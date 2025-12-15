@@ -71,9 +71,10 @@ extern "C" [[noreturn]] void init()
 		(*ctor)();
 
 	early_serial_init();
-	bootCPU.early_init(0);
-
 	log::info("monolith kernel version git-");
+	
+	bootCPU.early_init(0);
+	
 	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
 
 	for(;;)
