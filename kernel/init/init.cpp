@@ -2,6 +2,7 @@
 #include <arch/x86_64/serial.hpp>
 
 #include <mm/memory_map.hpp>
+#include <mm/pmm.hpp>
 
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
@@ -83,7 +84,9 @@ extern "C" [[noreturn]] void init()
 	auto memmap = mm::parse_memmap(memmap_request.response->entries, memmap_request.response->entry_count);
 
 	bootCPU.early_init(0);
-	
+
+	pmm_initialize(memmap);
+
 	for(;;)
 		asm volatile("hlt");
 }

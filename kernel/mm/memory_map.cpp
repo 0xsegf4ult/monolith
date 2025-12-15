@@ -19,52 +19,52 @@ constexpr const char* region_type_strings[5] =
 namespace mm
 {
 
-void* MemoryMap::reserve(size_t size)
+void* memory_map::reserve(size_t size)
 {
 	for(mem_region* region = regions; region != regions + num_regions; region++)
 	{
 		if(region->type != mem_region::RegionType::Usable)
 			continue;
 
-		physaddr_t start = region->start;
+		physaddr_t begin = region->begin;
 		physaddr_t end = region->end;
 
-		if(start < end && end - start >= size)
+		if(begin < end && end - begin >= size)
 		{
 			if(num_regions == max_regions)
 				return nullptr;
 
-			log::info("memmap: update region [{:x} - {:x}] -> [{:x} - {:x}]", region->start, region->end, mm::page_align(region->start + size), region->end);
-			region->start = mm::page_align(start + size);
+			log::info("memmap: update region [{:x} - {:x}] -> [{:x} - {:x}]", region->begin, region->end, mm::page_align(region->begin + size), region->end);
+			region->begin = mm::page_align(begin + size);
 
 			mem_region* new_region = regions + num_regions;
 
-			new_region->start = start;
-			new_region->end = mm::page_align(start + size);
+			new_region->begin = begin;
+			new_region->end = mm::page_align(begin + size);
 			new_region->type = mem_region::RegionType::Allocated;
 
-			log::info("memmap: region [{:x} - {:x}] -> allocated", new_region->start, new_region->end);
+			log::info("memmap: region [{:x} - {:x}] -> allocated", new_region->begin, new_region->end);
 
 			num_regions++;
-			return reinterpret_cast<void*>(start + mm::direct_mapping_offset);
+			return reinterpret_cast<void*>(begin + mm::direct_mapping_offset);
 		}
 	}
 
 	return nullptr;
 }
 
-MemoryMap parse_memmap(limine_memmap_entry** entries, size_t entry_count)
+memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 {
-	MemoryMap mem_map;
+	memory_map mem_map;
 
-	if(entry_count > MemoryMap::max_regions)
+	if(entry_count > memory_map::max_regions)
 		panic("failed to parse memory map, too many entries");
 
 	for(limine_memmap_entry* entry = entries[0]; entry < entries[0] + entry_count; entry++)
 	{
 		auto& region = mem_map.regions[mem_map.num_regions];
 
-		region.start = entry->base;
+		region.begin = entry->base;
 		region.end = entry->base + entry->length;
 
 		switch(entry->type)
@@ -92,7 +92,7 @@ MemoryMap parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 			break;
 		}
 
-		log::info("memmap: [mem {:x} - {:x}] {}", region.start, region.end, region_type_strings[static_cast<int>(region.type)]);
+		log::info("memmap: [mem {:x} - {:x}] {}", region.begin, region.end, region_type_strings[static_cast<int>(region.type)]);
 		mem_map.num_regions++;
 	}
 

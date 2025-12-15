@@ -8,7 +8,7 @@ namespace mm
 
 struct mem_region
 {
-	physaddr_t start;
+	physaddr_t begin;
 	physaddr_t end;
 
 	enum class RegionType
@@ -21,7 +21,7 @@ struct mem_region
 	} type;
 };
 
-struct MemoryMap
+struct memory_map
 {
 	constexpr static size_t max_regions = 64;
 
@@ -32,6 +32,6 @@ struct MemoryMap
 	void* reserve(size_t size);
 };
 
-MemoryMap parse_memmap(limine_memmap_entry** entries, size_t entry_count);
+memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count);
 
 }
