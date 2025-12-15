@@ -44,7 +44,7 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 	{
 		const auto& region = memmap.regions[i];
 
-		if(region.type != mm::mem_region::RegionType::Usable && region.type != mm::mem_region::RegionType::Allocated)
+		if(region.type != mm::mem_region::RegionType::Usable && region.type != mm::mem_region::RegionType::Allocated && region.type != mm::mem_region::RegionType::ACPI_Table)
 			continue;
 
 		auto begin = mm::page_align_down(region.begin);
@@ -55,7 +55,7 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 	kernel_address_space->switch_to();
 }
 
-virtaddr_t vmalloc(size_t length, vm_flags flags)
+virtaddr_t vmalloc(size_t length, uint64_t flags)
 {
 	return kernel_address_space->alloc(length, flags);
 }
@@ -65,12 +65,12 @@ void vfree(virtaddr_t addr)
 	kernel_address_space->free(addr);
 }
 
-void vm_map(physaddr_t phys, virtaddr_t virt, vm_flags flags)
+void vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
 	kernel_address_space->map(phys, virt, flags);
 }
 
-void vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, vm_flags flags)
+void vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
 	kernel_address_space->map_range(phys, virt, length, flags);
 }

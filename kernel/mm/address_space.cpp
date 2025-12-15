@@ -22,7 +22,7 @@ void address_space::switch_to()
 	CPU::get_current()->set_pagetable(root_pml4);
 }
 
-virtaddr_t address_space::alloc(size_t length, vm_flags flags, void* arg)
+virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
 
 }
@@ -32,17 +32,17 @@ void address_space::free(virtaddr_t addr)
 
 }
 
-void address_space::map(physaddr_t phys, virtaddr_t virt, vm_flags flags)
+void address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
 	mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
 }
 
-void address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, vm_flags flags)
+void address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
 	mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
 }
 
-void address_space::reserve_range(virtaddr_t virt, size_t length, vm_flags flags)
+void address_space::reserve_range(virtaddr_t virt, size_t length, uint64_t flags)
 {
 
 }

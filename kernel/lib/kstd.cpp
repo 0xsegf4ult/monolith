@@ -31,6 +31,21 @@ void panic_inner(const char* string)
         CPU::halt();
 }
 
+size_t strncmp(const char* src, const char* dst, size_t len)
+{
+	while(len && *src && (*src == *dst))
+	{
+		src++;
+		dst++;
+		len--;
+	}
+
+	if(len == 0)
+		return 0;
+	else
+		return (*((unsigned char*)src) - *((unsigned char*)dst));
+}
+
 extern "C" void* memcpy(void* dest, const void* src, size_t n)
 {
         uint8_t* pdest = reinterpret_cast<uint8_t*>(dest);

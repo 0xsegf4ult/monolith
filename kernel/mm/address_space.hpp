@@ -14,9 +14,9 @@ struct address_space
 
 	void init(virtaddr_t base = 0x1000);
 	void switch_to();
-	virtaddr_t alloc(size_t length, vm_flags flags = vm_none, void* arg = nullptr);
+	virtaddr_t alloc(size_t length, uint64_t flags = 0, void* arg = nullptr);
 	void free(virtaddr_t addr);
-	void map(physaddr_t phys, virtaddr_t virt, vm_flags flags = vm_none);
-	void map_range(physaddr_t phys, virtaddr_t virt, size_t length, vm_flags flags = vm_none);
-	void reserve_range(virtaddr_t virt, size_t length = 0x1000, vm_flags flags = vm_none);
+	void map(physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
+	void map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0);
+	void reserve_range(virtaddr_t virt, size_t length = 0x1000, uint64_t flags = 0);
 };

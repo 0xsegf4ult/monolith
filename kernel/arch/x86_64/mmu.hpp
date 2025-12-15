@@ -70,7 +70,7 @@ private:
 	uint64_t raw;
 };
 
-constexpr PTEBits vm_flags_to_x86(vm_flags flags)
+constexpr PTEBits vm_flags_to_x86(uint64_t flags)
 {
 	uint64_t result{0};
 
@@ -92,4 +92,4 @@ page_table* get_or_create_pte(page_table* table, uint64_t entry, uint64_t flags 
 void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
-void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0);
+void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0, bool allow_huge = false);

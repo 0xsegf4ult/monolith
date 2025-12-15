@@ -22,8 +22,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 	{
 		uint64_t cr2;
 		asm volatile("movq %%cr2, %0" : "=r"(cr2));
-
-		panic("unhandled page fault at RIP {:x} memory access {:x}", ctx->rip, cr2);
+		panic("unhandled page fault at RIP {:x} memory access {:x} {:b}", ctx->rip, cr2, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{

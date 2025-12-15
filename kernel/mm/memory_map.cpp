@@ -7,11 +7,12 @@
 
 #include <limine.h>
 
-constexpr const char* region_type_strings[5] =
+constexpr const char* region_type_strings[6] =
 {
 	"usable",
 	"kernel",
-	"ACPI",
+	"ACPI tables",
+	"ACPI NVS",
 	"reserved",
 	"allocated"
 };
@@ -33,7 +34,6 @@ void* memory_map::reserve(size_t size)
 		{
 			if(num_regions == max_regions)
 				return nullptr;
-
 			log::info("memmap: update region [{:x} - {:x}] -> [{:x} - {:x}]", region->begin, region->end, mm::page_align(region->begin + size), region->end);
 			region->begin = mm::page_align(begin + size);
 
@@ -67,6 +67,9 @@ memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 		region.begin = entry->base;
 		region.end = entry->base + entry->length;
 
+		if(region.begin == 0)
+			region.begin = 0x1000;
+
 		switch(entry->type)
 		{
 		case LIMINE_MEMMAP_USABLE:
@@ -76,8 +79,10 @@ memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 			region.type = mem_region::RegionType::Usable;
 			break;
 		case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
+			region.type = mem_region::RegionType::ACPI_Table;
+			break;
 		case LIMINE_MEMMAP_ACPI_NVS:
-			region.type = mem_region::RegionType::ACPI;
+			region.type = mem_region::RegionType::ACPI_NVS;
 			break;
 		case LIMINE_MEMMAP_BAD_MEMORY:
 		case LIMINE_MEMMAP_RESERVED:

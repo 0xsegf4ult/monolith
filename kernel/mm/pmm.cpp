@@ -13,12 +13,13 @@ void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 {
 	auto rlen = end - begin;
 	auto rbegin = begin;
+	physmem_available += rbegin;
 
 	while(rlen >= 4096)
 	{
 		auto bmp_offset = (rbegin / 4096) / 64;
 		auto bit_offset = (rbegin / 4096) % 64;
-
+		
 		if(rlen >= 64 * 4096 && bit_offset == 0)
 		{
 			pmm_bitmap[bmp_offset] = ~(0ull);
@@ -26,7 +27,7 @@ void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 			rbegin += (64 * 4096);
 			continue;
 		}
-
+		
 		pmm_bitmap[bmp_offset] |= (1ull << bit_offset);
 
 		rlen -= 4096;
@@ -45,13 +46,11 @@ void pmm_initialize(mm::memory_map& memmap)
 		panic("failed to reserve memory for pmm_bitmap");
 
 	pmm_bitmap = reinterpret_cast<uint64_t*>(pmm_block);
-
 	memset(pmm_bitmap, 0, pmm_bitmap_length * sizeof(uint64_t));
-
+		
 	for(size_t i = 0; i < memmap.num_regions; i++)
 	{
 		const auto& region = memmap.regions[i];
-
 		if(region.type == mm::mem_region::RegionType::Usable)
 			pmm_mark_range_free(region.begin, region.end);
 		else
@@ -67,10 +66,11 @@ physaddr_t pmm_allocate()
 		if(cur_word == 0)
 			continue;
 
-		auto index = __builtin_ctzll(cur_word);
+		int index = __builtin_ctzll(cur_word);
 		pmm_bitmap[i] &= ~(1ull << index);
 		physmem_available -= 4096;
 		physmem_used += 4096;
+
 		return (i * 64ull + index) * 4096ull;
 	}
 
@@ -84,6 +84,8 @@ void pmm_free(physaddr_t addr)
 	auto bit_offset = (addr / 4096) % 64;
 
 	pmm_bitmap[bmp_offset] |= (1ull << bit_offset);
+	physmem_used -= 4096;
+	physmem_available += 4096;
 }
 
 

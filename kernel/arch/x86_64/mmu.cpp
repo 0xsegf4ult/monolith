@@ -9,7 +9,7 @@
 
 page_table* get_pte(page_table* table, uint64_t entry)
 {
-	if(table[entry].get_raw() & PTE_PRESENT)
+	if(table[entry].get_raw() & PTE_PRESENT && table[entry].get())
 		return reinterpret_cast<page_table*>(table[entry].get() + mm::direct_mapping_offset);
 
 	return nullptr;
@@ -74,18 +74,18 @@ void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t fl
 	pdpt[pdpt_index].set_flags(flags | PTE_PRESENT | PTE_HUGE);
 }
 
-void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
+void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags, bool allow_huge)
 {
 	size_t cur_pgsz = 0;
 	
 	while(length > 0)
 	{
-		if(length >= page_size_1G)
+		if(allow_huge && length >= page_size_1G)
 		{
 			mmu_map_GB(table, phys, virt, flags);
 			cur_pgsz = page_size_1G;
 		}
-		else if(length >= page_size_2M)
+		else if(allow_huge && length >= page_size_2M)
 		{
 			mmu_map_MB(table, phys, virt, flags);
 			cur_pgsz = page_size_2M;

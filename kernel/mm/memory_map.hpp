@@ -15,7 +15,8 @@ struct mem_region
 	{
 		Usable,
 		Kernel,
-		ACPI,
+		ACPI_Table,
+		ACPI_NVS,
 		Reserved,
 		Allocated
 	} type;
