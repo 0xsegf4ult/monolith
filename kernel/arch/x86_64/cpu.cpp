@@ -47,8 +47,8 @@ void CPU::early_init(uint32_t cpu)
 	wrmsr(MSRRegisters::IA32_PAT_MSR, 0x0407050600070106);
 }
 
-void CPU::set_pagetable(PageTable* pt_address)
+void CPU::set_pagetable(page_table* pt_address)
 {
-	page_table = pt_address;
+	pt = pt_address;
 	asm volatile("movq %0, %%cr3" : : "a"(reinterpret_cast<uint64_t>(pt_address) - mm::direct_mapping_offset));
 }

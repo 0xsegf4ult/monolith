@@ -4,6 +4,7 @@
 #include <mm/memory_map.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
+#include <mm/vmm.hpp>
 
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
@@ -84,10 +85,16 @@ extern "C" [[noreturn]] void init()
 
 	auto memmap = mm::parse_memmap(memmap_request.response->entries, memmap_request.response->entry_count);
 
+	if(kaddr_request.response == nullptr)
+		panic("bootloader supplied kernel physical load address invalid");
+	
+	physaddr_t phys_kernel_start = kaddr_request.response->physical_base;
+
 	bootCPU.early_init(0);
 
 	pmm_initialize(memmap);
 	mm::slab_init();
+	vmm_init_kpages(memmap, phys_kernel_start);
 
 	for(uint32_t i = 0; i < 5; i++)
 	{

@@ -115,7 +115,7 @@ static_assert(sizeof(IDTDescriptor) == 10);
 extern "C" void reload_segments();
 extern "C" void isr_stubs();
 
-struct PageTable;
+struct page_table;
 
 class CPU
 {
@@ -124,10 +124,10 @@ public:
 
 	void early_init(uint32_t cpu);
 	
-	void set_pagetable(PageTable* pt_address);
-	constexpr PageTable* get_pagetable()
+	void set_pagetable(page_table* pt_address);
+	constexpr page_table* get_pagetable()
 	{
-		return page_table;
+		return pt;
 	}
 
 	static uint64_t rdmsr(uint64_t msr)
@@ -187,5 +187,5 @@ private:
 	GDTDescriptor gdtr;
 	IDTDescriptor idtr;
 
-	PageTable* page_table;
+	page_table* pt;
 };
