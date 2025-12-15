@@ -9,6 +9,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/isr_stubs.S
 	arch/x86_64/interrupts.cpp
 	arch/x86_64/serial.cpp
+	mm/memory_map.cpp
 	lib/kstd.cpp
 	lib/klog.cpp
 	init/init.cpp)

@@ -1,6 +1,8 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/serial.hpp>
 
+#include <mm/memory_map.hpp>
+
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 
@@ -72,11 +74,16 @@ extern "C" [[noreturn]] void init()
 
 	early_serial_init();
 	log::info("monolith kernel version git-");
-	
+
+
+	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
+	if(memmap_request.response == nullptr)
+		panic("EFI memory map pointer invalid");
+
+	auto memmap = mm::parse_memmap(memmap_request.response->entries, memmap_request.response->entry_count);
+
 	bootCPU.early_init(0);
 	
-	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
-
 	for(;;)
 		asm volatile("hlt");
 }
