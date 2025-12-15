@@ -11,6 +11,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/serial.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
+	mm/slab.cpp
 	lib/kstd.cpp
 	lib/klog.cpp
 	init/init.cpp)

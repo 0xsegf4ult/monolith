@@ -3,6 +3,7 @@
 
 #include <mm/memory_map.hpp>
 #include <mm/pmm.hpp>
+#include <mm/slab.hpp>
 
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
@@ -86,6 +87,13 @@ extern "C" [[noreturn]] void init()
 	bootCPU.early_init(0);
 
 	pmm_initialize(memmap);
+	mm::slab_init();
+
+	for(uint32_t i = 0; i < 5; i++)
+	{
+	auto* test = kmalloc(16);
+	log::debug("kmalloc {:x}", test);
+	}
 
 	for(;;)
 		asm volatile("hlt");
