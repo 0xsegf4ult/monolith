@@ -1,3 +1,4 @@
+#include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/interrupts.hpp>
 #include <arch/x86_64/context.hpp>
 #include <lib/klog.hpp>
@@ -43,6 +44,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 				log::warn("no interrupt handler for irq {}", ctx->interrupt_id);
 		}
 
+		lapic::eoi();
 		return ctx;
 	}
 

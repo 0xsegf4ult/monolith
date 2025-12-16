@@ -1,7 +1,11 @@
+#include <arch/x86_64/acpi.hpp>
+#include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/pic.hpp>
 #include <arch/x86_64/serial.hpp>
 
 #include <mm/memory_map.hpp>
+#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
@@ -90,17 +94,21 @@ extern "C" [[noreturn]] void init()
 	
 	physaddr_t phys_kernel_start = kaddr_request.response->physical_base;
 
+	if(rsdp_request.response == nullptr)
+		panic("EFI RSDP pointer invalid");
+
+	auto* rsdp = reinterpret_cast<const acpi::rsdp_v1*>(reinterpret_cast<byte*>(rsdp_request.response->address) + mm::direct_mapping_offset);
+
 	bootCPU.early_init(0);
 
 	pmm_initialize(memmap);
 	mm::slab_init();
 	vmm_init_kpages(memmap, phys_kernel_start);
 
-	for(uint32_t i = 0; i < 5; i++)
-	{
-	auto* test = kmalloc(16);
-	log::debug("kmalloc {:x}", test);
-	}
+	auto acpi_tables = acpi::parse_tables(rsdp);
+
+	pic::disable();
+	lapic::enable(acpi_tables.madt->lapic_address);
 
 	for(;;)
 		asm volatile("hlt");

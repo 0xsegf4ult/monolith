@@ -4,6 +4,8 @@ target_compile_options(vmmonolith PRIVATE -target x86_64-none-elf -ffreestanding
 target_link_options(vmmonolith PRIVATE -T ${CMAKE_CURRENT_LIST_DIR}/init/linker.ld -fuse-ld=lld -nostdlib -nostdlib++ -nodefaultlibs)
 target_include_directories(vmmonolith PRIVATE ${CMAKE_SOURCE_DIR}/buildroot/usr/include ${CMAKE_CURRENT_LIST_DIR})
 target_sources(vmmonolith PRIVATE
+	arch/x86_64/acpi.cpp
+	arch/x86_64/apic.cpp
 	arch/x86_64/cpu.cpp
 	arch/x86_64/gdt.S
 	arch/x86_64/isr_stubs.S
