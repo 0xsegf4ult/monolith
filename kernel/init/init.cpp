@@ -7,6 +7,8 @@
 
 #include <fs/vfs.hpp>
 
+#include <init/initramfs.hpp>
+
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 
@@ -98,6 +100,25 @@ extern "C" [[noreturn]] void init()
 	
 	physaddr_t phys_kernel_start = kaddr_request.response->physical_base;
 
+	if(module_request.response == nullptr || module_request.response->module_count < 1)
+		panic("failed to load initramfs");
+
+	byte* initramfs_address{nullptr};
+	size_t initramfs_size{0};
+
+	for(uint32_t i = 0; i < module_request.response->module_count; i++)
+	{
+		limine_file* mod = module_request.response->modules[i];
+		if(!strncmp(mod->string, "initramfs", 9))
+		{
+			initramfs_address = reinterpret_cast<byte*>(mod->address);
+			initramfs_size = mod->size;
+		}
+	}
+
+	if(!initramfs_address || !initramfs_size)
+		panic("failed to load initramfs");
+
 	if(rsdp_request.response == nullptr)
 		panic("EFI RSDP pointer invalid");
 
@@ -115,6 +136,14 @@ extern "C" [[noreturn]] void init()
 	lapic::enable(acpi_tables.madt->lapic_address);
 
 	vfs::init();
+
+	log::info("initramfs [{:x} - {:x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
+	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
+	initramfs_unpack(initramfs_address, initramfs_size);
+
+	auto init_f = vfs::open("/bin/init");
+	if(init_f < 0)
+		log::error("could not find /bin/init");
 
 	for(;;)
 		asm volatile("hlt");

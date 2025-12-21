@@ -1,5 +1,6 @@
 buildroot/boot/vmmonolith
 buildroot/boot/initramfs.tar
+buildroot/bin/*
 *.img
 *.sym
 build

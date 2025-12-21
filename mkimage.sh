@@ -2,8 +2,11 @@
 
 cmake --build build -j$(nproc)
 
+cd buildroot
+tar -cvf boot/initramfs.tar bin
+cd ..
+
 objcopy --only-keep-debug buildroot/boot/vmmonolith buildroot/boot/vmmonolith.sym
-tar -cvf buildroot/boot/initramfs.tar buildroot/bin
 dd if=/dev/zero of=boot.img bs=512 count=93750
 parted boot.img -s -a minimal mklabel gpt
 parted boot.img -s -a minimal mkpart EFI FAT16 2048s 93716s

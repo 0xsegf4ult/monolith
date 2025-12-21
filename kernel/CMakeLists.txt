@@ -14,6 +14,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/serial.cpp
 	fs/ramfs.cpp
 	fs/vfs.cpp
+	init/initramfs.cpp
 	mm/address_space.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
