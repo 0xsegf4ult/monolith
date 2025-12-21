@@ -17,12 +17,19 @@ void remove_irq_handler(uint8_t irq)
 	irq_handlers[irq - 32] = nullptr;
 }
 
+static bool in_pf = false;
+
 extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 {
+	if(in_pf)
+		panic("error while handling page fault");
+
 	if(ctx->interrupt_id == InterruptID::PageFault)
 	{
+		in_pf = true;
 		uint64_t cr2;
 		asm volatile("movq %%cr2, %0" : "=r"(cr2));
+
 		panic("unhandled page fault at RIP {:x} memory access {:x} {:b}", ctx->rip, cr2, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
@@ -40,7 +47,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		{
 			if(irq_handlers[ctx->interrupt_id - 32])
 				irq_handlers[ctx->interrupt_id - 32]();
-			else
+			else if(ctx->interrupt_id != 0x21)
 				log::warn("no interrupt handler for irq {}", ctx->interrupt_id);
 		}
 
@@ -48,6 +55,6 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		return ctx;
 	}
 
-	panic("unhandled interrupt {}", ctx->interrupt_id);
+	panic("unhandled interrupt {} RIP {:x}", ctx->interrupt_id, ctx->rip);
 	return ctx;
 }

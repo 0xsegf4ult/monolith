@@ -3,7 +3,9 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/pic.hpp>
 #include <arch/x86_64/serial.hpp>
+#include <arch/x86_64/timer.hpp>
 
+#include <dev/ps2.hpp>
 
 #include <fs/vfs.hpp>
 
@@ -134,6 +136,12 @@ extern "C" [[noreturn]] void init()
 
 	pic::disable();
 	lapic::enable(acpi_tables.madt->lapic_address);
+	
+	pit::init(1193);
+	log::info("timer: initialized source PIT 1ms period");
+
+	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
+		ps2::init();
 
 	vfs::init();
 

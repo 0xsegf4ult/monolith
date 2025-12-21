@@ -39,9 +39,9 @@ void CPU::early_init(uint32_t cpu)
 	idtr.base = idt_entries;
 
 	asm volatile("lidt %0" : : "m"(idtr) : "memory");
-	enable_interrupts();
-	
-	log::info("x86: PAT configured: WB WC UC- UC WB WP UC- WT");
+
+	if(cpu == 0)	
+		log::info("x86: PAT configured: WB WC UC- UC WB WP UC- WT");
 
 	// WB WC UC- UC WB WP UC- WT
 	wrmsr(MSRRegisters::IA32_PAT_MSR, 0x0407050600070106);

@@ -8,10 +8,12 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/apic.cpp
 	arch/x86_64/cpu.cpp
 	arch/x86_64/gdt.S
-	arch/x86_64/isr_stubs.S
 	arch/x86_64/interrupts.cpp
+	arch/x86_64/isr_stubs.S
 	arch/x86_64/mmu.cpp
 	arch/x86_64/serial.cpp
+	arch/x86_64/timer.cpp
+	dev/ps2.cpp
 	fs/ramfs.cpp
 	fs/vfs.cpp
 	init/initramfs.cpp
