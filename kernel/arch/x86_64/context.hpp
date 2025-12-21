@@ -30,3 +30,4 @@ struct __attribute__((packed)) cpu_context_t
 	uint64_t ss;
 };
 
+extern "C" void arch_context_switch(virtaddr_t* old_rsp, virtaddr_t new_rsp);

@@ -21,6 +21,8 @@
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
+#include <sys/process.hpp>
+#include <sys/scheduler.hpp>
 
 #define LIMINE_API_REVISION 3
 #include <limine.h>
@@ -145,6 +147,8 @@ extern "C" [[noreturn]] void init()
 
 	vfs::init();
 
+	sched_init();
+	
 	log::info("initramfs [{:x} - {:x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
 	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
 	initramfs_unpack(initramfs_address, initramfs_size);
@@ -153,6 +157,8 @@ extern "C" [[noreturn]] void init()
 	if(init_f < 0)
 		log::error("could not find /bin/init");
 
-	for(;;)
-		asm volatile("hlt");
+
+	sched_start();
+
+	panic("idle process died");
 }

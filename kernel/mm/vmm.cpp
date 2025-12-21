@@ -4,6 +4,8 @@
 #include <mm/layout.hpp>
 #include <mm/slab.hpp>
 
+#include <arch/x86_64/mmu.hpp>
+
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
@@ -73,4 +75,15 @@ void vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 void vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
 	kernel_address_space->map_range(phys, virt, length, flags);
+}
+
+void clone_kernel_vm(address_space* dest)
+{
+	for(int i = 0; i < 512; i++)
+		dest->root_pml4[i] = kernel_address_space->root_pml4[i];
+}
+
+address_space* get_kernel_vmspace()
+{
+	return kernel_address_space;
 }

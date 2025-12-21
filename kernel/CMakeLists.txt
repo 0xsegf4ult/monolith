@@ -7,6 +7,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/acpi.cpp
 	arch/x86_64/apic.cpp
 	arch/x86_64/cpu.cpp
+	arch/x86_64/context.S
 	arch/x86_64/gdt.S
 	arch/x86_64/interrupts.cpp
 	arch/x86_64/isr_stubs.S
@@ -17,12 +18,14 @@ target_sources(vmmonolith PRIVATE
 	fs/ramfs.cpp
 	fs/vfs.cpp
 	init/initramfs.cpp
+	init/init.cpp
+	lib/klog.cpp
+	lib/kstd.cpp
 	mm/address_space.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
 	mm/slab.cpp
 	mm/vmm.cpp
-	lib/kstd.cpp
-	lib/klog.cpp
-	init/init.cpp)
+	sys/process.cpp
+	sys/scheduler.cpp)
 set_target_properties(vmmonolith PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/boot")
