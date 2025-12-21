@@ -260,6 +260,9 @@ public:
 
                 switch(type_id)
                 {
+		case TypeID::Char:
+			*it++ = v_char;
+			break;
                 case TypeID::UInt32:
                         format.format_integer(it, dst.end(), v_uint32);
                         break;

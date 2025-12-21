@@ -4,14 +4,19 @@
 #include <arch/x86_64/pic.hpp>
 #include <arch/x86_64/serial.hpp>
 
-#include <mm/memory_map.hpp>
+
+#include <fs/vfs.hpp>
+
+#include <lib/klog.hpp>
+#include <lib/kstd.hpp>
+
+#include <mm/address_space.hpp>
 #include <mm/layout.hpp>
+#include <mm/memory_map.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
 
 #define LIMINE_API_REVISION 3
 #include <limine.h>
@@ -82,7 +87,6 @@ extern "C" [[noreturn]] void init()
 	early_serial_init();
 	log::info("monolith kernel version git-");
 
-
 	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
 	if(memmap_request.response == nullptr)
 		panic("EFI memory map pointer invalid");
@@ -109,6 +113,8 @@ extern "C" [[noreturn]] void init()
 
 	pic::disable();
 	lapic::enable(acpi_tables.madt->lapic_address);
+
+	vfs::init();
 
 	for(;;)
 		asm volatile("hlt");
