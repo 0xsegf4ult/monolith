@@ -7,6 +7,8 @@
 #include <lib/klog.hpp>
 #include <lib/types.hpp>
 
+#include <sys/scheduler.hpp>
+
 namespace ps2
 {
 
@@ -25,6 +27,13 @@ void interrupt_handler()
 
 	kbd_buffer[kbd_buf_position].code = scancode;
 	kbd_buf_position = (kbd_buf_position + 1) % kbd_buffer_size;
+
+	if(scancode == 0x1f)
+	{
+		log::debug("schedule()");
+		lapic::eoi();
+		schedule();
+	}
 }
 
 void init()

@@ -11,6 +11,7 @@
 
 #include <init/initramfs.hpp>
 
+#include <lib/elf.hpp>
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 
@@ -157,6 +158,59 @@ extern "C" [[noreturn]] void init()
 	if(init_f < 0)
 		log::error("could not find /bin/init");
 
+	auto* init_proc = 
+
+	auto* ebuf = (Elf64_Ehdr*)kmalloc(sizeof(Elf64_Ehdr));
+	vfs::read(init_f, (byte*)ebuf, sizeof(Elf64_Ehdr));
+	if(!elf_validate(ebuf))
+		log::error("/bin/init not a valid ELF executable");
+	
+	auto* init_proc = create_process("init", ebuf->e_entry, nullptr);
+	log::debug("create process init entry {:x}", ebuf->e_entry);
+	auto* phdrs = (Elf64_Phdr*)kmalloc(ebuf->e_phentsize * ebuf->e_phnum);
+	vfs::seek(init_f, ebuf->e_phoff);
+	vfs::read(init_f, (byte*)phdrs, ebuf->e_phentsize * ebuf->e_phnum);
+	auto* phdr = phdrs;
+	for(int i = 0; i < ebuf->e_phnum; i++)
+	{
+		log::debug("elf phdr: type {} flags {:b} offset {:x}", phdr->p_type, phdr->p_flags, phdr->p_offset);
+		if(phdr->p_type == PT_LOAD)
+		{
+			log::debug("LOAD {}{}{}", (phdr->p_flags & PF_R) ? 'R' : '-', (phdr->p_flags & PF_W) ? 'W' : '-', (phdr->p_flags & PF_X) ? 'X' : '-');
+
+			uint64_t vmflags = vm_none;
+			if(phdr->p_flags & PF_W)
+				vmflags |= vm_write;
+			if(phdr->p_flags & PF_X)
+			{
+				if(phdr->p_flags & PF_W)
+					log::warn("section has W+X flags!!!");
+				vmflags |= vm_exec;
+			}
+
+			uint64_t page_offset = phdr->p_vaddr % 0x1000;
+			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
+			log::debug("vm_alloc {:x} size {:x}", aligned_vaddr, phdr->p_memsz + page_offset);
+			init_proc->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags);
+			
+			virtaddr_t user_page = init_proc->vm_space->get_mapping(aligned_vaddr) + mm::direct_mapping_offset;
+			log::debug("section mapped at {:x}", user_page);
+
+			vfs::seek(init_f, phdr->p_offset);
+			log::debug("copy {:x} bytes from EHDR + {:x}", phdr->p_filesz, phdr->p_offset);
+			vfs::read(init_f, (byte*)user_page + page_offset, phdr->p_filesz);
+		       	auto zerocount = phdr->p_memsz - phdr->p_filesz;
+			if(zerocount)
+			{
+				log::debug("zeroing {:x} bytes at {:x}", zerocount, phdr->p_memsz);
+				memset((void*)(user_page + page_offset + phdr->p_filesz), 0, zerocount); 
+			}	
+		}
+
+		phdr++;
+	}
+	vfs::close(init_f);
+	sched_add_ready(init_proc);
 
 	sched_start();
 

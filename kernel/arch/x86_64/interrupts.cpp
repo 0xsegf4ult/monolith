@@ -51,6 +51,11 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 				log::warn("no interrupt handler for irq {}", ctx->interrupt_id);
 		}
 
+		if(ctx->interrupt_id == 0x80)
+		{
+			log::debug("syscall {:x}", ctx->rax);
+		}
+
 		lapic::eoi();
 		return ctx;
 	}

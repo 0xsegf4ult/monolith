@@ -1,4 +1,7 @@
-int main()
+extern "C" int _start()
 {
-	return -2;
+	asm volatile("movl $6, %eax; int $0x80");
+
+	for(;;)
+		asm volatile("hlt");
 }

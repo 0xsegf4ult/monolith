@@ -19,6 +19,7 @@ target_sources(vmmonolith PRIVATE
 	fs/vfs.cpp
 	init/initramfs.cpp
 	init/init.cpp
+	lib/elf.cpp
 	lib/klog.cpp
 	lib/kstd.cpp
 	mm/address_space.cpp
