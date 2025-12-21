@@ -20,8 +20,9 @@ struct process_t
 	virtaddr_t rsp0;
 	virtaddr_t rsp;
 	address_space* vm_space;
+	virtaddr_t entry;
 	process_t* next;
 };
 
-process_t* create_process(const char* name, virtaddr_t entry, void* arg);
+process_t* create_process(const char* name, bool is_user);
 

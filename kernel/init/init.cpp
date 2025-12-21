@@ -158,14 +158,13 @@ extern "C" [[noreturn]] void init()
 	if(init_f < 0)
 		log::error("could not find /bin/init");
 
-	auto* init_proc = 
-
 	auto* ebuf = (Elf64_Ehdr*)kmalloc(sizeof(Elf64_Ehdr));
 	vfs::read(init_f, (byte*)ebuf, sizeof(Elf64_Ehdr));
 	if(!elf_validate(ebuf))
 		log::error("/bin/init not a valid ELF executable");
 	
-	auto* init_proc = create_process("init", ebuf->e_entry, nullptr);
+	auto* init_proc = create_process("init", true);
+	init_proc->entry = ebuf->e_entry;
 	log::debug("create process init entry {:x}", ebuf->e_entry);
 	auto* phdrs = (Elf64_Phdr*)kmalloc(ebuf->e_phentsize * ebuf->e_phnum);
 	vfs::seek(init_f, ebuf->e_phoff);
@@ -178,7 +177,7 @@ extern "C" [[noreturn]] void init()
 		{
 			log::debug("LOAD {}{}{}", (phdr->p_flags & PF_R) ? 'R' : '-', (phdr->p_flags & PF_W) ? 'W' : '-', (phdr->p_flags & PF_X) ? 'X' : '-');
 
-			uint64_t vmflags = vm_none;
+			uint64_t vmflags = vm_user;
 			if(phdr->p_flags & PF_W)
 				vmflags |= vm_write;
 			if(phdr->p_flags & PF_X)

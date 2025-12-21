@@ -27,35 +27,35 @@ void address_space::switch_to()
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
-	return 0;
-}
-
-virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t flags, void* arg)
-{
-	if(base < 0x1000)
-		return 0;
-	
 	vm_object* prev = nullptr;
-	vm_object* cur = objects; 
+	vm_object* cur = objects;
+	
+	virtaddr_t alloc_base = 0;
+
+	if(!cur)
+		alloc_base = base_addr;
+
 	while(cur)
 	{
-		if(cur->base <= base)
+		auto base = (prev == nullptr) ? base_addr : prev->base;
+	       	if(base + length <= cur->base)
 		{
-			if(cur->base + cur->length >= base)
-				return 0;
-		}
-		else
-		{
-			if(cur->base < base + length)
-				return 0;
-		}
+			alloc_base = base;
+			break;		
+		}	
 
 		prev = cur;
 		cur = cur->next;
 	}
 
+	if(!cur && !alloc_base)
+		alloc_base = prev->base + prev->length;
+
+	if(!alloc_base)
+		return 0;
+
 	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
-	range->base = base;
+	range->base = alloc_base;
 	range->length = length;
 	range->flags = vm_flags(flags);
 	range->next = nullptr;
@@ -64,17 +64,40 @@ virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t 
 		objects = range;
 	else
 		prev->next = range;
+	
+	while(length)
+	{
+		auto phys = pmm_allocate();
+		mmu_map(root_pml4, phys, alloc_base, vm_flags_to_x86(flags));
+	       	alloc_base += 0x1000;	
 
+		if(length < 0x1000)
+			length = 0;
+		else
+			length -= 0x1000;
+	}	
+
+	return range->base;
+}
+
+virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t flags, void* arg)
+{
+	if(base < 0x1000)
+		return 0;
+
+	if(reserve_range(base, length, flags) != 0)
+		return 0;
+	
 	while(length)
 	{
 		auto phys = pmm_allocate();
 		mmu_map(root_pml4, phys, base, vm_flags_to_x86(flags));		
-		base += 4096;
+		base += 0x1000;
 
-		if(length < 4096)
+		if(length < 0x1000)
 			length = 0;
 		else
-			length -= 4096;
+			length -= 0x1000;
 	}
 
 	return base;
@@ -105,39 +128,59 @@ void address_space::free(virtaddr_t addr)
 
 }
 
-void address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
+int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
-	mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
-/*	
-	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
-       	range->base = virt;
-	range->length = 0x1000;
-	range->flags = vm_flags(flags);
-	range->next = nullptr;
-*/
-	
+	if(reserve_range(virt, 0x1000, flags) == 0)
+	{
+		mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
+		return 0;
+	}
+
+	return -1;
 }
 
-void address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
+int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
-	mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
+	if(reserve_range(virt, length, flags) == 0)
+	{
+		mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
+		return 0;
+	}
 
-	/*
+	return -1;
+}
+
+int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
+{
+	vm_object* prev = nullptr;
+	vm_object* cur = objects;
+	while(cur)
+	{
+		if(cur->base <= base)	
+		{
+			if(cur->base + cur->length > base)
+				return -1;
+		}
+		else
+		{
+			if(cur->base < base + length)
+				return -1;
+		}
+
+		prev = cur;
+		cur = cur->next;
+	}
+
 	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
-	range->base = virt;
+	range->base = base;
 	range->length = length;
 	range->flags = vm_flags(flags);
 	range->next = nullptr;
-	*/
-}
 
-void address_space::reserve_range(virtaddr_t virt, size_t length, uint64_t flags)
-{
-	/*
-	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
-	range->base = virt;
-	range->length = length;
-	range->flags = vm_flags(flags);
-	range->next = nullptr;
-	*/
+	if(!prev)
+		objects = range;
+	else
+		prev->next = range;
+
+	return 0;
 }

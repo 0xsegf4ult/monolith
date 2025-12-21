@@ -4,6 +4,7 @@
 #include <arch/x86_64/context.hpp>
 
 #include <lib/kstd.hpp>
+#include <lib/klog.hpp>
 #include <lib/types.hpp>
 
 #include <mm/address_space.hpp>
@@ -13,8 +14,29 @@
 #include <mm/vmm.hpp>
 
 static uint32_t next_pid = 1;
+typedef void (*entry_function_t)();
 
-process_t* create_process(const char* name, virtaddr_t entry, void* arg)
+void thread_entry_stub()
+{
+	CPU::enable_interrupts();
+	auto self = CPU::get_current()->get_current_process();
+
+	log::debug("started process {}", self->name);
+	log::debug("entrypoint {:x}", self->entry);
+	log::debug("rsp0 {:x} rsp3 {:x}", self->rsp0, self->rsp);
+
+	if(!self->rsp)
+	{
+		(reinterpret_cast<entry_function_t>(self->entry))();
+	}
+	else
+	{
+		log::debug("entering ring3");
+		arch_switch_to_usermode(self->rsp, self->entry);
+	}
+}
+
+process_t* create_process(const char* name, bool is_user)
 {
 	auto* process = (process_t*)kmalloc(sizeof(process_t));
 	strncpy(process->name, name, 32);
@@ -25,9 +47,9 @@ process_t* create_process(const char* name, virtaddr_t entry, void* arg)
 	process->status = process_status::ready;
 	process->next = nullptr;
 
-        auto stack_alloc = pmm_allocate() + mm::direct_mapping_offset;
-	auto* stack_ptr = reinterpret_cast<uint64_t*>(stack_alloc + 0x1000);
-	*(--stack_ptr) = entry;
+        auto kstack_alloc = pmm_allocate() + mm::direct_mapping_offset;
+	auto* stack_ptr = reinterpret_cast<uint64_t*>(kstack_alloc + 0x1000);
+	*(--stack_ptr) = reinterpret_cast<virtaddr_t>(thread_entry_stub);
 	*(--stack_ptr) = 0;
 	*(--stack_ptr) = 0;
 	*(--stack_ptr) = 0;
@@ -37,6 +59,12 @@ process_t* create_process(const char* name, virtaddr_t entry, void* arg)
 
 	process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
 	process->rsp = 0;
+
+	if(is_user)
+	{
+		process->rsp = process->vm_space->alloc(0x1000, vm_write | vm_user) + 0x1000;
+		log::debug("allocated user stack {:x}", process->rsp);
+	}
 
 	return process;	
 }

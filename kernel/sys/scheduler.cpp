@@ -48,10 +48,10 @@ void schedule()
 			ready_list_tail = ready_list_head;
 
 		current_process->status = process_status::running; 
+		CPU::get_current()->set_current_process(current_process);
 		current_process->vm_space->switch_to();
 
-		// should happen as part of ctx switch to avoid races?
-		CPU::enable_interrupts();
+		CPU::disable_interrupts();
 		arch_context_switch(&last->rsp0, current_process->rsp0);
 	}	
 }
@@ -84,6 +84,7 @@ void sched_start()
 	
 	current_process = idle_process;
 	current_process->status = process_status::running;
+	CPU::get_current()->set_current_process(current_process);
 
 	arch_context_switch(&boot_stack, current_process->rsp0);
 

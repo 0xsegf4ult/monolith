@@ -34,7 +34,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{
-		panic("general protection fault at RIP {:x}", ctx->rip);
+		panic("general protection fault at RIP {:x} {:b}", ctx->rip, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == 0xFF)
 	{

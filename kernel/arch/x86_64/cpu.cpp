@@ -2,6 +2,7 @@
 #include <mm/layout.hpp>
 #include <lib/types.hpp>
 #include <lib/klog.hpp>
+#include <sys/process.hpp>
 
 static IDTEntry idt_entries[256];
 
@@ -51,4 +52,9 @@ void CPU::set_pagetable(page_table* pt_address)
 {
 	pt = pt_address;
 	asm volatile("movq %0, %%cr3" : : "a"(reinterpret_cast<uint64_t>(pt_address) - mm::direct_mapping_offset));
+}
+
+void CPU::set_current_process(process_t* process)
+{
+	current_process = process;
 }

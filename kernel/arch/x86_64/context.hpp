@@ -31,3 +31,4 @@ struct __attribute__((packed)) cpu_context_t
 };
 
 extern "C" void arch_context_switch(virtaddr_t* old_rsp, virtaddr_t new_rsp);
+extern "C" void arch_switch_to_usermode(virtaddr_t rsp, virtaddr_t rip);

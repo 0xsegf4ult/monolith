@@ -53,7 +53,7 @@ struct __attribute__((packed)) GDTEntry
 		limit_low = 0;
 		base_low = 0;
 		base_mid = 0;
-		flags = flags_sel | (priv << 6) | GDT_PRESENT | GDT_ACCESSED;
+		flags = flags_sel | (priv << 5) | GDT_PRESENT | GDT_ACCESSED;
 		granularity = 0b10100000;
 		base_high = 0;
 	}
@@ -116,6 +116,7 @@ extern "C" void reload_segments();
 extern "C" void isr_stubs();
 
 struct page_table;
+struct process_t;
 
 class CPU
 {
@@ -128,6 +129,12 @@ public:
 	constexpr page_table* get_pagetable()
 	{
 		return pt;
+	}
+
+	void set_current_process(process_t* proc);
+	constexpr process_t* get_current_process()
+	{
+		return current_process;
 	}
 
 	static uint64_t rdmsr(uint64_t msr)
@@ -160,7 +167,7 @@ public:
 	{
 		return CPU::read_gs_ptr(__builtin_offsetof(CPU, id));
 	}
-	
+
 	static void disable_interrupts()
 	{
 		asm volatile("cli");
@@ -187,5 +194,6 @@ private:
 	GDTDescriptor gdtr;
 	IDTDescriptor idtr;
 
-	page_table* pt;
+	page_table* pt{nullptr};
+	process_t* current_process{nullptr};
 };
