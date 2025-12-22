@@ -36,6 +36,9 @@ void thread_entry_stub()
 	}
 }
 
+constexpr size_t kernel_stack_size = 0x1000;
+constexpr size_t user_stack_size = 0x4000;
+
 process_t* create_process(const char* name, bool is_user)
 {
 	auto* process = (process_t*)kmalloc(sizeof(process_t));
@@ -48,7 +51,7 @@ process_t* create_process(const char* name, bool is_user)
 	process->next = nullptr;
 
         auto kstack_alloc = pmm_allocate() + mm::direct_mapping_offset;
-	auto* stack_ptr = reinterpret_cast<uint64_t*>(kstack_alloc + 0x1000);
+	auto* stack_ptr = reinterpret_cast<uint64_t*>(kstack_alloc + kernel_stack_size);
 	*(--stack_ptr) = reinterpret_cast<virtaddr_t>(thread_entry_stub);
 	*(--stack_ptr) = 0;
 	*(--stack_ptr) = 0;
@@ -62,7 +65,7 @@ process_t* create_process(const char* name, bool is_user)
 
 	if(is_user)
 	{
-		process->rsp = process->vm_space->alloc(0x1000, vm_write | vm_user) + 0x1000;
+		process->rsp = process->vm_space->alloc(user_stack_size, vm_write | vm_user) + user_stack_size;
 		log::debug("allocated user stack {:x}", process->rsp);
 	}
 

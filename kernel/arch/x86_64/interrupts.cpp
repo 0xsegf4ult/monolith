@@ -53,7 +53,9 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 
 		if(ctx->interrupt_id == 0x80)
 		{
-			log::debug("syscall {:x}", ctx->rax);
+			log::debug("syscall {:x}", ctx->rsi);
+			if(ctx->rsi == 6 && ctx->rdi)
+				log::info("{}", (const char*)ctx->rdi);
 		}
 
 		lapic::eoi();
