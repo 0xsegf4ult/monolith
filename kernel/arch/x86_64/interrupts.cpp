@@ -4,6 +4,7 @@
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
+#include <sys/syscall.hpp>
 
 dev_irq_handler_t irq_handlers[32]{nullptr};
 
@@ -52,11 +53,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		}
 
 		if(ctx->interrupt_id == 0x80)
-		{
-			log::debug("syscall {:x}", ctx->rsi);
-			if(ctx->rsi == 6 && ctx->rdi)
-				log::info("{}", (const char*)ctx->rdi);
-		}
+			syscall_handler(ctx);
 
 		lapic::eoi();
 		return ctx;

@@ -7,6 +7,7 @@ enum class process_status
 {
 	ready,
 	running,
+	sleeping,
 	dead
 };
 
@@ -21,6 +22,7 @@ struct process_t
 	virtaddr_t rsp;
 	address_space* vm_space;
 	virtaddr_t entry;
+	int open_files[32];
 	process_t* next;
 };
 

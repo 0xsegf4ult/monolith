@@ -1,6 +1,8 @@
 #pragma once
 
+#include <fs/ops.hpp>
 #include <lib/types.hpp>
+#include <dev/device.hpp>
 
 namespace vfs
 {
@@ -8,30 +10,15 @@ namespace vfs
 enum class vnode_type
 {
 	directory,
-	file
+	file,
+	link,
+	char_device,
+	block_device
 };
-
-struct vnode_t;
-struct ventry_t;
-struct file_descriptor_t;
-
-typedef ventry_t* (*fs_lookup_t)(ventry_t*, const char*);
-typedef int (*fs_mkdir_t)(ventry_t*, const char*);
-typedef int (*fs_create_t)(ventry_t*, const char*);
-typedef int (*fs_open_t)(vnode_t*, int);
-typedef int (*fs_close_t)(int);
-typedef size_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);
-typedef size_t (*fs_write_t)(file_descriptor_t*, const byte*, size_t);
 
 struct vfilesystem_t
 {
-	fs_lookup_t lookup;
-	fs_create_t create;
-	fs_mkdir_t mkdir;
-	fs_open_t open;	
-	fs_close_t close;
-	fs_read_t read;
-	fs_write_t write;
+	fs_ops ops;
 	void* data;	
 };
 
@@ -49,7 +36,8 @@ struct vnode_t
 	vnode_type type;
 	size_t size;
 	void* data;
-	vfilesystem_t* fs;
+	fs_ops* ops;
+	dev_t dev;
 };
 
 struct mountpoint_t
@@ -74,6 +62,7 @@ struct context_t
 void init();
 int create(const char* path);
 int mkdir(const char* path);
+int mknod(const char* path, char type, dev_t device);
 
 struct lookup_result
 {

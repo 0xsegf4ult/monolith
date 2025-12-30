@@ -6,6 +6,7 @@
 #include <arch/x86_64/timer.hpp>
 
 #include <dev/ps2.hpp>
+#include <dev/tty.hpp>
 
 #include <fs/vfs.hpp>
 
@@ -87,13 +88,15 @@ extern "C" void __assertion_fail_handler(const char* str)
 extern "C" [[noreturn]] void init()
 {
 	CPU bootCPU;
-
+	
 	for(ctor_func_t* ctor = start_ctors; ctor < end_ctors; ctor++)
+	{
 		(*ctor)();
+	}
 
 	early_serial_init();
 	log::info("monolith kernel version git-");
-
+	
 	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
 	if(memmap_request.response == nullptr)
 		panic("EFI memory map pointer invalid");
@@ -142,11 +145,15 @@ extern "C" [[noreturn]] void init()
 	
 	pit::init(1193);
 	log::info("timer: initialized source PIT 1ms period");
+	
+	vfs::init();
+	vfs::mkdir("/dev");	
+
+	log::debug("init tty");
+	tty_init();
 
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
 		ps2::init();
-
-	vfs::init();
 
 	sched_init();
 	

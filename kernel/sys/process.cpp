@@ -63,6 +63,9 @@ process_t* create_process(const char* name, bool is_user)
 	process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
 	process->rsp = 0;
 
+	for(int i = 0; i < 32; i++)
+		process->open_files[i] = -1;
+
 	if(is_user)
 	{
 		process->rsp = process->vm_space->alloc(user_stack_size, vm_write | vm_user) + user_stack_size;

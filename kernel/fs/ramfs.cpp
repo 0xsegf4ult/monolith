@@ -7,6 +7,9 @@
 #include <lib/types.hpp>
 
 #include <lib/klog.hpp>
+#include <dev/device.hpp>
+#include <dev/character.hpp>
+#include <dev/block.hpp>
 
 using namespace vfs;
 
@@ -30,7 +33,7 @@ int ramfs_create(ventry_t* parent, const char* path)
 	inode->type = vnode_type::file;
 	inode->size = 0;
 	inode->data = nullptr;
-	inode->fs = parent->node->fs;
+	inode->ops = parent->node->ops;
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);
@@ -56,7 +59,45 @@ int ramfs_mkdir(ventry_t* parent, const char* path)
 	inode->type = vnode_type::directory;
 	inode->size = 0;
 	inode->data = nullptr;
-	inode->fs = parent->node->fs;
+	inode->ops = parent->node->ops;
+
+	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
+	strncpy(dirent->name, path, 64);
+	auto namel = string_length(dirent->name);
+	if(dirent->name[namel - 1] == '/')
+		dirent->name[namel - 1] = '\0';
+	dirent->node = inode;
+	dirent->parent = parent;
+	dirent->children = nullptr;
+	dirent->sibling = nullptr;
+
+	if(parent->children)
+		dirent->sibling = parent->children;
+
+	parent->children = dirent;
+
+	return 0;
+}
+
+int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
+{
+	auto* inode = (vnode_t*)kmalloc(sizeof(vnode_t));
+	switch(type)
+	{
+	case 'c':
+		inode->type = vnode_type::char_device;
+		inode->ops = chardev_get(dev)->ops;
+		break;
+	case 'b':
+		inode->type = vnode_type::block_device;
+		inode->ops = blockdev_get(dev)->ops;
+		break;
+	default:
+		return -1;
+	}
+
+	inode->size = 0;
+	inode->data = nullptr;
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);
@@ -206,13 +247,14 @@ size_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 vfilesystem_t* ramfs_create()
 {
 	auto* fs = (vfilesystem_t*)kmalloc(sizeof(vfilesystem_t));
-	fs->lookup = ramfs_lookup;
-	fs->create = ramfs_create;
-	fs->mkdir = ramfs_mkdir;
-	fs->open = ramfs_open;
-	fs->close = ramfs_close;
-	fs->read = ramfs_read;
-	fs->write = ramfs_write;
+	fs->ops.lookup = ramfs_lookup;
+	fs->ops.create = ramfs_create;
+	fs->ops.mkdir = ramfs_mkdir;
+	fs->ops.mknod = ramfs_mknod;
+	fs->ops.open = ramfs_open;
+	fs->ops.close = ramfs_close;
+	fs->ops.read = ramfs_read;
+	fs->ops.write = ramfs_write;
 	fs->data = nullptr;
 
 	return fs;

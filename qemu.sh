@@ -9,5 +9,5 @@ then qemu-system-x86_64 -no-shutdown -no-reboot -machine type=q35 -bios /usr/sha
 fi
 
 if [ "$1" = "full" ]
-then qemu-system-x86_64 -accel kvm -machine type=q35 -smp cores=6,threads=2 -m 4096M -bios /usr/share/ovmf/x64/OVMF.4m.fd -vga virtio -serial stdio -usb boot.img
+then qemu-system-x86_64 -accel kvm -machine type=q35 -smp cores=6 -m 4096M -bios /usr/share/ovmf/x64/OVMF.4m.fd -vga virtio -serial stdio -usb boot.img
 fi

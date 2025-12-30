@@ -18,11 +18,13 @@ void init()
 {
 	context = (context_t*)(pmm_allocate() + mm::direct_mapping_offset);
 
+	auto* ramfs = ramfs_create();
+
 	auto* rnode = (vnode_t*)kmalloc(sizeof(vnode_t));
 	rnode->type = vnode_type::directory;
 	rnode->size = 0;
 	rnode->data = nullptr;
-	rnode->fs = ramfs_create();
+	rnode->ops = &ramfs->ops;
 
 	context->root_node = (ventry_t*)kmalloc(sizeof(ventry_t));
 	context->root_node->name[0] = '/';
@@ -44,7 +46,7 @@ int create(const char* path)
 	if(!query.parent)
 		return -1;
 
-	return query.parent->node->fs->create(query.parent, query.basename);	
+	return query.parent->node->ops->create(query.parent, query.basename);	
 }
 
 int mkdir(const char* path)
@@ -57,7 +59,21 @@ int mkdir(const char* path)
 	if(!query.parent)
 		return -1;
 
-	return query.parent->node->fs->mkdir(query.parent, query.basename);
+	return query.parent->node->ops->mkdir(query.parent, query.basename);
+}
+
+int mknod(const char* path, char type, dev_t device)
+{
+	log::debug("mknod {}", path);
+	auto query = lookup(context->root_node, path);
+
+	if(query.result)
+		return -1;
+
+	if(!query.parent)
+		return -1;
+
+	return query.parent->node->ops->mknod(query.parent, query.basename, type, device);
 }
 
 lookup_result lookup(ventry_t* parent, const char* path)
@@ -91,7 +107,7 @@ lookup_result lookup(ventry_t* parent, const char* path)
 		char* component = &cbuffer[i];
 		size_t clen = string_length(component);
 
-		auto* next = current->node->fs->lookup(current, component);
+		auto* next = current->node->ops->lookup(current, component);
 
 		i += clen;
 		current = next;
@@ -108,8 +124,8 @@ int open(const char* path, int flags)
 	{
 		return -1;
 	}
-	
-	auto fs_id = query.result->node->fs->open(query.result->node, flags);
+
+	auto fs_id = query.result->node->ops->open(query.result->node, flags);
 	if(fs_id < 0)
 		return -1;
 
@@ -133,13 +149,13 @@ int open(const char* path, int flags)
 size_t read(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
-	return inode->fs->read(&context->open_files[fd], buffer, length);
+	return inode->ops->read(&context->open_files[fd], buffer, length);
 }
 
 size_t write(int fd, const byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
-	return inode->fs->write(&context->open_files[fd], buffer, length);
+	return inode->ops->write(&context->open_files[fd], buffer, length);
 }
 
 int close(int fd)
@@ -147,8 +163,8 @@ int close(int fd)
 	if(context->open_files[fd].inode == nullptr)
 		return -1;
 
-	auto cres = context->open_files[fd].inode->fs->close(context->open_files[fd].fs_id);
-	if(!cres)
+	auto cres = context->open_files[fd].inode->ops->close(context->open_files[fd].fs_id);
+	if(cres < 0)
 		return -1;
 
 	context->open_files[fd].read_pos = 0;

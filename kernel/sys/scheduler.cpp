@@ -33,6 +33,7 @@ void schedule()
 {
 	if(ready_list_head)
 	{
+		CPU::disable_interrupts();
 		if(current_process->status == process_status::running)
 		{
 			current_process->status = process_status::ready;
@@ -51,9 +52,20 @@ void schedule()
 		CPU::get_current()->set_current_process(current_process);
 		current_process->vm_space->switch_to();
 
-		CPU::disable_interrupts();
 		arch_context_switch(&last->rsp0, current_process->rsp0);
 	}	
+}
+
+void sched_block()
+{
+	log::debug("process {} blocked", current_process->name);
+	current_process->status = process_status::sleeping;
+	schedule();
+}
+
+void sched_unblock()
+{
+
 }
 
 void sched_init()
@@ -103,4 +115,9 @@ void sched_add_ready(process_t* proc)
 		ready_list_tail->next = proc;
 		ready_list_tail = proc;
 	}
+}
+
+void sched_dump_state()
+{
+	log::debug("current: {}", current_process->name);
 }

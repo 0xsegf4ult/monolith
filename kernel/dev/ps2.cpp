@@ -34,6 +34,11 @@ void interrupt_handler()
 		lapic::eoi();
 		schedule();
 	}
+	else if(scancode == 0x20)
+	{
+		log::debug("sched_dump_state()");
+		sched_dump_state();
+	}
 }
 
 void init()
