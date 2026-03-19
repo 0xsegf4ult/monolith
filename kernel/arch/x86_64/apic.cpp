@@ -1,5 +1,6 @@
 #include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/cpu.hpp>
+#include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 #include <lib/kstd.hpp>
 #include <lib/klog.hpp>
@@ -12,9 +13,9 @@ static physaddr_t base_address = 0;
 
 void enable(physaddr_t base)
 {
-	base_address = base;
-	vm_map(base_address, base_address, vm_write | vm_mmio);
-	CPU::wrmsr(LAPIC_BASE, base_address | 0x800);
+	base_address = base + mm::direct_mapping_offset;
+	vm_map(base, base_address, vm_write | vm_mmio);
+	CPU::wrmsr(LAPIC_BASE, base | 0x800);
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0xf0) = 0x1ff;
 }
 
@@ -28,12 +29,12 @@ void eoi()
 namespace ioapic
 {
 
-void ioapic_instance::enable(uint32_t address, uint32_t gsi)
+void ioapic_instance::enable(physaddr_t address, uint32_t gsi)
 {
-	base_address = address;
+	base_address = address + mm::direct_mapping_offset;
 	gsi_base = gsi;
 
-	vm_map(base_address, base_address, vm_write | vm_mmio);
+	vm_map(address, base_address, vm_write | vm_mmio);
 
 	id = (mmio_read(0x00) >> 24) * 0xf0;
 	ver = mmio_read(0x01);

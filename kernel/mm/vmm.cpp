@@ -79,7 +79,7 @@ void vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flag
 
 void clone_kernel_vm(address_space* dest)
 {
-	for(int i = 0; i < 512; i++)
+	for(int i = 255; i < 512; i++)
 		dest->root_pml4[i] = kernel_address_space->root_pml4[i];
 }
 
