@@ -6,6 +6,7 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/context.hpp>
 #include <fs/vfs.hpp>
+#include <sys/executable.hpp>
 #include <sys/process.hpp>
 #include <sys/scheduler.hpp>
 
@@ -13,7 +14,7 @@
 
 void syscall_handler(cpu_context_t* ctx)
 {
-	auto id = syscall_id(ctx->rax);
+	auto id = syscall_id(ctx->rdi);
 	auto* proc = CPU::get_current()->get_current_process();
 
 	switch(id)
@@ -21,14 +22,14 @@ void syscall_handler(cpu_context_t* ctx)
 	using enum syscall_id;
 	case OPEN:
 	{
-		if(!ctx->rdi)
+		if(!ctx->rsi)
 		{
 			ctx->rax = -1;
 			break;
 		}	
 
-		log::debug("sys_open: {:x} -> {}", ctx->rdi, (const char*)ctx->rdi);
-		int v_fd = vfs::open((const char*)ctx->rdi, (int)ctx->rsi);
+		log::debug("sys_open: {:x} -> {}", ctx->rsi, (const char*)ctx->rsi);
+		int v_fd = vfs::open((const char*)ctx->rsi, (int)ctx->rdx);
 		if(v_fd < 0)
 		{
 			ctx->rax = -1;
@@ -54,13 +55,14 @@ void syscall_handler(cpu_context_t* ctx)
 			break;
 		}
 
+		proc->open_files[fd] = v_fd;
 		ctx->rax = fd;
 
 		break;
 	}
 	case CLOSE:
 	{
-		auto fd = int(ctx->rdi);
+		auto fd = int(ctx->rsi);
 		if(fd < 0)
 		{
 			ctx->rax = 1;
@@ -68,21 +70,22 @@ void syscall_handler(cpu_context_t* ctx)
 		}
 		
 		auto v_fd = proc->open_files[fd];
+		proc->open_files[fd] = -1;
 		
-		auto res = vfs::close((int)ctx->rdi);
+		auto res = vfs::close(v_fd);
 		ctx->rax = res;
 	
 		break;
 	}
 	case READ:
 	{
-		log::debug("sys_read fd{}", ctx->rdi);
+		log::debug("sys_read fd{}", ctx->rsi);
 
-		auto fd = int(ctx->rdi);
-		auto* buf = reinterpret_cast<byte*>(ctx->rsi);
-		auto len = size_t(ctx->rdx);
+		auto fd = int(ctx->rsi);
+		auto* buf = reinterpret_cast<byte*>(ctx->rdx);
+		auto len = size_t(ctx->rcx);
 
-		if(fd < 0)
+		if(fd < 0 || proc->open_files[fd] < 0)
 		{
 			ctx->rax = -1;
 			break;
@@ -90,18 +93,19 @@ void syscall_handler(cpu_context_t* ctx)
 
 		// validate buf
 
-		sched_block();
 		ctx->rax = vfs::read(proc->open_files[fd], buf, len);
 
 		break;
 	}
 	case WRITE:
 	{
-		auto fd = int(ctx->rdi);
-		auto* buf = reinterpret_cast<const byte*>(ctx->rsi);
-		auto len = size_t(ctx->rdx);
+		auto fd = int(ctx->rsi);
+		auto* buf = reinterpret_cast<const byte*>(ctx->rdx);
+		auto len = size_t(ctx->rcx);
+		
+		log::debug("sys_write fd {} mem {:x} len {}", ctx->rsi, ctx->rdx, ctx->rcx);
 
-		if(fd < 0)
+		if(fd < 0 || proc->open_files[fd] < 0)
 		{
 			ctx->rax = -1;
 			break;
@@ -112,12 +116,47 @@ void syscall_handler(cpu_context_t* ctx)
 
 		break;
 	}
+	case SPAWN:
+	{
+		auto* path = reinterpret_cast<const char*>(ctx->rsi);
+		if(!path)
+		{
+			ctx->rax = -1;
+			break;
+		}
+		
+		log::debug("sys_spawn: {}", path);
+		
+		int fd = vfs::open((const char*)ctx->rsi, (int)ctx->rdx);
+		if(fd < 0)
+		{
+			ctx->rax = -1;
+			break;
+		}
+		
+		auto* proc = create_process(path, true);
+		load_executable(fd, proc);
+		vfs::close(fd);
+		
+		sched_add_ready(proc);
+
+		break;
+	}
+	case EXIT:
+	{
+		auto status = int(ctx->rsi);
+		log::debug("process {} exited with status {}", proc->name, status); 
+	
+		sched_kill();
+
+		break;
+	}
 	case DEBUG_PRINT:
 	{
-		if(!ctx->rdi)
+		if(!ctx->rsi)
 			break;
 
-		log::debug("userdebug: {}", (const char*)ctx->rdi);
+		log::debug("userdebug: {}", (const char*)ctx->rsi);
 		break;
 	}
 	default:

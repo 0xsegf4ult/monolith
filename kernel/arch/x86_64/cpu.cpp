@@ -74,6 +74,7 @@ void CPU::early_init(uint32_t cpu)
 		for(int i = 32; i < 256; i++)
 		{
 			auto dpl = DPL_KERNEL;
+			// syscall
 			if(i == 0x80)
 				dpl = DPL_USER;
 			
@@ -96,7 +97,7 @@ void CPU::early_init(uint32_t cpu)
 void CPU::set_pagetable(page_table* pt_address)
 {
 	pt = pt_address;
-	asm volatile("movq %0, %%cr3" : : "a"(reinterpret_cast<uint64_t>(pt_address) - mm::direct_mapping_offset));
+	asm volatile("movq %0, %%cr3" : : "r"(reinterpret_cast<uint64_t>(pt_address) - mm::direct_mapping_offset));
 }
 
 void CPU::set_current_process(process_t* process)

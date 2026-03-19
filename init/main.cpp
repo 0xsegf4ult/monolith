@@ -1,18 +1,17 @@
+#include <syscall.hpp>
+
 extern "C" int _start()
 {
-	const char* init_str = "Message from userspace!";
+	debugmsg("Message from userspace!");	
 
-	asm volatile("movq $6, %%rax; movq %0, %%rdi; int $0x80" : :"g"(init_str));
+	int fd = open("/dev/tty0", 0);
+	if(fd < 0)
+		debugmsg("Failed to open /dev/tty0");
 
+	const char* out_str = "INIT: booting...\n";
+	write(fd, out_str, 17);
 
-	const char* devname = "/dev/tty0";
-	
-	asm volatile("movq $0, %%rax; movq %0, %%rdi; movq $0, %%rsi; int $0x80" : : "g"(devname));
-	
-	int fd = -1;
-	asm volatile("movl %%eax, %0" : "=g"(fd));
-
-	asm volatile("movq $2, %%rax; movq %0, %%rdi; movq $2, %%rsi; movq $8, %%rdx; int $0x80" : : "g"(fd));
+	spawn("/bin/sh");
 
 	for(;;)
 		asm volatile("pause");

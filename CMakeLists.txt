@@ -9,3 +9,4 @@ project(monolith VERSION 0.1 LANGUAGES CXX C ASM)
 
 add_subdirectory("kernel")
 add_subdirectory("init")
+add_subdirectory("userspace")
