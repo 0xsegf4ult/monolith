@@ -263,9 +263,15 @@ public:
 		case TypeID::Char:
 			*it++ = v_char;
 			break;
-                case TypeID::UInt32:
+		case TypeID::Int32: //FIXME: implement signed integers
+			format.format_integer(it, dst.end(), v_uint32);
+                	break;
+		case TypeID::UInt32:
                         format.format_integer(it, dst.end(), v_uint32);
                         break;
+		case TypeID::Int64:
+			format.format_integer(it, dst.end(), v_uint64);
+			break;
                 case TypeID::UInt64:
                         format.format_integer(it, dst.end(), v_uint64);
                         break;

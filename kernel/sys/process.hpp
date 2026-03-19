@@ -8,7 +8,7 @@ enum class process_status
 	ready,
 	running,
 	sleeping,
-	dead
+	terminated	
 };
 
 struct address_space;

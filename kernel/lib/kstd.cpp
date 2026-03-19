@@ -11,22 +11,6 @@ void panic_inner(const char* string)
         early_serial_write(string);
         early_serial_putchar('\n');
 
-        struct stack_frame
-        {
-                stack_frame* rbp;
-                uint64_t rip;
-        };
-
-        early_serial_write("Stack trace:\n");
-
-        char trace_buf[64];
-        stack_frame* stk = reinterpret_cast<stack_frame*>(__builtin_frame_address(0));
-        for(uint32_t frame = 0; stk && frame < 32; frame++)
-        {
-                format_to(string_span{&trace_buf[0], 64}, "{:x}\n", stk->rip);
-                early_serial_write(trace_buf);
-                stk = stk->rbp;
-        }
 
         CPU::halt();
 }

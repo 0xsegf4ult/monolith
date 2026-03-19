@@ -1,9 +1,12 @@
 #include <arch/x86_64/apic.hpp>
+#include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/interrupts.hpp>
 #include <arch/x86_64/context.hpp>
+#include <arch/x86_64/serial.hpp>
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
+#include <sys/process.hpp>
 #include <sys/syscall.hpp>
 
 dev_irq_handler_t irq_handlers[32]{nullptr};
@@ -31,7 +34,25 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		uint64_t cr2;
 		asm volatile("movq %%cr2, %0" : "=r"(cr2));
 
-		panic("unhandled page fault at RIP {:x} memory access {:x} {:b}", ctx->rip, cr2, ctx->error_code);
+/*		struct stack_frame
+		{
+			stack_frame* rbp;
+			uint64_t rip;
+		};
+
+		early_serial_write("Stack trace:\n");
+
+		char trace_buf[64];
+		stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rsp);
+		for(uint32_t frame = 0; stk && frame < 32; frame++)
+		{
+			format_to(string_span{&trace_buf[0], 64}, "{:x}\n", stk->rip);
+			early_serial_write(trace_buf);
+			stk = stk->rbp;
+		}
+*/		
+		auto* proc = CPU::get_current()->get_current_process();
+		panic("[{}] unhandled page fault at RIP {:x} memory access {:x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{

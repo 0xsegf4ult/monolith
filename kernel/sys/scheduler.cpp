@@ -11,12 +11,12 @@
 #include <lib/klog.hpp>
 #include <lib/types.hpp>
 
-static process_t* current_process = nullptr;
 static virtaddr_t boot_stack = 0;
 
 static process_t* idle_process = nullptr;
 static process_t* ready_list_head = nullptr;
 static process_t* ready_list_tail = nullptr;
+static process_t* kill_list = nullptr;
 
 void idle_process_entry(void* arg)
 {
@@ -34,6 +34,7 @@ void schedule()
 	if(ready_list_head)
 	{
 		CPU::disable_interrupts();
+		auto* current_process = CPU::get_current()->get_current_process();
 		if(current_process->status == process_status::running)
 		{
 			current_process->status = process_status::ready;
@@ -42,11 +43,14 @@ void schedule()
 		}
 	
 		process_t* last = current_process;	
+
 		process_t* proc = ready_list_head;
-		current_process = proc;
 		ready_list_head = proc->next;
+		proc->next = nullptr;
 		if(ready_list_tail == proc)
 			ready_list_tail = ready_list_head;
+
+		current_process = proc;
 
 		current_process->status = process_status::running; 
 		CPU::get_current()->set_current_process(current_process);
@@ -56,16 +60,46 @@ void schedule()
 	}	
 }
 
-void sched_block()
+void sched_block(process_status status)
 {
-	log::debug("process {} blocked", current_process->name);
-	current_process->status = process_status::sleeping;
+	auto* current_process = CPU::get_current()->get_current_process();
+	current_process->status = status;
 	schedule();
 }
 
-void sched_unblock()
+void sched_unblock(process_t* proc)
 {
+	if(ready_list_head)
+	{
+		proc->status = process_status::ready;
+		ready_list_tail->next = proc;
+		ready_list_tail = proc;
+	}
+	else
+	{
+		auto* current_process = CPU::get_current()->get_current_process();
+		if(current_process->status == process_status::running)
+		{
+			current_process->status = process_status::ready;
+			ready_list_head = current_process;
+			ready_list_tail = current_process;
+		}
 
+		proc->status = process_status::running;
+		CPU::get_current()->set_current_process(proc);
+		current_process->vm_space->switch_to();
+		
+		arch_context_switch(&current_process->rsp0, proc->rsp0);
+	}
+}
+
+void sched_kill()
+{
+	auto* current_process = CPU::get_current()->get_current_process();
+	
+	current_process->next = kill_list;
+	kill_list = current_process;
+	sched_block(process_status::terminated);	
 }
 
 void sched_init()
@@ -94,11 +128,10 @@ void sched_start()
         idle_process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
         idle_process->rsp = 0;
 	
-	current_process = idle_process;
-	current_process->status = process_status::running;
-	CPU::get_current()->set_current_process(current_process);
+	idle_process->status = process_status::running;
+	CPU::get_current()->set_current_process(idle_process);
 
-	arch_context_switch(&boot_stack, current_process->rsp0);
+	arch_context_switch(&boot_stack, idle_process->rsp0);
 
 	panic("failed to start idle process");
 }
@@ -119,5 +152,21 @@ void sched_add_ready(process_t* proc)
 
 void sched_dump_state()
 {
-	log::debug("current: {}", current_process->name);
+	auto* current_process = CPU::get_current()->get_current_process();
+	log::debug("SCHEDULER STATE: ");
+	generic_log("current: {}", current_process->name);
+	generic_log("ready_list");
+	auto* r_cur = ready_list_head;
+	while(r_cur)
+	{
+		generic_log(" -> {}", r_cur->name);
+		r_cur = r_cur->next;
+	}
+	generic_log("kill_list");
+	auto* k_cur = kill_list;
+	while(k_cur)
+	{
+		generic_log(" -> {}", k_cur->name);
+		k_cur = k_cur->next;
+	}
 }
