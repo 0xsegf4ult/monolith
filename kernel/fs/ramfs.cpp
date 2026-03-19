@@ -98,6 +98,7 @@ int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
 
 	inode->size = 0;
 	inode->data = nullptr;
+	inode->dev = dev;
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);

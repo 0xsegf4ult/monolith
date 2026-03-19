@@ -1,4 +1,5 @@
 #include <dev/ps2.hpp>
+#include <dev/tty.hpp>
 
 #include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/io.hpp>
@@ -12,14 +13,30 @@
 namespace ps2
 {
 
+enum kbd_modifier_key : uint32_t
+{
+	KBD_MOD_CTRL = 1,
+	KBD_MOD_ALT = 2,
+	KBD_MOD_SHIFT = 4
+};
+
 struct key_event
 {
 	uint8_t code;
+	uint8_t mod;
+};
+
+enum kbd_state
+{
+	KBD_STATE_NORMAL,
+	KBD_STATE_PREFIX
 };
 
 constexpr size_t kbd_buffer_size = 256;
 key_event kbd_buffer[kbd_buffer_size];
 uint8_t kbd_buf_position = 0;
+kbd_state state = KBD_STATE_NORMAL;
+tty_device* cur_tty = nullptr;
 
 void interrupt_handler()
 {
@@ -38,6 +55,10 @@ void interrupt_handler()
 	{
 		log::debug("sched_dump_state()");
 		sched_dump_state();
+	}
+	else if(cur_tty)
+	{
+		tty_consume(cur_tty, 'K');
 	}
 }
 
@@ -66,6 +87,11 @@ void init()
 
 	ioapic::get(0).write_redirection_entry(0x1, 0x20);
 	install_irq_handler(0x20, interrupt_handler);
+}
+
+void set_tty(tty_device* tty)
+{
+	cur_tty = tty;
 }
 
 }

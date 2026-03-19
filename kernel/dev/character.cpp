@@ -21,11 +21,11 @@ char_device_t* chardev_get(dev_t dev)
 {
 	char_device_t* cur = devices;
 
-	while(cur)
+	while(cur != nullptr)
 	{
 		if(cur->dev == dev)
 			return cur;
-		
+
 		cur = cur->next;
 	}
 
