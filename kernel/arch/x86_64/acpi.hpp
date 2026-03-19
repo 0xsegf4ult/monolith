@@ -182,16 +182,30 @@ struct __attribute__((packed)) fadt : public sdt_header
         acpi_gas x_gpe1_block;
 };
 
+struct __attribute__((packed)) mcfg_ecam
+{
+	uint64_t base_address;
+	uint16_t segment_group;
+	uint8_t start_bus;
+	uint8_t end_bus;
+	char reserved[4];
+};
+
+struct __attribute__((packed)) mcfg : public sdt_header
+{
+	char reserved[8];
+};
+
 struct acpi_tables
 {
 	const rsdp_v2* xsdp;
 	const sdt_header* xsdt;
 	const fadt* fadt;
 	const madt* madt;
+	const mcfg* mcfg;
 };
 
 const sdt_header* find_table(const sdt_header* root_table, const char* id);
 acpi_tables parse_tables(const rsdp_v1* rsdp);
-void parse_madt(const madt* table);
 
 }
