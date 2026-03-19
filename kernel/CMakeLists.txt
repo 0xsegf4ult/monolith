@@ -30,6 +30,7 @@ target_sources(vmmonolith PRIVATE
 	mm/pmm.cpp
 	mm/slab.cpp
 	mm/vmm.cpp
+	sys/executable.cpp
 	sys/process.cpp
 	sys/scheduler.cpp
 	sys/syscall.cpp)
