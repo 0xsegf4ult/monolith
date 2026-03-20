@@ -56,9 +56,9 @@
 
 .extern interrupt_handler
 __common_interrupt:
-	cld
 	push_all_registers
 
+	cld
 	movq %rsp, %rdi
 	call interrupt_handler
 	movq %rax, %rsp

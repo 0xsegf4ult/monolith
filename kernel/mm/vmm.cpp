@@ -34,11 +34,11 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 	auto databss_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_data_start));
 	auto databss_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_bss_end) - reinterpret_cast<virtaddr_t>(&_data_start));
 
-	log::info("mm: mapping kernel .text [{:x} - {:x}] R-X", text_start, text_start + text_length);
+	log::info("mm: mapping kernel .text [{:#x} - {:#x}] R-X", text_start, text_start + text_length);
 	kernel_address_space->map_range(text_start - mm::kernel_mapping_offset + kload_addr, text_start, text_length, vm_exec);
-	log::info("mm: mapping kernel .rodata [{:x} - {:x}] R--", rodata_start, rodata_start + rodata_length);
+	log::info("mm: mapping kernel .rodata [{:#x} - {:#x}] R--", rodata_start, rodata_start + rodata_length);
 	kernel_address_space->map_range(rodata_start - mm::kernel_mapping_offset + kload_addr, rodata_start, rodata_length);
-	log::info("mm: mapping kernel .data .bss [{:x} - {:x}] RW-", databss_start, databss_start + databss_length);
+	log::info("mm: mapping kernel .data .bss [{:#x} - {:#x}] RW-", databss_start, databss_start + databss_length);
 	kernel_address_space->map_range(databss_start - mm::kernel_mapping_offset + kload_addr, databss_start, databss_length, vm_write);
 
 	log::info("mm: HHDM mapping physical memory RW-");

@@ -34,7 +34,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		uint64_t cr2;
 		asm volatile("movq %%cr2, %0" : "=r"(cr2));
 
-/*		struct stack_frame
+		struct stack_frame
 		{
 			stack_frame* rbp;
 			uint64_t rip;
@@ -43,20 +43,29 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		early_serial_write("Stack trace:\n");
 
 		char trace_buf[64];
-		stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rsp);
+		stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rbp);
 		for(uint32_t frame = 0; stk && frame < 32; frame++)
 		{
-			format_to(string_span{&trace_buf[0], 64}, "{:x}\n", stk->rip);
+			format_to(string_span{&trace_buf[0], 64}, "{:#x}\n", stk->rip);
 			early_serial_write(trace_buf);
 			stk = stk->rbp;
 		}
-*/		
+
+		format_to(string_span{&trace_buf[0], 64}, "RAX: {:#x}", ctx->rax);
+		early_serial_write(trace_buf);
+		format_to(string_span{&trace_buf[0], 64}, " RBX: {:#x}", ctx->rbx);
+		early_serial_write(trace_buf);
+		format_to(string_span{&trace_buf[0], 64}, " RCX: {:#x}", ctx->rcx);
+		early_serial_write(trace_buf);
+		format_to(string_span{&trace_buf[0], 64}, " RDX: {:#x}", ctx->rdx);
+		early_serial_write(trace_buf);
+
 		auto* proc = CPU::get_current()->get_current_process();
-		panic("[{}] unhandled page fault at RIP {:x} memory access {:x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
+		panic("[{}] unhandled page fault at RIP {:#x} memory access {:#x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{
-		panic("general protection fault at RIP {:x} {:b}", ctx->rip, ctx->error_code);
+		panic("general protection fault at RIP {:#x} {:b}", ctx->rip, ctx->error_code);
 	}
 	else if(ctx->interrupt_id == 0xFF)
 	{
@@ -80,6 +89,6 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		return ctx;
 	}
 
-	panic("unhandled interrupt {} RIP {:x}", ctx->interrupt_id, ctx->rip);
+	panic("unhandled interrupt {} RIP {:#x}", ctx->interrupt_id, ctx->rip);
 	return ctx;
 }

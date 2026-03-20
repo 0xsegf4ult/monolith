@@ -37,4 +37,3 @@ void install_irq_handler(uint8_t irq, dev_irq_handler_t handler);
 void remove_irq_handler(uint8_t irq);
 
 struct cpu_context_t;
-extern "C" cpu_context_t* interrupt_handler(cpu_context_t* context); 

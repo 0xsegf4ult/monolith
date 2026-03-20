@@ -88,15 +88,15 @@ void scan_device(uint8_t bus, uint8_t device)
 
 	if(dev.is_bridge())
 	{
-		log::info("pcie: {}:{}.0 {}", bus, device, cname != nullptr ? cname : "Bridge");
+		log::info("pcie: {:02x}:{:02x}.0 {}", bus, device, cname != nullptr ? cname : "Bridge");
 		scan_bus(dev.sub_bus());
 		return;
 	}
 
 	if(cname)
-		log::info("pcie: {}:{}.0 {}", bus, device, cname);
+		log::info("pcie: {:02x}:{:02x}.0 {}", bus, device, cname);
 	else	
-		log::info("pcie: {}:{}.0 {}:{}", bus, device, dev.vendor_id(), dev.device_id());
+		log::info("pcie: {:02x}:{:02x}.0 {:#x}:{:#x}", bus, device, dev.vendor_id(), dev.device_id());
 
 	if(dev.has_multiple_functions())
 	{
@@ -114,9 +114,9 @@ void scan_device(uint8_t bus, uint8_t device)
 			}
 			
 			if(s_cname)
-				log::info("pcie: {}:{}.{} {}", bus, device, i, s_cname);
+				log::info("pcie: {:02x}:{:02x}.{:x} {}", bus, device, i, s_cname);
 			else
-				log::info("pcie: {}:{}.{} {}:{}", bus, device, i, sub_dev.vendor_id(), sub_dev.device_id());
+				log::info("pcie: {:02x}:{:02x}.{:x} {:#x}:{:#x}", bus, device, i, sub_dev.vendor_id(), sub_dev.device_id());
 		}
 	}
 }

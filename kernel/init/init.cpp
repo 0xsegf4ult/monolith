@@ -5,6 +5,7 @@
 #include <arch/x86_64/serial.hpp>
 #include <arch/x86_64/timer.hpp>
 
+#include <dev/pcie.hpp>
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
 
@@ -97,7 +98,7 @@ extern "C" [[noreturn]] void init()
 	early_serial_init();
 	log::info("monolith kernel version git-");
 	
-	log::info("kernel virt memory [{} - {}]", &virt_kernel_start, &virt_kernel_end);
+	log::info("kernel virt memory [{:#x} - {:#x}]", &virt_kernel_start, &virt_kernel_end);
 	if(memmap_request.response == nullptr)
 		panic("EFI memory map pointer invalid");
 
@@ -155,9 +156,11 @@ extern "C" [[noreturn]] void init()
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
 		ps2::init();
 
+	pcie::enumerate();
+
 	sched_init();
 	
-	log::info("initramfs [{:x} - {:x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
+	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
 	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
 	initramfs_unpack(initramfs_address, initramfs_size);
 

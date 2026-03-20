@@ -134,7 +134,47 @@ public:
 
                 if(*it == ':' && *(it + 1) != '}')
                 {
-                        ++it;
+                        m_flags = FMT_FLAGS_NONE;
+			++it;
+
+			m_flags = parse_align_flag(*(it + 1));
+			if(m_flags != FMT_FLAGS_NONE)
+			{
+				if(*it == '{' || *it == '}')
+					__assertion_fail_handler("failed to parse format string: invalid fill character");
+				m_fill_char = *it;
+				it += 2;
+			}
+			else
+			{
+				m_flags = parse_align_flag(*it);
+				if(m_flags != FMT_FLAGS_NONE)
+					++it;
+			}
+
+			switch(*it)
+			{
+				case '-': m_flags |= FMT_FLAGS_SIGN_MINUS; ++it; break;
+				case '+': m_flags |= FMT_FLAGS_SIGN_PLUS; ++it; break;
+				case ' ': m_flags |= FMT_FLAGS_SIGN_SPACE; ++it; break;
+				default: break;
+			}
+
+			if(*it == '#')
+			{
+				m_flags |= FMT_FLAGS_HASH;
+				++it;
+			}
+
+			bool fill_zero = false;
+			if(*it == '0')
+			{
+				fill_zero = true;
+				++it;
+			}
+
+			if(*it >= '0' && *it <= '9')
+				m_width = parse_positive_small_int(it, 255);
 
                         if(*it != '}')
                         {
@@ -166,7 +206,13 @@ public:
                                 if(m_type == Type::Invalid)
                                         __assertion_fail_handler("failed to parse format string: invalid type specifier");
                         }
-                }
+                	
+			if(fill_zero)
+			{
+				m_flags = (m_flags & (~FMT_FLAGS_ALIGN_BITMASK)) | FMT_FLAGS_ALIGN_NUMERIC;
+				m_fill_char = '0';
+			}
+		}
 			if(!(it < fmt.cend() && *it++ == '}'))
                 		__assertion_fail_handler("failed to parse format string: unterminated format argument specifier");
 
@@ -178,37 +224,41 @@ public:
         template <typename T>
         void format_integer(iterator& it, const_iterator end, const T value)
         {
+		int fill_after = 0;
+
                 if(m_type == Type::None || m_type == Type::IntegerDec)
                 {
                         const auto digits = count_digits_dec(value);
-                        it += digits;
+                        fill_after = write_alignment(it, end, digits, false);
+			it += digits;
                         convert_dec(it, value);
                 }
                 else if(m_type == Type::IntegerHex)
                 {
                         const auto digits = count_digits_hex(value);
-                        *it++ = '0';
-                        *it++ = 'x';
-                        it += digits;
+                        fill_after = write_alignment(it, end, digits, false);
+			it += digits;
                         convert_hex(it, value);
                 }
                 else if(m_type == Type::IntegerBin)
                 {
                         const auto digits = count_digits_bin(value);
-                        *it++ = '0';
-                        *it++ = 'b';
-                        it += digits;
+                        fill_after = write_alignment(it, end, digits, false);
+			it += digits;
                         convert_bin(it, value);
                 }
+
+		for(int i = 0; i < fill_after; i++)
+			*it++ = m_fill_char;
         }
 	
 	void format_pointer(iterator& it, const_iterator end, const uintptr_t value)
 	{
 		auto ivalue = static_cast<uint64_t>(value);
                 const auto digits = count_digits_hex(ivalue);
-                *it++ = '0';
-                *it++ = 'x';
-                it += digits;
+		m_flags |= FMT_FLAGS_HASH;
+                const auto fill_after = write_alignment(it, end, digits, false);
+		it += digits;
                 convert_hex<uint64_t>(it, ivalue);
 	}
 
@@ -231,8 +281,170 @@ private:
                 String,
                 Invalid
         };
+	
+	enum FormatFlags : uint8_t
+	{
+		FMT_FLAGS_NONE = 0u,
+		FMT_FLAGS_EMPTY = 1u,
+		FMT_FLAGS_ALIGN_NONE = (0u << 1u),
+		FMT_FLAGS_ALIGN_LEFT = (1u << 1u),
+		FMT_FLAGS_ALIGN_RIGHT = (2u << 1u),
+		FMT_FLAGS_ALIGN_CENTER = (3u << 1u),
+		FMT_FLAGS_ALIGN_NUMERIC = (4u << 1u),
+		FMT_FLAGS_ALIGN_BITMASK = (7u << 1u),
+
+		FMT_FLAGS_SIGN_NONE = (0u << 4u),
+		FMT_FLAGS_SIGN_MINUS = (1u << 4u),
+		FMT_FLAGS_SIGN_PLUS = (2u << 4u),
+		FMT_FLAGS_SIGN_SPACE = (3u << 4u),
+		FMT_FLAGS_SIGN_BITMASK = (3u << 4u),
+
+		FMT_FLAGS_HASH = (1u << 6u)
+	};
+	
+	enum Align : uint8_t
+	{
+		FMT_ALIGN_NONE = 0,
+		FMT_ALIGN_LEFT = 1,
+		FMT_ALIGN_RIGHT = 2,
+		FMT_ALIGN_CENTER = 4,
+		FMT_ALIGN_NUMERIC = 8
+	};
+
+	enum Sign : uint8_t
+	{
+		FMT_SIGN_NONE = 0,
+		FMT_SIGN_MINUS = 1,
+		FMT_SIGN_PLUS = 2,
+		FMT_SIGN_SPACE = 4
+	};
+
+	constexpr Align align() const { return Align(m_flags & FMT_FLAGS_ALIGN_BITMASK); }
+	constexpr Sign sign() const { return Sign(m_flags & FMT_FLAGS_SIGN_BITMASK); }
+
+	static constexpr uint8_t parse_positive_small_int(const_iterator& it, const int max_value)
+	{
+		int value = 0;
+
+		do
+		{
+			value = (value * 10) + static_cast<int>(*it++ - '0');
+		} while(*it >= '0' && *it <= '9');
+
+		return static_cast<uint8_t>(value);
+	}
+
+	static constexpr uint8_t parse_align_flag(const char ch) 
+	{
+		switch(ch)
+		{
+		case '<' : return FMT_FLAGS_ALIGN_LEFT; 
+		case '>' : return FMT_FLAGS_ALIGN_RIGHT;
+		case '^' : return FMT_FLAGS_ALIGN_CENTER;
+		case '=' : return FMT_FLAGS_ALIGN_NUMERIC;
+		default: return FMT_FLAGS_ALIGN_NONE;
+		}
+	}
+
+	constexpr int sign_width(const bool negative) const
+	{
+		return (!negative && sign() <= FMT_SIGN_MINUS) ? 0 : 1;
+	}
+	
+	constexpr int prefix_width() const
+	{
+		bool has_hash = m_flags & FMT_FLAGS_HASH;
+		return (!has_hash) ? 0 : 2;
+	}
+
+	constexpr void write_sign(iterator& it, const bool negative) const
+	{
+		if(negative)
+		{
+			*it++ = '-';
+		}
+		else
+		{
+			const Sign s = sign();
+			if(s != FMT_SIGN_NONE)
+			{
+				if(s == FMT_SIGN_PLUS)
+				{
+					*it++ = '+';
+				}
+				else if(s == FMT_SIGN_SPACE)
+				{
+					*it++ = ' ';
+				}
+			}
+		}
+	}
+
+	constexpr void write_prefix(iterator& it) const noexcept
+	{
+		if(m_flags & FMT_FLAGS_HASH)
+		{
+			*it++ = '0';
+
+			if(m_type == Type::IntegerBin)
+				*it++ = 'b';
+			else if(m_type == Type::IntegerHex || m_type == Type::Pointer)
+				*it++ = 'x';
+		}
+	}
+
+	constexpr int write_alignment(iterator& it, const_iterator& end, int digits, const bool negative) const
+	{
+		digits += sign_width(negative) + prefix_width();
+
+		int fill_after = 0;
+
+		if(m_width <= digits)
+		{
+			if(it + digits >= end)
+				__assertion_fail_handler("failed to format: invalid width");
+			write_sign(it, negative);
+			write_prefix(it);
+		}
+		else
+		{
+			if(it + m_width >= end)
+				__assertion_fail_handler("failed to format: invalid width");
+
+			int fill_count = m_width - digits;
+			const Align al = align();
+
+			if(al == FMT_ALIGN_LEFT)
+				fill_after = fill_count;
+			else if(al == FMT_ALIGN_CENTER)
+			{
+				fill_after = fill_count - (fill_count / 2);
+				fill_count /= 2;
+			}
+
+			if(al != FMT_ALIGN_LEFT && al != FMT_ALIGN_NUMERIC)
+			{
+				for(int i = 0; i < fill_count; i++)
+					*it++ = m_fill_char;
+			}
+
+			write_sign(it, negative);
+			write_prefix(it);
+
+			if(al == FMT_ALIGN_NUMERIC)
+			{
+				for(int i = 0; i < fill_count; i++)
+					*it++ = m_fill_char;
+			}
+		}
+
+		return fill_after;
+	}
 
         Type m_type{Type::None};
+	char m_fill_char = ' ';
+	uint8_t m_flags{0};
+	uint8_t m_width{0};
         int8_t m_index{-1};
 };
 
