@@ -1,5 +1,6 @@
 #include <syscall.h>
 #include <string.h>
+#include <stdlib.h>
 
 static int fd;
 static char input_buf[256];
@@ -9,7 +10,7 @@ static size_t b_count;
 void execute()
 {
 	if(b_count == 5 && (strncmp(buffer, "exit", 5) == 0)) 
-		_exit(0);		
+		exit(0);		
 
 	if(buffer[0] == '/')
 	{
@@ -26,7 +27,7 @@ void execute()
        	write(fd, ": command not found", 19);	
 }
 
-void _start()
+int main()
 {
 	fd = open("/dev/tty0", 0);
 	ioctl(fd, 1, 0);
@@ -38,15 +39,15 @@ void _start()
 	int running = 1;
 	while(running)
 	{
-		size_t count = read(fd, input_buf, 256);
+		ssize_t count = read(fd, input_buf, 256);
 
-		for(size_t i = 0; i < count; i++)
+		for(ssize_t i = 0; i < count; i++)
 		{
 			char data = input_buf[i];
 			if(data >= 32 && data <= 126 && b_count < 4095)
 				buffer[b_count++] = data;
 
-			if(data == '\b')
+			if(data == '\b' && b_count)
 				b_count--;
 
 			if(data == '\n')
@@ -62,5 +63,5 @@ void _start()
 		}
 	}
 
-	_exit(0);
+	return 0;
 }
