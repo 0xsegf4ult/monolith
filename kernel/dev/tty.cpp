@@ -9,6 +9,7 @@
 #include <fs/vfs.hpp>
 
 #include <lib/klog.hpp>
+#include <lib/kstd.hpp>
 
 #include <sys/process.hpp>
 #include <sys/scheduler.hpp>
@@ -21,13 +22,13 @@ struct tty_device
 	constexpr static size_t buffer_size = 0x1000;
 	byte* read_buffer;
 	uint32_t read_buffer_head;
+	uint32_t read_buffer_tail;
 
-	process_t* waitqueue = nullptr;
+	process_t* waitqueue;
 };
 
 int tty_open(vfs::vnode_t* node, int flags)
 {
-	log::debug("open() tty0");
 	return node->dev.minor();
 }
 
@@ -38,18 +39,21 @@ int tty_close(int fd)
 
 void tty_consume(tty_device* tty, char c)
 {
-	if(tty->read_buffer_head >= tty_device::buffer_size)
+	if((tty->read_buffer_tail + 1) % tty_device::buffer_size == tty->read_buffer_head)
 		return;
-	
-	log::debug("tty0 consume {}", c);
-	*reinterpret_cast<char*>(tty->read_buffer + tty->read_buffer_head) = c;
-       	tty->read_buffer_head++;
+
+	*reinterpret_cast<char*>(tty->read_buffer + tty->read_buffer_tail) = c;
+       	tty->read_buffer_tail = (tty->read_buffer_tail + 1) % tty_device::buffer_size;
+
+	/* if echo */
+	klog_internal(&c, 1);	
 
 	while(tty->waitqueue)
 	{
 		auto* proc = tty->waitqueue;
 		tty->waitqueue = tty->waitqueue->next;
 		proc->next = nullptr;
+		
 		sched_unblock(proc);
 	}
 }
@@ -57,25 +61,35 @@ void tty_consume(tty_device* tty, char c)
 size_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
-	while(!tty->read_buffer_head)
+	while(tty->read_buffer_head == tty->read_buffer_tail)
 	{
 		auto* proc = CPU::get_current()->get_current_process();
 		proc->next = tty->waitqueue;
 		tty->waitqueue = proc;
-		
+	
 		sched_block(process_status::sleeping);
 	}
 
-	auto count = tty->read_buffer_head;
+	size_t read_count = 0;
+	if(tty->read_buffer_tail > tty->read_buffer_head)
+		read_count = tty->read_buffer_tail - tty->read_buffer_head;
+	else
+		read_count = tty_device::buffer_size - tty->read_buffer_head + tty->read_buffer_tail;
 
-	return 0;
+	if(read_count > length)
+		read_count = length;
+
+	memcpy(buffer, tty->read_buffer + tty->read_buffer_head, read_count);
+	tty->read_buffer_head = (tty->read_buffer_head + read_count) % tty_device::buffer_size;
+
+	return read_count;
 }
 
 size_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 
-	klog_internal((const char*)buffer);
+	klog_internal((const char*)buffer, length);
 
 	return length;
 }
@@ -96,6 +110,8 @@ void tty_init()
 	auto* device = (tty_device*)kmalloc(sizeof(tty_device));
 	device->read_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));
 	device->read_buffer_head = 0;
+	device->read_buffer_tail = 0;
+	device->waitqueue = nullptr;
 	tty->data = device;
 
 	auto dev_node = vfs::mknod("/dev/tty0", 'c', dev_t{3, 0});

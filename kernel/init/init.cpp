@@ -150,7 +150,6 @@ extern "C" [[noreturn]] void init()
 	vfs::init();
 	vfs::mkdir("/dev");	
 
-	log::debug("init tty");
 	tty_init();
 
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)

@@ -64,7 +64,6 @@ int mkdir(const char* path)
 
 int mknod(const char* path, char type, dev_t device)
 {
-	log::debug("mknod {}", path);
 	auto query = lookup(context->root_node, path);
 
 	if(query.result)
@@ -125,7 +124,12 @@ int open(const char* path, int flags)
 		return -1;
 	}
 
-	auto fs_id = query.result->node->ops->open(query.result->node, flags);
+	auto* node = query.result->node;
+
+	int fs_id = 0;
+	if(node->ops->open)
+		fs_id = node->ops->open(node, flags);
+	
 	if(fs_id < 0)
 		return -1;
 
@@ -137,7 +141,7 @@ int open(const char* path, int flags)
 			fd = i;
 			context->open_files[i].read_pos = 0;
 			context->open_files[i].write_pos = 0;
-			context->open_files[i].inode = query.result->node;
+			context->open_files[i].inode = node;
 			context->open_files[i].fs_id = fs_id;
 			break;
 		}
@@ -160,10 +164,14 @@ size_t write(int fd, const byte* buffer, size_t length)
 
 int close(int fd)
 {
-	if(context->open_files[fd].inode == nullptr)
+	auto* node = context->open_files[fd].inode;
+	if(!node)
 		return -1;
 
-	auto cres = context->open_files[fd].inode->ops->close(context->open_files[fd].fs_id);
+	int cres = 0;
+	if(node->ops->close)
+		cres = node->ops->close(context->open_files[fd].fs_id);
+	
 	if(cres < 0)
 		return -1;
 
