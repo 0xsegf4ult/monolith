@@ -75,9 +75,9 @@ lookup_result lookup(ventry_t* parent, const char* path);
 
 int open(const char* path, int flags = 0);
 int close(int fd);
-size_t read(int fd, byte* buffer, size_t len);
-size_t write(int fd, const byte* buffer, size_t len);
-size_t seek(int fd, size_t offset, int flags = 0);
+ssize_t read(int fd, byte* buffer, size_t len);
+ssize_t write(int fd, const byte* buffer, size_t len);
+ssize_t seek(int fd, ssize_t offset, int flags = 0);
 int ioctl(int fd, uint64_t op, uint64_t arg = 0);
 
 }

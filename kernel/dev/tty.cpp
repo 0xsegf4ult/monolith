@@ -17,6 +17,8 @@
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
+#include <sys/err.hpp>
+
 struct tty_device
 {
 	constexpr static size_t buffer_size = 0x1000;
@@ -60,7 +62,7 @@ void tty_consume(tty_device* tty, char c)
 	}
 }
 
-size_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 	while(tty->read_buffer_head == tty->read_buffer_tail)
@@ -87,7 +89,7 @@ size_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	return read_count;
 }
 
-size_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length)
+ssize_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 
@@ -106,7 +108,7 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 		return 0;
 	}
 
-	return -1;
+	return -ENOTTY;
 }
 
 static vfs::fs_ops tty_fops =

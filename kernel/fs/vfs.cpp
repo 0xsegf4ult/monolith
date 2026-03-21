@@ -9,6 +9,8 @@
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
 
+#include <sys/err.hpp>
+
 namespace vfs
 {
 
@@ -41,10 +43,10 @@ int create(const char* path)
 	auto query = lookup(context->root_node, path);
 
 	if(query.result)
-		return -1;
+		return -EEXIST;
 
 	if(!query.parent)
-		return -1;
+		return -ENOENT;
 
 	return query.parent->node->ops->create(query.parent, query.basename);	
 }
@@ -54,10 +56,10 @@ int mkdir(const char* path)
 	auto query = lookup(context->root_node, path);
 
 	if(query.result)
-		return -1;
+		return -EEXIST;
 
 	if(!query.parent)
-		return -1;
+		return -ENOENT;
 
 	return query.parent->node->ops->mkdir(query.parent, query.basename);
 }
@@ -67,10 +69,10 @@ int mknod(const char* path, char type, dev_t device)
 	auto query = lookup(context->root_node, path);
 
 	if(query.result)
-		return -1;
+		return -EEXIST;
 
 	if(!query.parent)
-		return -1;
+		return -ENOENT;
 
 	return query.parent->node->ops->mknod(query.parent, query.basename, type, device);
 }
@@ -121,7 +123,7 @@ int open(const char* path, int flags)
 	auto query = lookup(context->root_node, path);
 	if(!query.result)
 	{
-		return -1;
+		return -ENOENT;
 	}
 
 	auto* node = query.result->node;
@@ -131,7 +133,7 @@ int open(const char* path, int flags)
 		fs_id = node->ops->open(node, flags);
 	
 	if(fs_id < 0)
-		return -1;
+		return fs_id;
 
 	int fd = -1;
 	for(int i = 0; i < 64; i++)
@@ -150,13 +152,13 @@ int open(const char* path, int flags)
 	return fd;
 }
 
-size_t read(int fd, byte* buffer, size_t length)
+ssize_t read(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
 	return inode->ops->read(&context->open_files[fd], buffer, length);
 }
 
-size_t write(int fd, const byte* buffer, size_t length)
+ssize_t write(int fd, const byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
 	return inode->ops->write(&context->open_files[fd], buffer, length);
@@ -166,14 +168,14 @@ int close(int fd)
 {
 	auto* node = context->open_files[fd].inode;
 	if(!node)
-		return -1;
+		return -EBADF;
 
 	int cres = 0;
 	if(node->ops->close)
 		cres = node->ops->close(context->open_files[fd].fs_id);
 	
 	if(cres < 0)
-		return -1;
+		return cres;
 
 	context->open_files[fd].read_pos = 0;
 	context->open_files[fd].write_pos = 0;
@@ -182,10 +184,13 @@ int close(int fd)
 	return 0;
 }
 
-size_t seek(int fd, size_t offset, int flags)
+ssize_t seek(int fd, ssize_t offset, int flags)
 {
 	if(context->open_files[fd].inode == nullptr)
-		return 0;
+		return -EBADF;
+
+	if(offset < 0)
+		offset = 0;
 
 	context->open_files[fd].read_pos = offset;
 	context->open_files[fd].write_pos = offset;
@@ -197,10 +202,10 @@ int ioctl(int fd, uint64_t op, uint64_t arg)
 {
 	auto* inode = context->open_files[fd].inode;
 	if(inode == nullptr)
-		return -1;
+		return -EBADF;
 
 	if(!inode->ops->ioctl)
-		return -1;
+		return -ENOTTY;
 
 	return inode->ops->ioctl(&context->open_files[fd], op, arg);
 }

@@ -66,9 +66,8 @@ void handle_pagefault(cpu_context_t* ctx)
 		stk = stk->rbp;
 	}
 
-	//auto* proc = CPU::get_current()->get_current_process();
-	//panic("[{}] unhandled page fault at RIP {:#x} memory access {:#x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
-	panic("unhandled page fault at RIP {:#x} memory access {:#x} {:b}", ctx->rip, cr2, ctx->error_code);
+	auto* proc = CPU::get_current()->get_current_process();
+	panic("unhandled page fault in [{}] at RIP {:#x} memory access {:#x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
 }
 
 void handle_gpf(cpu_context_t* ctx)

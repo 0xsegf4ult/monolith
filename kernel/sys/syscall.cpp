@@ -6,6 +6,7 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/context.hpp>
 #include <fs/vfs.hpp>
+#include <sys/err.hpp>
 #include <sys/executable.hpp>
 #include <sys/process.hpp>
 #include <sys/scheduler.hpp>
@@ -15,11 +16,11 @@
 int sys_open(const char* path, int flags)
 {
 	if(!path)
-		return -1;
+		return -EFAULT;
 
 	int v_fd = vfs::open(path, flags);
 	if(v_fd < 0)
-		return -1;
+		return v_fd;
 	
 	auto* proc = CPU::get_current()->get_current_process();
 	int fd = -1;
@@ -35,7 +36,7 @@ int sys_open(const char* path, int flags)
 	if(fd < 0)
 	{
 		vfs::close(v_fd);
-		return -1;
+		return -EMFILE;
 	}
 	proc->open_files[fd] = v_fd;
 	return fd;
@@ -44,7 +45,7 @@ int sys_open(const char* path, int flags)
 int sys_close(int fd)
 {
 	if(fd < 0)
-		return -1;
+		return -EBADF;
 
 	auto* proc = CPU::get_current()->get_current_process();
 	auto v_fd = proc->open_files[fd];
@@ -53,20 +54,26 @@ int sys_close(int fd)
 	return vfs::close(v_fd);
 }
 
-size_t sys_read(int fd, byte* buffer, size_t length)
+ssize_t sys_read(int fd, byte* buffer, size_t length)
 {
 	auto* proc = CPU::get_current()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
-	       return -1;
+	       return -EBADF;
+
+	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+		return -EFAULT;
 
 	return vfs::read(proc->open_files[fd], buffer, length);
 }	
 
-size_t sys_write(int fd, const byte* buffer, size_t length)
+ssize_t sys_write(int fd, const byte* buffer, size_t length)
 {
 	auto* proc = CPU::get_current()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
-		return -1;
+		return -EBADF;
+
+	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+		return -EFAULT;
 
 	return vfs::write(proc->open_files[fd], buffer, length);
 }
@@ -74,11 +81,11 @@ size_t sys_write(int fd, const byte* buffer, size_t length)
 int sys_spawn(const char* path)
 {
 	if(!path)
-		return -1;
+		return -EINVAL;
 	
 	int fd = vfs::open(path, 0);
 	if(fd < 0)
-		return -1;
+		return fd;
 		
 	auto* proc = create_process(path, true);
 	load_executable(fd, proc);
@@ -99,7 +106,7 @@ int sys_ioctl(int fd, uint64_t op, uint64_t arg)
 {
 	auto* proc = CPU::get_current()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
-		return -1;
+		return -EBADF;
 
 	return vfs::ioctl(proc->open_files[fd], op, arg); 
 }
@@ -126,10 +133,10 @@ void syscall_handler(cpu_context_t* ctx)
 		ctx->rax = static_cast<uint64_t>(sys_close((int)ctx->rsi));
 		break;
 	case READ:
-		ctx->rax = sys_read((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx);
+		ctx->rax = static_cast<uint64_t>(sys_read((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx));
 		break;
 	case WRITE:
-		ctx->rax = sys_write((int)ctx->rsi, (const byte*)ctx->rdx, (size_t)ctx->rcx);
+		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rsi, (const byte*)ctx->rdx, (size_t)ctx->rcx));
 		break;
 	case SPAWN:
 		ctx->rax = static_cast<uint64_t>(sys_spawn((const char*)ctx->rsi));

@@ -1,0 +1,15 @@
+#pragma once
+
+enum SYS_ERROR : int
+{
+	EPERM = 1,
+	ENOENT,
+	EBADF,
+	EFAULT,
+	EEXIST,
+	ENOTDIR,
+	EISDIR,
+	EINVAL,
+	EMFILE,
+	ENOTTY
+};

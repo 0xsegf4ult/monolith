@@ -16,8 +16,8 @@ typedef int (*fs_create_t)(ventry_t*, const char*);
 typedef int (*fs_mknod_t)(ventry_t*, const char*, char, dev_t); 
 typedef int (*fs_open_t)(vnode_t*, int);
 typedef int (*fs_close_t)(int);
-typedef size_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);
-typedef size_t (*fs_write_t)(file_descriptor_t*, const byte*, size_t);
+typedef ssize_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);
+typedef ssize_t (*fs_write_t)(file_descriptor_t*, const byte*, size_t);
 typedef int (*fs_ioctl_t)(file_descriptor_t*, uint64_t, uint64_t);
 
 struct fs_ops

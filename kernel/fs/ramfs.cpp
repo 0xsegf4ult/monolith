@@ -11,6 +11,8 @@
 #include <dev/character.hpp>
 #include <dev/block.hpp>
 
+#include <sys/err.hpp>
+
 using namespace vfs;
 
 ventry_t* ramfs_lookup(ventry_t* parent, const char* path)
@@ -93,7 +95,7 @@ int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
 		inode->ops = blockdev_get(dev)->ops;
 		break;
 	default:
-		return -1;
+		return -EINVAL;
 	}
 
 	inode->size = 0;
@@ -142,7 +144,7 @@ struct ramfs_data
 	ramfs_page* tail;
 };
 
-size_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
+ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 {
 	ramfs_page* spage = reinterpret_cast<ramfs_data*>(file->inode->data)->head;
 	if(file->read_pos)
@@ -173,7 +175,7 @@ size_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 	return orig_l - length;
 }
 
-size_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
+ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 {
 	auto fsize = file->inode->size;
 	auto wr_len = file->write_pos + length;
