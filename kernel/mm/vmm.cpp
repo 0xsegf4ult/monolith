@@ -25,7 +25,7 @@ extern "C"
 void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 {	
 	kernel_address_space = (address_space*)kmalloc(sizeof(address_space));
-	kernel_address_space->init(0xffff800000000000);
+	kernel_address_space->init(0xffff800000001000);
 
 	auto text_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_text_start));
 	auto text_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_text_end) - reinterpret_cast<virtaddr_t>(&_text_start));

@@ -8,6 +8,7 @@
 #include <arch/x86_64/mmu.hpp>
 
 #include <lib/types.hpp>
+#include <lib/klog.hpp>
 
 void address_space::init(virtaddr_t base)
 {
@@ -20,6 +21,19 @@ void address_space::init(virtaddr_t base)
 	objects = nullptr;
 }
 
+void address_space::destroy()
+{
+	while(objects)
+	{
+		auto last = objects;
+		objects = objects->next;
+
+		kfree(last);
+	}
+
+	pmm_free(reinterpret_cast<physaddr_t>(root_pml4 - mm::direct_mapping_offset));
+}
+
 void address_space::switch_to()
 {
 	CPU::get_current()->set_pagetable(root_pml4);
@@ -27,29 +41,30 @@ void address_space::switch_to()
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
+	log::debug("vmalloc {:#x} bytes", length);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
 	
 	virtaddr_t alloc_base = 0;
-
-	if(!cur)
+	
+	if(!objects)
 		alloc_base = base_addr;
 
 	while(cur)
 	{
-		auto base = (prev == nullptr) ? base_addr : prev->base;
-	       	if(base + length <= cur->base)
+		auto prev_end = prev ? prev->base + prev->length : base_addr;
+		if(prev_end + length <= cur->base)
 		{
-			alloc_base = base;
-			break;		
-		}	
+			alloc_base = prev_end;
+			break;
+		}
 
 		prev = cur;
-		cur = cur->next;
+		cur = cur->next;	
 	}
 
-	if(!cur && !alloc_base)
-		alloc_base = prev->base + prev->length;
+	log::debug("will allocate at {:#x}", alloc_base);
+
 
 	if(!alloc_base)
 		return 0;
@@ -61,10 +76,16 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 	range->next = nullptr;
 
 	if(!prev)
+	{
+		range->next = objects;
 		objects = range;
+	}
 	else
-		prev->next = range;
-	
+	{
+		range->next = prev->next;
+		prev->next = range;		
+	}
+
 	while(length)
 	{
 		auto phys = pmm_allocate();
@@ -82,6 +103,7 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 
 virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t flags, void* arg)
 {
+	log::debug("vmalloc_placed {:#x}", base);
 	if(base < 0x1000)
 		return 0;
 
@@ -130,22 +152,27 @@ void address_space::free(virtaddr_t addr)
 
 int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
+	log::debug("vm_map {:#x}", virt);
 	if(reserve_range(virt, 0x1000, flags) == 0)
 	{
 		mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
 		return 0;
 	}
 
+	log::debug("failed");
 	return -1;
 }
 
 int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
+	log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
 	if(reserve_range(virt, length, flags) == 0)
 	{
 		mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
 		return 0;
 	}
+
+	log::debug("failed");
 
 	return -1;
 }
@@ -154,17 +181,24 @@ int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 {
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
+	
 	while(cur)
 	{
 		if(cur->base <= base)	
 		{
 			if(cur->base + cur->length > base)
+			{
+				log::debug("overlapping {:#x} - {:#x}", cur->base, cur->base + cur->length);
 				return -1;
+			}
 		}
 		else
 		{
 			if(cur->base < base + length)
+			{
+				log::debug("overlapping {:#x} - {:#x}", cur->base, cur->base + cur->length);
 				return -1;
+			}
 		}
 
 		prev = cur;
@@ -177,10 +211,30 @@ int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 	range->flags = vm_flags(flags);
 	range->next = nullptr;
 
-	if(!prev)
+	if(objects == nullptr || objects->base >= base)
+	{
+		range->next = objects;
 		objects = range;
+	}
 	else
-		prev->next = range;
+	{
+		vm_object* current = objects;
+		while(current->next && current->next->base < base)
+			current = current->next;
+
+		range->next = current->next;
+		current->next = range;
+	}
 
 	return 0;
+}
+
+void address_space::dump_objects()
+{
+	vm_object* cur = objects;
+	while(cur)
+	{
+		log::debug("vm_object [{:#x} - {:#x}] {:b}", cur->base, cur->length, cur->flags);
+	       	cur = cur->next;
+	}	
 }

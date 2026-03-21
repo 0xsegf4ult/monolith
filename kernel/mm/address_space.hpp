@@ -13,6 +13,7 @@ struct address_space
 	page_table* root_pml4;
 
 	void init(virtaddr_t base = 0x10000);
+	void destroy();
 	void switch_to();
 	virtaddr_t alloc(size_t length, uint64_t flags = 0, void* arg = nullptr);
 	virtaddr_t alloc_placed(virtaddr_t base, size_t length, uint64_t flags = 0, void* arg = nullptr);
@@ -21,4 +22,6 @@ struct address_space
 	int map(physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 	int map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0);
 	int reserve_range(virtaddr_t base, size_t length = 0x1000, uint64_t flags = 0);
+
+	void dump_objects();
 };
