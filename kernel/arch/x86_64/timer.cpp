@@ -5,6 +5,8 @@
 
 #include <lib/types.hpp>
 
+#include <sys/scheduler.hpp>
+
 namespace timer
 {
 
@@ -22,6 +24,8 @@ namespace pit
 void irq_handler()
 {
 	timer::ticks++;
+	if(timer::ticks % 10 == 0)
+		schedule();
 }
 
 void init(uint16_t count)

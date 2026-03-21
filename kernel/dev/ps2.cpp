@@ -32,33 +32,93 @@ enum kbd_state
 	KBD_STATE_PREFIX
 };
 
-constexpr size_t kbd_buffer_size = 256;
-key_event kbd_buffer[kbd_buffer_size];
-uint8_t kbd_buf_position = 0;
 kbd_state state = KBD_STATE_NORMAL;
 tty_device* cur_tty = nullptr;
+
+constexpr char scancode_row_1[] =
+{
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'0',
+	'-',
+	'=',
+	'\b'
+};
+
+constexpr char scancode_row_2[] =
+{
+	'q',
+	'w',
+	'e',
+	'r',
+	't',
+	'y',
+	'u',
+	'i',
+	'o',
+	'p',
+	'[',
+	']',
+	'\n'
+};
+
+constexpr char scancode_row_3[] =
+{
+	'a',
+	's',
+	'd',
+	'f',
+	'g',
+	'h',
+	'j',
+	'k',
+	'l',
+	';',
+	'\'',
+	'`'
+};
+
+constexpr char scancode_row_4[] =
+{
+	'\\',
+	'z',
+	'x',
+	'c',
+	'v',
+	'b',
+	'n',
+	'm',
+	',',
+	'.',
+	'/'
+};
 
 void interrupt_handler()
 {
 	auto scancode = io::inb(0x60);
 
-	kbd_buffer[kbd_buf_position].code = scancode;
-	kbd_buf_position = (kbd_buf_position + 1) % kbd_buffer_size;
+	bool release_flag = scancode & 0x80;
+	scancode = scancode & 0x7f;
 
-	if(scancode == 0x1f)
+	if(cur_tty && !release_flag)
 	{
-		log::debug("schedule()");
-		lapic::eoi();
-		schedule();
-	}
-	else if(scancode == 0x20)
-	{
-		log::debug("sched_dump_state()");
-		sched_dump_state();
-	}
-	else if(cur_tty)
-	{
-		tty_consume(cur_tty, 'K');
+		if(scancode >= 0x02 && scancode <= 0x0e)
+			tty_consume(cur_tty, scancode_row_1[scancode - 0x02]);
+		else if(scancode >= 0x10 && scancode <= 0x1c)
+			tty_consume(cur_tty, scancode_row_2[scancode - 0x10]);
+		else if(scancode >= 0x1e && scancode <= 0x29)
+			tty_consume(cur_tty, scancode_row_3[scancode - 0x1e]);
+		else if(scancode >= 0x2b && scancode <= 0x35)
+			tty_consume(cur_tty, scancode_row_4[scancode - 0x2b]);
+		else if(scancode == 0x39)
+			tty_consume(cur_tty, ' ');
 	}
 }
 
