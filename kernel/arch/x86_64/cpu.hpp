@@ -195,3 +195,5 @@ private:
 	page_table* pt{nullptr};
 	process_t* current_process{nullptr};
 };
+
+extern "C" void cpu_switch_process(process_t* prev, process_t* next);

@@ -1,4 +1,5 @@
 #include <arch/x86_64/cpu.hpp>
+#include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <lib/types.hpp>
 #include <lib/klog.hpp>
@@ -102,6 +103,12 @@ void CPU::set_pagetable(page_table* pt_address)
 
 void CPU::set_current_process(process_t* process)
 {
-	tss.rsp0 = process->rsp0;
+	tss.rsp0 = process->rsp0_top;
 	current_process = process;
+}
+
+extern "C" void cpu_switch_process(process_t* prev, process_t* next)
+{
+	CPU::get_current()->set_current_process(next);
+	next->vm_space->switch_to();
 }

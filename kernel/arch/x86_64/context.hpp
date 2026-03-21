@@ -3,7 +3,7 @@
 #include <lib/types.hpp>
 
 struct __attribute__((packed)) cpu_context_t
-{
+{	
 	uint64_t r15;
 	uint64_t r14;
 	uint64_t r13;
@@ -30,5 +30,7 @@ struct __attribute__((packed)) cpu_context_t
 	uint64_t ss;
 };
 
-extern "C" void arch_context_switch(virtaddr_t* old_rsp, virtaddr_t new_rsp);
+struct process_t;
+
+extern "C" void arch_context_switch(process_t* prev, process_t* next);
 extern "C" void arch_switch_to_usermode(virtaddr_t rsp, virtaddr_t rip);

@@ -22,8 +22,8 @@ void thread_entry_stub()
 	auto self = CPU::get_current()->get_current_process();
 
 	log::debug("started process {}", self->name);
-	log::debug("entrypoint {:x}", self->entry);
-	log::debug("rsp0 {:x} rsp3 {:x}", self->rsp0, self->rsp);
+	log::debug("entrypoint {:#x}", self->entry);
+	log::debug("rsp0 {:#x} rsp3 {:#x}", self->rsp0, self->rsp);
 
 	if(!self->rsp)
 	{
@@ -50,7 +50,9 @@ process_t* create_process(const char* name, bool is_user)
 	process->status = process_status::ready;
 	process->next = nullptr;
 
-        auto kstack_alloc = pmm_allocate() + mm::direct_mapping_offset;
+	get_kernel_vmspace()->dump_objects();
+	auto kstack_alloc = vmalloc(kernel_stack_size, vm_write);
+	log::debug("allocated kernel stack {:#x}", kstack_alloc);
 	auto* stack_ptr = reinterpret_cast<uint64_t*>(kstack_alloc + kernel_stack_size);
 	*(--stack_ptr) = reinterpret_cast<virtaddr_t>(thread_entry_stub);
 	*(--stack_ptr) = 0;
@@ -62,15 +64,27 @@ process_t* create_process(const char* name, bool is_user)
 
 	process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
 	process->rsp = 0;
+	process->rsp0_top = process->rsp0;
 
 	for(int i = 0; i < 32; i++)
 		process->open_files[i] = -1;
 
 	if(is_user)
 	{
-		process->rsp = process->vm_space->alloc(user_stack_size, vm_write | vm_user) + user_stack_size;
-		log::debug("allocated user stack {:x}", process->rsp);
+		process->rsp = process->vm_space->alloc(user_stack_size, vm_write | vm_user) + user_stack_size - 8;
+		log::debug("allocated user stack {:#x}", process->rsp);
 	}
 
 	return process;	
+}
+
+void destroy_process(process_t* proc)
+{
+	if(proc->rsp0)
+		pmm_free(proc->rsp0);
+	
+	proc->vm_space->destroy();
+	kfree(proc->vm_space);
+
+	kfree(proc);
 }
