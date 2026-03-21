@@ -25,6 +25,8 @@ struct tty_device
 	uint32_t read_buffer_tail;
 
 	process_t* waitqueue;
+
+	bool echo;
 };
 
 int tty_open(vfs::vnode_t* node, int flags)
@@ -45,8 +47,8 @@ void tty_consume(tty_device* tty, char c)
 	*reinterpret_cast<char*>(tty->read_buffer + tty->read_buffer_tail) = c;
        	tty->read_buffer_tail = (tty->read_buffer_tail + 1) % tty_device::buffer_size;
 
-	/* if echo */
-	klog_internal(&c, 1);	
+	if(tty->echo)
+		klog_internal(&c, 1);	
 
 	while(tty->waitqueue)
 	{
@@ -94,12 +96,26 @@ size_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length
 	return length;
 }
 
+int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
+{
+	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
+
+	if(op == 1)
+	{
+		tty->echo = (arg > 0);
+		return 0;
+	}
+
+	return -1;
+}
+
 static vfs::fs_ops tty_fops =
 {
 	.open = tty_open,
 	.close = tty_close,
 	.read = tty_read,
-	.write = tty_write
+	.write = tty_write,
+	.ioctl = tty_ioctl
 };
 
 void tty_init()
@@ -112,6 +128,7 @@ void tty_init()
 	device->read_buffer_head = 0;
 	device->read_buffer_tail = 0;
 	device->waitqueue = nullptr;
+	device->echo = true;
 	tty->data = device;
 
 	auto dev_node = vfs::mknod("/dev/tty0", 'c', dev_t{3, 0});

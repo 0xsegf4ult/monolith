@@ -1,6 +1,6 @@
-#include <syscall.hpp>
+#include <syscall.h>
 
-extern "C" int _start()
+int _start()
 {
 	debugmsg("Message from userspace!");	
 

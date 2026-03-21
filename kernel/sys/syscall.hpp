@@ -10,6 +10,7 @@ enum class syscall_id : uint64_t
 	WRITE,
 	SPAWN,
 	EXIT,
+	IOCTL,
 	DEBUG_PRINT
 };
 

@@ -18,6 +18,7 @@ typedef int (*fs_open_t)(vnode_t*, int);
 typedef int (*fs_close_t)(int);
 typedef size_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);
 typedef size_t (*fs_write_t)(file_descriptor_t*, const byte*, size_t);
+typedef int (*fs_ioctl_t)(file_descriptor_t*, uint64_t, uint64_t);
 
 struct fs_ops
 {
@@ -29,6 +30,7 @@ struct fs_ops
 	fs_close_t close = nullptr;
 	fs_read_t read = nullptr;
 	fs_write_t write = nullptr;
+	fs_ioctl_t ioctl = nullptr;
 };
 
 }

@@ -193,4 +193,16 @@ size_t seek(int fd, size_t offset, int flags)
 	return offset;
 }
 
+int ioctl(int fd, uint64_t op, uint64_t arg)
+{
+	auto* inode = context->open_files[fd].inode;
+	if(inode == nullptr)
+		return -1;
+
+	if(!inode->ops->ioctl)
+		return -1;
+
+	return inode->ops->ioctl(&context->open_files[fd], op, arg);
+}
+
 }

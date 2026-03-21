@@ -80,9 +80,6 @@ process_t* create_process(const char* name, bool is_user)
 
 void destroy_process(process_t* proc)
 {
-	if(proc->rsp0)
-		pmm_free(proc->rsp0);
-	
 	proc->vm_space->destroy();
 	kfree(proc->vm_space);
 

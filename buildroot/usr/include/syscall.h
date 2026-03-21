@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _MONOLITH_SYSCALL
+#define _MONOLITH_SYSCALL
 
 #include <stdint.h>
 #include <stddef.h>
@@ -11,6 +12,7 @@ enum SYSCALL_ID
 	SYS_WRITE,
 	SYS_SPAWN,
 	SYS_EXIT,
+	SYS_IOCTL,
 	SYS_DEBUGMSG
 };
 
@@ -30,30 +32,37 @@ __attribute__((always_inline)) inline size_t _syscall(uint64_t id, uint64_t arg0
 
 inline void debugmsg(const char* message)
 {
-	_syscall(SYS_DEBUGMSG, reinterpret_cast<uint64_t>(message), 0, 0, 0, 0);
+	_syscall(SYS_DEBUGMSG, (uint64_t)message, 0, 0, 0, 0);
 }
 
 inline int open(const char* path, int flags)
 {
-	return _syscall(SYS_OPEN, reinterpret_cast<uint64_t>(path), flags, 0, 0, 0);
+	return (int)(_syscall(SYS_OPEN, (uint64_t)path, flags, 0, 0, 0));
 }
 
 inline size_t read(int fd, void* buffer, size_t size)
 {
-	return _syscall(SYS_READ, fd, reinterpret_cast<uint64_t>(buffer), size, 0, 0);
+	return _syscall(SYS_READ, fd, (uint64_t)buffer, size, 0, 0);
 }
 
 inline size_t write(int fd, const void* buffer, size_t size)
 {
-	return _syscall(SYS_WRITE, fd, reinterpret_cast<uint64_t>(buffer), size, 0, 0);
+	return _syscall(SYS_WRITE, fd, (uint64_t)buffer, size, 0, 0);
 }
 
 inline int spawn(const char* path)
 {
-	return _syscall(SYS_SPAWN, reinterpret_cast<uint64_t>(path), 0, 0, 0, 0);
+	return (int)_syscall(SYS_SPAWN, (uint64_t)path, 0, 0, 0, 0);
 }
 
 inline void _exit(int status)
 {
 	_syscall(SYS_EXIT, status, 0, 0, 0, 0);
 }
+
+inline int ioctl(int fd, uint64_t op, uint64_t arg)
+{
+	return (int)_syscall(SYS_IOCTL, fd, op, arg, 0, 0);
+}
+
+#endif
