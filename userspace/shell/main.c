@@ -27,8 +27,6 @@ void execute()
 	argv[1] = buffer + sp_offset + 1;
 	if(argv[1][0] == '\0')
 		argv[1] = nullptr;
-	else
-		printf("\nargument: %s\n", argv[1]);
 	argv[2] = nullptr;
 
 	if(buffer[0] == '/')
