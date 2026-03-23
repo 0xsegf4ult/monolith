@@ -19,6 +19,7 @@ typedef int (*fs_close_t)(int);
 typedef ssize_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);
 typedef ssize_t (*fs_write_t)(file_descriptor_t*, const byte*, size_t);
 typedef int (*fs_ioctl_t)(file_descriptor_t*, uint64_t, uint64_t);
+typedef ssize_t (*fs_getdents_t)(file_descriptor_t*, byte*, size_t); 
 
 struct fs_ops
 {
@@ -31,6 +32,7 @@ struct fs_ops
 	fs_read_t read = nullptr;
 	fs_write_t write = nullptr;
 	fs_ioctl_t ioctl = nullptr;
+	fs_getdents_t getdents = nullptr;
 };
 
 }

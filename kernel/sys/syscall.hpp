@@ -11,6 +11,9 @@ enum class syscall_id : uint64_t
 	SPAWN,
 	EXIT,
 	IOCTL,
+	STAT,
+	GETDENTS,
+	CHDIR,
 	DEBUG_PRINT
 };
 

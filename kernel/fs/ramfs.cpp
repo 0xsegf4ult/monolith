@@ -70,8 +70,26 @@ int ramfs_mkdir(ventry_t* parent, const char* path)
 		dirent->name[namel - 1] = '\0';
 	dirent->node = inode;
 	dirent->parent = parent;
-	dirent->children = nullptr;
 	dirent->sibling = nullptr;
+	
+	auto* dot_dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
+	dot_dirent->name[0] = '.';
+	dot_dirent->name[1] = '\0';
+	dot_dirent->node = inode;
+	dot_dirent->parent = dirent;
+	dot_dirent->children = nullptr;
+
+	auto* doubledot_dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
+	doubledot_dirent->name[0] = '.';
+	doubledot_dirent->name[1] = '.';
+	doubledot_dirent->name[2] = '\0';
+	doubledot_dirent->node = parent->node;
+	doubledot_dirent->parent = dirent;
+	doubledot_dirent->children = nullptr;
+	doubledot_dirent->sibling = nullptr;
+
+	dirent->children = dot_dirent;
+	dot_dirent->sibling = doubledot_dirent;
 
 	if(parent->children)
 		dirent->sibling = parent->children;
@@ -247,6 +265,31 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 	return orig_l - length;
 }
 
+ssize_t ramfs_getdents(file_descriptor_t* file, byte* buffer, size_t length)
+{
+	auto* dentry = file->path->children;
+
+	byte* write_head = buffer;
+
+	while(dentry && write_head < buffer + length)
+	{
+		dirent_info* dirent = reinterpret_cast<dirent_info*>(write_head);
+
+		log::debug("dirent {}", dentry->name);
+		auto name_len = string_length(dentry->name) + 1;
+		dirent->length = sizeof(dirent_info) + name_len;
+		dirent->type = file->inode->type;
+
+		write_head += sizeof(dirent_info);
+		memcpy(write_head, dentry->name, name_len);
+		write_head += name_len;
+
+		dentry = dentry->sibling;
+	}
+
+	return static_cast<ssize_t>(write_head - buffer);
+}	
+
 vfilesystem_t* ramfs_create()
 {
 	auto* fs = (vfilesystem_t*)kmalloc(sizeof(vfilesystem_t));
@@ -258,6 +301,7 @@ vfilesystem_t* ramfs_create()
 	fs->ops.close = ramfs_close;
 	fs->ops.read = ramfs_read;
 	fs->ops.write = ramfs_write;
+	fs->ops.getdents = ramfs_getdents;
 	fs->data = nullptr;
 
 	return fs;

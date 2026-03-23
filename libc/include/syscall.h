@@ -14,6 +14,9 @@ enum SYSCALL_ID
 	SYS_SPAWN,
 	SYS_EXIT,
 	SYS_IOCTL,
+	SYS_STAT,
+	SYS_GETDENTS,
+	SYS_CHDIR,
 	SYS_DEBUGMSG
 };
 
@@ -41,6 +44,11 @@ inline int open(const char* path, int flags)
 	return (int)(_syscall(SYS_OPEN, (uint64_t)path, flags, 0, 0, 0));
 }
 
+inline int close(int fd)
+{
+	return (int)(_syscall(SYS_CLOSE, (uint64_t)fd, 0, 0, 0, 0));
+}
+
 inline ssize_t read(int fd, void* buffer, size_t size)
 {
 	return (ssize_t)(_syscall(SYS_READ, fd, (uint64_t)buffer, size, 0, 0));
@@ -59,6 +67,51 @@ inline int spawn(const char* path)
 inline int ioctl(int fd, uint64_t op, uint64_t arg)
 {
 	return (int)_syscall(SYS_IOCTL, fd, op, arg, 0, 0);
+}
+
+typedef enum
+{
+	S_IFDIR,
+	S_IFREG,
+	S_IFLNK,
+	S_IFCHR,
+	S_IFBLK
+} stat_mode;
+
+typedef struct 
+{
+	stat_mode mode;
+	size_t size;
+} stat_t;
+
+typedef enum : uint8_t
+{
+	DT_DIR,
+	DT_REG,
+	DT_LNK,
+	DT_CHR,
+	DT_BLK
+} dirent_type;
+
+typedef struct
+{
+	uint16_t length;
+	dirent_type type;
+} dirent_info;
+
+inline int stat(const char* path, stat_t* buffer)
+{
+	return (int)_syscall(SYS_STAT, (uint64_t)path, (uint64_t)buffer, 0, 0, 0);
+}
+
+inline ssize_t getdents(int fd, void* buffer, size_t length)
+{
+	return (ssize_t)_syscall(SYS_GETDENTS, (uint64_t)fd, (uint64_t)buffer, (uint64_t)length, 0, 0);
+}
+
+inline int chdir(const char* path)
+{
+	return (int)_syscall(SYS_CHDIR, (uint64_t)path, 0, 0, 0, 0);
 }
 
 #endif

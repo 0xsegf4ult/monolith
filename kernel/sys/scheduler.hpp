@@ -7,7 +7,6 @@ void schedule();
 
 struct process_t;
 
-void sched_init();
 void sched_start();
 void sched_add_ready(process_t* proc);
 void sched_block(process_status status);

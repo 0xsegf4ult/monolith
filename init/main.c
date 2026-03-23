@@ -1,18 +1,18 @@
 #include <syscall.h>
+#include <stdio.h>
 
-int _start()
+int main()
 {
-	debugmsg("Message from userspace!");	
-
 	int fd = open("/dev/tty0", 0);
 	if(fd < 0)
-		debugmsg("Failed to open /dev/tty0");
+		printf("Failed to open /dev/tty0\n");
 
-	const char* out_str = "INIT: booting...\n";
-	write(fd, out_str, 17);
+	printf("INIT: booting...\n");
 
 	spawn("/bin/sh");
 
 	for(;;)
 		asm volatile("pause");
+
+	return -1;
 }

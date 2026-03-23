@@ -1,6 +1,7 @@
-#pragma once
+#ifndef _LIBC_ERRNO_H
+#define _LIBC_ERRNO_H
 
-enum SYS_ERROR : int
+enum _LIBC_ERRNO : int
 {
 	EPERM = 1,
 	ENOENT,
@@ -14,3 +15,5 @@ enum SYS_ERROR : int
 	EMFILE,
 	ENOTTY
 };
+
+#endif

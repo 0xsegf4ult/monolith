@@ -13,6 +13,11 @@ enum class process_status : uint32_t
 
 struct address_space;
 
+namespace vfs
+{
+	struct ventry_t;
+}
+
 struct process_t
 {
 	char name[32];
@@ -23,7 +28,14 @@ struct process_t
 	virtaddr_t rsp0_top;
 	address_space* vm_space;
 	virtaddr_t entry;
+
+	process_t* parent;
+	process_t* children;
+	process_t* sibling;
+
+	vfs::ventry_t* cwd;
 	int open_files[32];
+
 	process_t* next;
 };
 

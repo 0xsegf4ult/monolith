@@ -82,15 +82,28 @@ int sys_spawn(const char* path)
 {
 	if(!path)
 		return -EINVAL;
-	
+
 	int fd = vfs::open(path, 0);
 	if(fd < 0)
 		return fd;
-		
+	
+	auto* parent = CPU::get_current()->get_current_process();
+
 	auto* proc = create_process(path, true);
+	proc->parent = parent;
+	proc->cwd = parent->cwd;
+
+	if(parent->children)
+		proc->sibling = parent->children;
+
+	parent->children = proc;
+
+	for(int i = 0; i < 32; i++)
+		proc->open_files[i] = parent->open_files[i];
+
 	load_executable(fd, proc);
 	vfs::close(fd);
-	
+
 	sched_add_ready(proc);
 	return 0;
 }
@@ -109,6 +122,47 @@ int sys_ioctl(int fd, uint64_t op, uint64_t arg)
 		return -EBADF;
 
 	return vfs::ioctl(proc->open_files[fd], op, arg); 
+}
+
+int sys_stat(const char* path, vfs::stat_t* buffer)
+{
+	if(!path || !buffer)
+		return -EINVAL;
+
+	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+		return -EFAULT;
+
+	return vfs::stat(path, buffer);
+}
+
+ssize_t sys_getdents(int fd, byte* buffer, size_t length)
+{
+	auto* proc = CPU::get_current()->get_current_process();
+	if(fd < 0 || proc->open_files[fd] < 0)
+		return -EBADF;
+	
+	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+		return -EFAULT;
+
+	return vfs::getdents(fd, buffer, length);
+}
+
+int sys_chdir(const char* path)
+{
+	if(!path)
+		return -EINVAL;
+
+	auto query = vfs::lookup(path); 
+	if(!query.result)
+		return -ENOENT;
+
+	if(query.result->node->type != vfs::vnode_type::directory)
+	       return -ENOTDIR;	
+
+	auto* proc = CPU::get_current()->get_current_process();
+	proc->cwd = query.result;
+
+	return 0;
 }
 
 void sys_dbgwrite(const char* message)
@@ -146,6 +200,15 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case IOCTL:
 		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rsi, ctx->rdx, ctx->rcx));
+		break;
+	case STAT:
+		ctx->rax = static_cast<uint64_t>(sys_stat((const char*)ctx->rsi, (vfs::stat_t*)ctx->rdx));
+		break;
+	case GETDENTS:
+		ctx->rax = static_cast<uint64_t>(sys_getdents((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx));
+		break;
+	case CHDIR:
+		ctx->rax = static_cast<uint64_t>(sys_chdir((const char*)ctx->rsi));
 		break;
 	case DEBUG_PRINT:
 		sys_dbgwrite((const char*)ctx->rsi);

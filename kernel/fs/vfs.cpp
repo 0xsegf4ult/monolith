@@ -1,3 +1,5 @@
+#include <arch/x86_64/cpu.hpp>
+
 #include <fs/vfs.hpp>
 #include <fs/ramfs.hpp>
 
@@ -10,6 +12,7 @@
 #include <lib/types.hpp>
 
 #include <sys/err.hpp>
+#include <sys/process.hpp>
 
 namespace vfs
 {
@@ -38,9 +41,14 @@ void init()
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
 }
 
+ventry_t* get_root_dentry()
+{
+	return context->root_node;
+}
+
 int create(const char* path)
 {
-	auto query = lookup(context->root_node, path);
+	auto query = lookup(path);
 
 	if(query.result)
 		return -EEXIST;
@@ -53,7 +61,7 @@ int create(const char* path)
 
 int mkdir(const char* path)
 {
-	auto query = lookup(context->root_node, path);
+	auto query = lookup(path);
 
 	if(query.result)
 		return -EEXIST;
@@ -66,7 +74,7 @@ int mkdir(const char* path)
 
 int mknod(const char* path, char type, dev_t device)
 {
-	auto query = lookup(context->root_node, path);
+	auto query = lookup(path);
 
 	if(query.result)
 		return -EEXIST;
@@ -77,7 +85,7 @@ int mknod(const char* path, char type, dev_t device)
 	return query.parent->node->ops->mknod(query.parent, query.basename, type, device);
 }
 
-lookup_result lookup(ventry_t* parent, const char* path)
+lookup_result lookup_at(ventry_t* parent, const char* path)
 {
 	auto len = string_length(path);
 
@@ -102,13 +110,25 @@ lookup_result lookup(ventry_t* parent, const char* path)
 		if(!current)
 			break;
 
-		c_parent = current;
 		basename = &path[i];
 
 		char* component = &cbuffer[i];
 		size_t clen = string_length(component);
 
-		auto* next = current->node->ops->lookup(current, component);
+		ventry_t* next;
+		
+		if(clen == 1 && component[0] == '.')
+			next = current;
+		else if(clen == 2 && component[0] == '.' && component[1] == '.')
+		{
+			c_parent = current;
+			next = current->parent;
+		}
+		else
+		{
+			c_parent = current;
+			next = current->node->ops->lookup(current, component);
+		}
 
 		i += clen;
 		current = next;
@@ -118,9 +138,17 @@ lookup_result lookup(ventry_t* parent, const char* path)
 	return {current, c_parent, basename};
 }
 
+lookup_result lookup(const char* path)
+{
+	if(path[0] == '/')
+		return lookup_at(get_root_dentry(), path);
+	else
+		return lookup_at(CPU::get_current()->get_current_process()->cwd, path);
+}
+
 int open(const char* path, int flags)
 {
-	auto query = lookup(context->root_node, path);
+	auto query = lookup(path);
 	if(!query.result)
 	{
 		return -ENOENT;
@@ -144,6 +172,7 @@ int open(const char* path, int flags)
 			context->open_files[i].read_pos = 0;
 			context->open_files[i].write_pos = 0;
 			context->open_files[i].inode = node;
+			context->open_files[i].path = query.result;
 			context->open_files[i].fs_id = fs_id;
 			break;
 		}
@@ -155,12 +184,18 @@ int open(const char* path, int flags)
 ssize_t read(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
+	if(inode->type == vnode_type::directory)
+	       return -EISDIR;	
+
 	return inode->ops->read(&context->open_files[fd], buffer, length);
 }
 
 ssize_t write(int fd, const byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
+	if(inode->type == vnode_type::directory)
+	       return -EISDIR;	
+	
 	return inode->ops->write(&context->open_files[fd], buffer, length);
 }
 
@@ -180,6 +215,7 @@ int close(int fd)
 	context->open_files[fd].read_pos = 0;
 	context->open_files[fd].write_pos = 0;
 	context->open_files[fd].inode = nullptr;
+	context->open_files[fd].path = nullptr;
 	context->open_files[fd].fs_id = -1;
 	return 0;
 }
@@ -209,5 +245,33 @@ int ioctl(int fd, uint64_t op, uint64_t arg)
 
 	return inode->ops->ioctl(&context->open_files[fd], op, arg);
 }
+
+int stat(const char* path, stat_t* output)
+{
+	auto query = lookup(path);
+	if(!query.result)
+	{
+		return -ENOENT;
+	}
+
+	auto* node = query.result->node;
+	
+	output->type = node->type;
+	output->size = node->size;
+
+	return 0;
+}
+
+ssize_t getdents(int fd, byte* buffer, size_t length)
+{
+	auto* inode = context->open_files[fd].inode;
+	if(!inode)
+		return -EBADF;
+
+	if(inode->type != vnode_type::directory)
+		return -ENOTDIR;
+
+	return inode->ops->getdents(&context->open_files[fd], buffer, length);	
+}	
 
 }

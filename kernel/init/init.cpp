@@ -77,6 +77,9 @@ extern "C" char* virt_kernel_end;
 typedef void (*ctor_func_t)();
 extern ctor_func_t start_ctors[];
 extern ctor_func_t end_ctors[];
+	
+static byte* initramfs_address{nullptr};
+static size_t initramfs_size{0};
 
 extern "C" void __assertion_fail_handler(const char* str)
 {
@@ -112,8 +115,6 @@ extern "C" [[noreturn]] void init()
 	if(module_request.response == nullptr || module_request.response->module_count < 1)
 		panic("failed to load initramfs");
 
-	byte* initramfs_address{nullptr};
-	size_t initramfs_size{0};
 
 	for(uint32_t i = 0; i < module_request.response->module_count; i++)
 	{
@@ -147,17 +148,24 @@ extern "C" [[noreturn]] void init()
 	pit::init(1193);
 	log::info("timer: initialized source PIT 1ms period");
 	
-	vfs::init();
-	vfs::mkdir("/dev");	
-
-	tty_init();
-
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
 		ps2::init();
 
-	pcie::enumerate();
+	vfs::init();
+	sched_start();
 
-	sched_init();
+	panic("idle process died");
+}
+
+void kernel_main()
+{
+	vfs::mkdir("dev");	
+	vfs::mkdir("proc");
+	vfs::mkdir("sys");
+
+	tty_init();
+	
+	pcie::enumerate();
 	
 	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
 	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
@@ -165,14 +173,10 @@ extern "C" [[noreturn]] void init()
 
 	auto init_f = vfs::open("/bin/init");
 	if(init_f < 0)
-		log::error("could not find /bin/init");
+		panic("could not find /bin/init");
 
 	auto* init_proc = create_process("init", true);
 	load_executable(init_f, init_proc);
 	vfs::close(init_f);
 	sched_add_ready(init_proc);
-
-	sched_start();
-
-	panic("idle process died");
 }

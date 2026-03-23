@@ -7,6 +7,8 @@
 #include <lib/klog.hpp>
 #include <lib/types.hpp>
 
+#include <fs/vfs.hpp>
+
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/pmm.hpp>
@@ -65,6 +67,10 @@ process_t* create_process(const char* name, bool is_user)
 	process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
 	process->rsp = 0;
 	process->rsp0_top = process->rsp0;
+	process->parent = nullptr;
+	process->children = nullptr;
+	process->sibling = nullptr;
+	process->cwd = vfs::get_root_dentry();
 
 	for(int i = 0; i < 32; i++)
 		process->open_files[i] = -1;

@@ -2,6 +2,7 @@
 #include <sys/process.hpp>
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/cpu.hpp>
+#include <fs/vfs.hpp>
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/pmm.hpp>
@@ -10,6 +11,7 @@
 #include <lib/kstd.hpp>
 #include <lib/klog.hpp>
 #include <lib/types.hpp>
+#include <init/init.hpp>
 
 static process_t boot_proc = {};
 
@@ -23,6 +25,9 @@ static bool sched_locked = false;
 void idle_process_entry(void* arg)
 {
 	log::info("sched: running on bsp");
+	
+	kernel_main();
+
 	CPU::enable_interrupts();
 
 	for(;;)
@@ -49,8 +54,6 @@ void schedule()
 	}
 
 	sched_locked = true;
-
-	sched_cleaner();	
 
 	auto* current_process = CPU::get_current()->get_current_process();
 	if(!ready_list_head && current_process->status == process_status::running)
@@ -115,10 +118,6 @@ void sched_kill()
 	sched_block(process_status::terminated);	
 }
 
-void sched_init()
-{
-}
-
 void sched_start()
 {
 	idle_process = (process_t*)kmalloc(sizeof(process_t));
@@ -141,7 +140,9 @@ void sched_start()
         idle_process->rsp0 = reinterpret_cast<virtaddr_t>(stack_ptr);
         idle_process->rsp = 0;
 	idle_process->rsp0_top = idle_process->rsp0;
-	
+
+	idle_process->cwd = vfs::get_root_dentry();
+
 	idle_process->status = process_status::running;
 	arch_context_switch(&boot_proc, idle_process);
 }
