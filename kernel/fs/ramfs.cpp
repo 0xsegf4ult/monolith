@@ -275,7 +275,6 @@ ssize_t ramfs_getdents(file_descriptor_t* file, byte* buffer, size_t length)
 	{
 		dirent_info* dirent = reinterpret_cast<dirent_info*>(write_head);
 
-		log::debug("dirent {}", dentry->name);
 		auto name_len = string_length(dentry->name) + 1;
 		dirent->length = sizeof(dirent_info) + name_len;
 		dirent->type = file->inode->type;

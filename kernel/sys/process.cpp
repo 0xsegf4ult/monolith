@@ -22,18 +22,17 @@ void thread_entry_stub()
 {
 	CPU::enable_interrupts();
 	auto self = CPU::get_current()->get_current_process();
-
+/*
 	log::debug("started process {}", self->name);
 	log::debug("entrypoint {:#x}", self->entry);
 	log::debug("rsp0 {:#x} rsp3 {:#x}", self->rsp0, self->rsp);
-
+*/
 	if(!self->rsp)
 	{
 		(reinterpret_cast<entry_function_t>(self->entry))();
 	}
 	else
 	{
-		log::debug("entering ring3");
 		arch_switch_to_usermode(self->rsp, self->entry);
 	}
 }
@@ -52,9 +51,8 @@ process_t* create_process(const char* name, bool is_user)
 	process->status = process_status::ready;
 	process->next = nullptr;
 
-	get_kernel_vmspace()->dump_objects();
+//	get_kernel_vmspace()->dump_objects();
 	auto kstack_alloc = vmalloc(kernel_stack_size, vm_write);
-	log::debug("allocated kernel stack {:#x}", kstack_alloc);
 	auto* stack_ptr = reinterpret_cast<uint64_t*>(kstack_alloc + kernel_stack_size);
 	*(--stack_ptr) = reinterpret_cast<virtaddr_t>(thread_entry_stub);
 	*(--stack_ptr) = 0;

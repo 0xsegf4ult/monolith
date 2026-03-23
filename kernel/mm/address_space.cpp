@@ -41,7 +41,7 @@ void address_space::switch_to()
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
-	log::debug("vmalloc {:#x} bytes", length);
+	//log::debug("vmalloc {:#x} bytes", length);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
 	
@@ -62,8 +62,6 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 		prev = cur;
 		cur = cur->next;	
 	}
-
-	log::debug("will allocate at {:#x}", alloc_base);
 
 
 	if(!alloc_base)
@@ -103,7 +101,7 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 
 virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t flags, void* arg)
 {
-	log::debug("vmalloc_placed {:#x}", base);
+	//log::debug("vmalloc_placed {:#x}", base);
 	if(base < 0x1000)
 		return 0;
 
@@ -152,27 +150,25 @@ void address_space::free(virtaddr_t addr)
 
 int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
-	log::debug("vm_map {:#x}", virt);
+	//log::debug("vm_map {:#x}", virt);
 	if(reserve_range(virt, 0x1000, flags) == 0)
 	{
 		mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
 		return 0;
 	}
 
-	log::debug("failed");
 	return -1;
 }
 
 int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
-	log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
+	//log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
 	if(reserve_range(virt, length, flags) == 0)
 	{
 		mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
 		return 0;
 	}
 
-	log::debug("failed");
 
 	return -1;
 }
@@ -187,18 +183,12 @@ int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 		if(cur->base <= base)	
 		{
 			if(cur->base + cur->length > base)
-			{
-				log::debug("overlapping {:#x} - {:#x}", cur->base, cur->base + cur->length);
 				return -1;
-			}
 		}
 		else
 		{
 			if(cur->base < base + length)
-			{
-				log::debug("overlapping {:#x} - {:#x}", cur->base, cur->base + cur->length);
 				return -1;
-			}
 		}
 
 		prev = cur;

@@ -25,10 +25,10 @@ int load_executable(int exec_fd, process_t* proc)
 	auto* phdr = phdrs;
 	for(int i = 0; i < ebuf->e_phnum; i++)
 	{
-		log::debug("ELF phdr type {} flags {:b} offset {:x}", phdr->p_type, phdr->p_flags, phdr->p_offset);
+//		log::debug("ELF phdr type {} flags {:b} offset {:x}", phdr->p_type, phdr->p_flags, phdr->p_offset);
 		if(phdr->p_type == PT_LOAD)
 		{
-			log::debug("LOAD {}{}{}", (phdr->p_flags & PF_R) ? 'R' : '-', (phdr->p_flags & PF_W) ? 'W' : '-', (phdr->p_flags & PF_X) ? 'X' : '-');
+//			log::debug("LOAD {}{}{}", (phdr->p_flags & PF_R) ? 'R' : '-', (phdr->p_flags & PF_W) ? 'W' : '-', (phdr->p_flags & PF_X) ? 'X' : '-');
 			uint64_t vmflags = vm_user;
 			if(phdr->p_flags & PF_W)
 				vmflags |= vm_write;
@@ -41,17 +41,17 @@ int load_executable(int exec_fd, process_t* proc)
 
 			uint64_t page_offset = phdr->p_vaddr % 0x1000;
 			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
-			log::debug("vmalloc {:x} size {:x}", aligned_vaddr, phdr->p_memsz + page_offset);
+//			log::debug("vmalloc {:x} size {:x}", aligned_vaddr, phdr->p_memsz + page_offset);
 			proc->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags);
 			virtaddr_t user_page = proc->vm_space->get_mapping(aligned_vaddr) + mm::direct_mapping_offset;
-			log::debug("pages mapped at {:x}", user_page);
+//			log::debug("pages mapped at {:x}", user_page);
 			vfs::seek(exec_fd, phdr->p_offset);
-			log::debug("copy {:x} bytes from EHDR + {:x}", phdr->p_filesz, phdr->p_offset);
+//			log::debug("copy {:x} bytes from EHDR + {:x}", phdr->p_filesz, phdr->p_offset);
 			vfs::read(exec_fd, (byte*)user_page + page_offset, phdr->p_filesz);
 			auto zerocount = phdr->p_memsz - phdr->p_filesz;
 			if(zerocount)
 			{
-				log::debug("zeroing {:x} bytes at {:x}", zerocount, phdr->p_memsz);
+//				log::debug("zeroing {:x} bytes at {:x}", zerocount, phdr->p_memsz);
 				memset((void*)(user_page + page_offset + phdr->p_filesz), 0, zerocount);
 			}
 		}
