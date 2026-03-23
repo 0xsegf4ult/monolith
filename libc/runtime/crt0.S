@@ -6,6 +6,10 @@
 .extern _exit
 _start:
 	xorq %rbp, %rbp
+
+	movl (%rsp), %edi # argc
+	movq 8(%rsp), %rsi # argv
+
 	xorq %rax, %rax
 	call main
 

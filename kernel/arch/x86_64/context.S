@@ -27,11 +27,11 @@ arch_context_switch:
 .type arch_switch_to_usermode, @function
 
 arch_switch_to_usermode:
-	push $0x23 # USER_DS | DPL_USER 
-	push %rdi # rsp
-	push $0x202 # RFLAGS IF | RF
-	push $0x1b # USER_CS | DPL_USER
-	push %rsi # rip
+	pushq $0x23 # USER_DS | DPL_USER 
+	pushq %rdi # rsp
+	pushq $0x202 # RFLAGS IF | RF
+	pushq $0x1b # USER_CS | DPL_USER
+	pushq %rsi # rip
 	iretq
 	int3
 	

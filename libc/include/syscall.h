@@ -13,6 +13,7 @@ enum SYSCALL_ID
 	SYS_WRITE,
 	SYS_SPAWN,
 	SYS_EXIT,
+	SYS_WAIT,
 	SYS_IOCTL,
 	SYS_STAT,
 	SYS_GETDENTS,
@@ -59,9 +60,14 @@ inline ssize_t write(int fd, const void* buffer, size_t size)
 	return (ssize_t)(_syscall(SYS_WRITE, fd, (uint64_t)buffer, size, 0, 0));
 }
 
-inline int spawn(const char* path)
+inline int spawn(const char* path, const char** argv)
 {
-	return (int)_syscall(SYS_SPAWN, (uint64_t)path, 0, 0, 0, 0);
+	return (int)_syscall(SYS_SPAWN, (uint64_t)path, (uint64_t)argv, 0, 0, 0);
+}
+
+inline int wait()
+{
+	return (int)_syscall(SYS_WAIT, 0, 0, 0, 0, 0);
 }
 
 inline int ioctl(int fd, uint64_t op, uint64_t arg)

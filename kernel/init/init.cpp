@@ -175,7 +175,8 @@ void kernel_main()
 	if(init_f < 0)
 		panic("could not find /bin/init");
 
-	auto* init_proc = create_process("init", true);
+	const char* argv[2] = {"init", nullptr};
+	auto* init_proc = create_process("init", argv, true);
 	load_executable(init_f, init_proc);
 	vfs::close(init_f);
 	sched_add_ready(init_proc);

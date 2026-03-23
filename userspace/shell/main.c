@@ -50,7 +50,7 @@ void execute()
 		if(ex_stat.mode == S_IFREG)
 		{
 			printf("\n");
-			spawn(buffer);
+			spawn(buffer, argv);
 			wait();
 			return;
 		}

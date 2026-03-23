@@ -78,9 +78,9 @@ ssize_t sys_write(int fd, const byte* buffer, size_t length)
 	return vfs::write(proc->open_files[fd], buffer, length);
 }
 
-int sys_spawn(const char* path)
+int sys_spawn(const char* path, const char** argv)
 {
-	if(!path)
+	if(!path || !argv)
 		return -EINVAL;
 
 	int fd = vfs::open(path, 0);
@@ -89,7 +89,7 @@ int sys_spawn(const char* path)
 	
 	auto* parent = CPU::get_current()->get_current_process();
 
-	auto* proc = create_process(path, true);
+	auto* proc = create_process(path, argv, true);
 	proc->parent = parent;
 	proc->cwd = parent->cwd;
 
@@ -112,7 +112,22 @@ void sys_exit(int status)
 {
 	auto* proc = CPU::get_current()->get_current_process();
 	log::debug("process {} exited with status {}", proc->name, uint32_t(status)); 
+	if(proc->parent && proc->parent->status == process_status::sleeping)
+		sched_unblock(proc->parent);
+
 	sched_kill();	
+}
+
+int sys_wait()
+{
+	auto* proc = CPU::get_current()->get_current_process();
+	if(!proc->children)
+		return -ECHILD;
+	
+	if(proc->children->status != process_status::terminated)
+		sched_block(process_status::sleeping);
+
+	return 0;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
@@ -193,10 +208,13 @@ void syscall_handler(cpu_context_t* ctx)
 		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rsi, (const byte*)ctx->rdx, (size_t)ctx->rcx));
 		break;
 	case SPAWN:
-		ctx->rax = static_cast<uint64_t>(sys_spawn((const char*)ctx->rsi));
+		ctx->rax = static_cast<uint64_t>(sys_spawn((const char*)ctx->rsi, (const char**)ctx->rdx));
 		break;
 	case EXIT:
 		sys_exit((int)ctx->rsi);
+		break;
+	case WAIT:
+		ctx->rax = static_cast<uint64_t>(sys_wait());
 		break;
 	case IOCTL:
 		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rsi, ctx->rdx, ctx->rcx));

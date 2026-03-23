@@ -9,7 +9,8 @@ int main()
 
 	printf("INIT: booting...\n");
 
-	spawn("/bin/sh");
+	const char* argv[2] = {"/bin/sh", nullptr};
+	spawn("/bin/sh", argv);
 
 	for(;;)
 		asm volatile("pause");

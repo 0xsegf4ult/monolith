@@ -40,5 +40,5 @@ struct process_t
 };
 
 static_assert(__builtin_offsetof(process_t, rsp0) == 40, "asm context switch expects rsp0 at 40 bytes"); 
-process_t* create_process(const char* name, bool is_user);
+process_t* create_process(const char* name, const char** argv, bool is_user);
 void destroy_process(process_t* proc);
