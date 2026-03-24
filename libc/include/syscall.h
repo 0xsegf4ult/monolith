@@ -18,6 +18,7 @@ enum SYSCALL_ID
 	SYS_STAT,
 	SYS_GETDENTS,
 	SYS_CHDIR,
+	SYS_MKDIR,
 	SYS_DEBUGMSG
 };
 
@@ -39,6 +40,11 @@ inline void debugmsg(const char* message)
 {
 	_syscall(SYS_DEBUGMSG, (uint64_t)message, 0, 0, 0, 0);
 }
+
+enum OPEN_FLAGS
+{
+	O_CREAT = 1
+};
 
 inline int open(const char* path, int flags)
 {
@@ -118,6 +124,11 @@ inline ssize_t getdents(int fd, void* buffer, size_t length)
 inline int chdir(const char* path)
 {
 	return (int)_syscall(SYS_CHDIR, (uint64_t)path, 0, 0, 0, 0);
+}
+
+inline int mkdir(const char* path)
+{
+	return (int)_syscall(SYS_MKDIR, (uint64_t)path, 0, 0, 0, 0);
 }
 
 #endif

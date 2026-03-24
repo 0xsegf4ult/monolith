@@ -67,15 +67,19 @@ int create(const char* path);
 int mkdir(const char* path);
 int mknod(const char* path, char type, dev_t device);
 
+enum LOOKUP_FLAGS
+{
+	LOOKUP_PARENT = 1
+};
+
 struct lookup_result
 {
 	ventry_t* result;
-	ventry_t* parent;
 	const char* basename;
 };
 
-lookup_result lookup_at(ventry_t* parent, const char* path);
-lookup_result lookup(const char* path);
+lookup_result lookup_at(ventry_t* parent, const char* path, int flags);
+lookup_result lookup(const char* path, int flags);
 
 struct stat_t
 {
@@ -87,6 +91,11 @@ struct dirent_info
 {
 	uint16_t length;
 	vnode_type type;
+};
+
+enum OPEN_FLAGS
+{
+	O_CREAT = 1
 };
 
 int open(const char* path, int flags = 0);

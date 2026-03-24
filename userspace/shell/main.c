@@ -27,6 +27,9 @@ void execute()
 	argv[1] = buffer + sp_offset + 1;
 	if(argv[1][0] == '\0')
 		argv[1] = nullptr;
+	else
+		printf("has argv");
+
 	argv[2] = nullptr;
 
 	if(buffer[0] == '/')
@@ -91,7 +94,10 @@ int main()
 				buffer[b_count++] = data;
 
 			if(data == '\b' && b_count)
+			{
+				buffer[b_count] = '\0';
 				b_count--;
+			}
 
 			if(data == '\n')
 			{

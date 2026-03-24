@@ -167,7 +167,7 @@ int sys_chdir(const char* path)
 	if(!path)
 		return -EINVAL;
 
-	auto query = vfs::lookup(path); 
+	auto query = vfs::lookup(path, 0); 
 	if(!query.result)
 		return -ENOENT;
 
@@ -178,6 +178,14 @@ int sys_chdir(const char* path)
 	proc->cwd = query.result;
 
 	return 0;
+}
+
+int sys_mkdir(const char* path)
+{
+	if(!path)
+		return -EINVAL;
+
+	return vfs::mkdir(path);
 }
 
 void sys_dbgwrite(const char* message)
@@ -227,6 +235,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case CHDIR:
 		ctx->rax = static_cast<uint64_t>(sys_chdir((const char*)ctx->rsi));
+		break;
+	case MKDIR:
+		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rsi));
 		break;
 	case DEBUG_PRINT:
 		sys_dbgwrite((const char*)ctx->rsi);

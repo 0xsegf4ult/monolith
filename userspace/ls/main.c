@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <syscall.h>
+#include <string.h>
 
 static char buffer[1024];
 
@@ -13,7 +14,10 @@ int main(int argc, const char** argv)
 		fd = open(".", 0);
 
 	if(fd < 0)
+	{
+		printf("ls: cannot access %s: %s", argc == 2 ? argv[1] : ".", strerrordesc_np(-fd));
 		return fd;
+	}
 
 	ssize_t read_count = getdents(fd, buffer, 1024);
 	close(fd);

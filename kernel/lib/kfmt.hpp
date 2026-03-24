@@ -472,6 +472,9 @@ public:
 
                 switch(type_id)
                 {
+		case TypeID::Bool:
+			format.format_string(it, dst.end(), v_bool ? "true" : "false");
+			break;
 		case TypeID::Char:
 			*it++ = v_char;
 			break;

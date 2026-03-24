@@ -15,6 +15,7 @@ enum class syscall_id : uint64_t
 	STAT,
 	GETDENTS,
 	CHDIR,
+	MKDIR,
 	DEBUG_PRINT
 };
 

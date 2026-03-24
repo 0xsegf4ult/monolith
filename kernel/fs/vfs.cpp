@@ -48,44 +48,74 @@ ventry_t* get_root_dentry()
 
 int create(const char* path)
 {
-	auto query = lookup(path);
+	auto parent = lookup(path, LOOKUP_PARENT);
+	if(!parent.result)
+		return -ENOENT;
 
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return -EINVAL;
+
+	auto query = lookup_at(parent.result, basename, 0);
 	if(query.result)
 		return -EEXIST;
 
-	if(!query.parent)
-		return -ENOENT;
-
-	return query.parent->node->ops->create(query.parent, query.basename);	
+	return parent.result->node->ops->create(parent.result, basename);	
 }
 
 int mkdir(const char* path)
 {
-	auto query = lookup(path);
+	auto parent = lookup(path, LOOKUP_PARENT);
+	if(!parent.result)
+		return -ENOENT;
 
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return -EINVAL;
+
+	auto query = lookup_at(parent.result, basename, 0);
 	if(query.result)
 		return -EEXIST;
 
-	if(!query.parent)
-		return -ENOENT;
-
-	return query.parent->node->ops->mkdir(query.parent, query.basename);
+	return parent.result->node->ops->mkdir(parent.result, basename);
 }
 
 int mknod(const char* path, char type, dev_t device)
 {
-	auto query = lookup(path);
+	auto parent = lookup(path, LOOKUP_PARENT);
+	if(!parent.result)
+		return -ENOENT;
 
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return -EINVAL;
+
+	auto query = lookup_at(parent.result, basename, 0);
 	if(query.result)
 		return -EEXIST;
 
-	if(!query.parent)
-		return -ENOENT;
-
-	return query.parent->node->ops->mknod(query.parent, query.basename, type, device);
+	return parent.result->node->ops->mknod(parent.result, basename, type, device);
 }
 
-lookup_result lookup_at(ventry_t* parent, const char* path)
+lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 {
 	auto len = string_length(path);
 
@@ -99,7 +129,7 @@ lookup_result lookup_at(ventry_t* parent, const char* path)
 	}
 
 	ventry_t* current = parent;
-	ventry_t* c_parent = parent->parent;
+	ventry_t* c_parent = nullptr;
 	const char* basename = nullptr;
 
 	for(int i = 0; i < len; i++)
@@ -110,10 +140,23 @@ lookup_result lookup_at(ventry_t* parent, const char* path)
 		if(!current)
 			break;
 
+		if(current->node->type != vnode_type::directory)
+			break;
+
 		basename = &path[i];
 
 		char* component = &cbuffer[i];
 		size_t clen = string_length(component);
+		bool is_last = (i + clen) == len;
+		if(!is_last)
+		{
+			int j;
+			for(j = i + clen; j < len && component[j] == '\0'; ++j) {}
+			is_last = (j == len);
+		}
+
+		if(is_last && (flags & LOOKUP_PARENT))
+			break;
 
 		ventry_t* next;
 		
@@ -121,12 +164,12 @@ lookup_result lookup_at(ventry_t* parent, const char* path)
 			next = current;
 		else if(clen == 2 && component[0] == '.' && component[1] == '.')
 		{
-			c_parent = current;
+			if(i + clen >= len)
+				c_parent = current;
 			next = current->parent;
 		}
 		else
 		{
-			c_parent = current;
 			next = current->node->ops->lookup(current, component);
 		}
 
@@ -135,23 +178,32 @@ lookup_result lookup_at(ventry_t* parent, const char* path)
 	}
 
 	kfree(cbuffer);
-	return {current, c_parent, basename};
+	return {current, basename};
 }
 
-lookup_result lookup(const char* path)
+lookup_result lookup(const char* path, int flags)
 {
 	if(path[0] == '/')
-		return lookup_at(get_root_dentry(), path);
+		return lookup_at(get_root_dentry(), path,  flags);
 	else
-		return lookup_at(CPU::get_current()->get_current_process()->cwd, path);
+		return lookup_at(CPU::get_current()->get_current_process()->cwd, path, flags);
 }
 
 int open(const char* path, int flags)
 {
-	auto query = lookup(path);
+	auto query = lookup(path, 0);
 	if(!query.result)
 	{
-		return -ENOENT;
+		if(flags & O_CREAT)
+		{
+			auto c_res = create(path);
+			if(c_res < 0)
+				return c_res;
+		
+			query = lookup(path, 0);
+		}
+		else
+			return -ENOENT;
 	}
 
 	auto* node = query.result->node;
@@ -248,7 +300,7 @@ int ioctl(int fd, uint64_t op, uint64_t arg)
 
 int stat(const char* path, stat_t* output)
 {
-	auto query = lookup(path);
+	auto query = lookup(path, 0);
 	if(!query.result)
 	{
 		return -ENOENT;
