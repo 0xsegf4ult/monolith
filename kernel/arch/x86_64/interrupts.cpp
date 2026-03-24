@@ -10,6 +10,12 @@
 #include <sys/syscall.hpp>
 
 static dev_irq_handler_t irq_handlers[32]{nullptr};
+static uint32_t irq_handler_counter = 0;
+
+uint32_t allocate_irq()
+{
+	return (irq_handler_counter++) + 32;
+}
 
 void install_irq_handler(uint8_t irq, dev_irq_handler_t handler)
 {

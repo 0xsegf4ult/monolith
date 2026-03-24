@@ -145,8 +145,9 @@ void init()
 
 	log::info("ps2: detected keyboard");
 
-	ioapic::get(0).write_redirection_entry(0x1, 0x20);
-	install_irq_handler(0x20, interrupt_handler);
+	auto irq = allocate_irq();
+	ioapic::get(0).write_redirection_entry(0x1, irq);
+	install_irq_handler(irq, interrupt_handler);
 }
 
 void set_tty(tty_device* tty)

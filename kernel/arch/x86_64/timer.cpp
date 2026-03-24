@@ -34,8 +34,9 @@ void init(uint16_t count)
 	io::outb(count & 0xFF, 0x40);
 	io::outb(count >> 8, 0x40);
 
-	ioapic::get(0).write_redirection_entry(0x2, 0x21);
-	install_irq_handler(0x21, irq_handler);
+	auto irq = allocate_irq();
+	ioapic::get(0).write_redirection_entry(0x2, irq);
+	install_irq_handler(irq, irq_handler);
 }
 
 }

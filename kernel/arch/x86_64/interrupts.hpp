@@ -33,6 +33,7 @@ enum InterruptID
 
 typedef void (*dev_irq_handler_t)();
 
+uint32_t allocate_irq();
 void install_irq_handler(uint8_t irq, dev_irq_handler_t handler);
 void remove_irq_handler(uint8_t irq);
 
