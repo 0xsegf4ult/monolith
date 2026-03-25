@@ -12,8 +12,9 @@ int main()
 	const char* argv[2] = {"/bin/sh", nullptr};
 	spawn("/bin/sh", argv);
 
-	for(;;)
-		asm volatile("pause");
+	wait();
 
-	return -1;
+	printf("init: /bin/sh exited");
+
+	return 0;
 }

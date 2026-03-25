@@ -42,5 +42,7 @@ int main(int argc, const char** argv)
 		bpos += d->length;
 	}
 
+	printf("\n");
+
 	return 0;
 }

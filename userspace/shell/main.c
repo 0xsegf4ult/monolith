@@ -6,6 +6,7 @@
 static char input_buf[256];
 static char buffer[4096];
 static size_t b_count;
+static int bindir;
 
 void execute()
 {
@@ -27,8 +28,6 @@ void execute()
 	argv[1] = buffer + sp_offset + 1;
 	if(argv[1][0] == '\0')
 		argv[1] = nullptr;
-	else
-		printf("has argv");
 
 	argv[2] = nullptr;
 
@@ -70,7 +69,23 @@ void execute()
 	}
 	else if(b_count == 5 && (strncmp(buffer, "exit", 5) == 0)) 
 		exit(0);		
-
+	else
+	{
+		auto ex_fd = openat(bindir, buffer, 0);
+		if(ex_fd)
+		{
+			stat_t ex_stat;
+			int st_r = fstat(ex_fd, &ex_stat);
+			if(st_r >= 0 && ex_stat.mode == S_IFREG)
+			{
+				printf("\n");
+				spawnat(bindir, buffer, argv);
+				wait();
+				return;
+			}
+			close(ex_fd);
+		}
+	}
 
 	printf("\nsh: %s: command not found\n", buffer);
 }
@@ -78,6 +93,8 @@ void execute()
 int main()
 {
 	ioctl(0, 1, 0);
+
+	bindir = open("/bin", 0);
 
 	printf("[root@monolith]# ");
 
@@ -112,5 +129,6 @@ int main()
 		}
 	}
 
+	close(bindir);
 	return 0;
 }

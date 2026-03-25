@@ -8,14 +8,17 @@ typedef int64_t ssize_t;
 enum SYSCALL_ID
 {
 	SYS_OPEN,
+	SYS_OPENAT,
 	SYS_CLOSE,
 	SYS_READ,
 	SYS_WRITE,
 	SYS_SPAWN,
+	SYS_SPAWNAT,
 	SYS_EXIT,
 	SYS_WAIT,
 	SYS_IOCTL,
 	SYS_STAT,
+	SYS_FSTAT,
 	SYS_GETDENTS,
 	SYS_CHDIR,
 	SYS_MKDIR,
@@ -48,7 +51,12 @@ enum OPEN_FLAGS
 
 inline int open(const char* path, int flags)
 {
-	return (int)(_syscall(SYS_OPEN, (uint64_t)path, flags, 0, 0, 0));
+	return (int)(_syscall(SYS_OPEN, (uint64_t)path, (uint64_t)flags, 0, 0, 0));
+}
+
+inline int openat(int dirfd, const char* path, int flags)
+{
+	return (int)(_syscall(SYS_OPENAT, (uint64_t)dirfd, (uint64_t)path, (uint64_t)flags, 0, 0));
 }
 
 inline int close(int fd)
@@ -69,6 +77,11 @@ inline ssize_t write(int fd, const void* buffer, size_t size)
 inline int spawn(const char* path, const char** argv)
 {
 	return (int)_syscall(SYS_SPAWN, (uint64_t)path, (uint64_t)argv, 0, 0, 0);
+}
+
+inline int spawnat(int dirfd, const char* path, const char** argv)
+{
+	return (int)_syscall(SYS_SPAWNAT, (uint64_t)dirfd, (uint64_t)path, (uint64_t)argv, 0, 0);
 }
 
 inline int wait()
@@ -114,6 +127,11 @@ typedef struct
 inline int stat(const char* path, stat_t* buffer)
 {
 	return (int)_syscall(SYS_STAT, (uint64_t)path, (uint64_t)buffer, 0, 0, 0);
+}
+
+inline int fstat(int fd, stat_t* buffer)
+{
+	return (int)_syscall(SYS_FSTAT, (uint64_t)fd, (uint64_t)buffer, 0, 0, 0);
 }
 
 inline ssize_t getdents(int fd, void* buffer, size_t length)

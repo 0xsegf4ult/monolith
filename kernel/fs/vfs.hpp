@@ -99,12 +99,14 @@ enum OPEN_FLAGS
 };
 
 int open(const char* path, int flags = 0);
+int openat(int fd, const char* path, int flags = 0);
 int close(int fd);
 ssize_t read(int fd, byte* buffer, size_t len);
 ssize_t write(int fd, const byte* buffer, size_t len);
 ssize_t seek(int fd, ssize_t offset, int flags = 0);
 int ioctl(int fd, uint64_t op, uint64_t arg = 0);
 int stat(const char* path, stat_t* output);
+int fstat(int fd, stat_t* output); 
 ssize_t getdents(int fd, byte* buffer, size_t length);
 
 }

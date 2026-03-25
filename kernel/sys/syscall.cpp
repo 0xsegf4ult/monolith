@@ -16,7 +16,7 @@
 int sys_open(const char* path, int flags)
 {
 	if(!path)
-		return -EFAULT;
+		return -EINVAL;
 
 	int v_fd = vfs::open(path, flags);
 	if(v_fd < 0)
@@ -41,6 +41,35 @@ int sys_open(const char* path, int flags)
 	proc->open_files[fd] = v_fd;
 	return fd;
 }	
+
+int sys_openat(int fd, const char* path, int flags)
+{
+	auto* proc = CPU::get_current()->get_current_process();
+	if(fd < 0 || proc->open_files[fd] < 0 || !path)
+		return -EINVAL;
+
+	int v_fd = vfs::openat(proc->open_files[fd], path, flags);
+	if(v_fd < 0)
+		return v_fd;
+
+	int proc_fd = -1;
+	for(int i = 0; i < 32; i++)
+	{
+		if(proc->open_files[i] == -1)
+		{
+			proc_fd = i;
+			break;
+		}
+	}
+
+	if(proc_fd < 0)
+	{
+		vfs::close(v_fd);
+		return -EMFILE;
+	}
+	proc->open_files[proc_fd] = v_fd;
+	return proc_fd;
+}
 
 int sys_close(int fd)
 {
@@ -78,15 +107,8 @@ ssize_t sys_write(int fd, const byte* buffer, size_t length)
 	return vfs::write(proc->open_files[fd], buffer, length);
 }
 
-int sys_spawn(const char* path, const char** argv)
+int common_spawn_fd(int fd, const char* path, const char** argv)
 {
-	if(!path || !argv)
-		return -EINVAL;
-
-	int fd = vfs::open(path, 0);
-	if(fd < 0)
-		return fd;
-	
 	auto* parent = CPU::get_current()->get_current_process();
 
 	auto* proc = create_process(path, argv, true);
@@ -102,10 +124,38 @@ int sys_spawn(const char* path, const char** argv)
 		proc->open_files[i] = parent->open_files[i];
 
 	load_executable(fd, proc);
-	vfs::close(fd);
 
 	sched_add_ready(proc);
 	return 0;
+}
+
+int sys_spawn(const char* path, const char** argv)
+{
+	if(!path || !argv)
+		return -EINVAL;
+
+	int fd = vfs::open(path, 0);
+	if(fd < 0)
+		return fd;
+
+	auto res = common_spawn_fd(fd, path, argv);
+	vfs::close(fd);
+	return res;
+}
+
+int sys_spawnat(int fd, const char* path, const char** argv)
+{
+	auto* proc = CPU::get_current()->get_current_process();
+	if(proc->open_files[fd] < 0 || !path || !argv)
+		return -EINVAL;
+	
+	int efd = vfs::openat(proc->open_files[fd], path, 0);
+	if(efd < 0)
+		return efd;
+
+	auto res = common_spawn_fd(efd, path, argv);
+	vfs::close(efd);
+	return res;
 }
 
 void sys_exit(int status)
@@ -148,6 +198,21 @@ int sys_stat(const char* path, vfs::stat_t* buffer)
 		return -EFAULT;
 
 	return vfs::stat(path, buffer);
+}
+
+int sys_fstat(int fd, vfs::stat_t* buffer)
+{
+	auto* proc = CPU::get_current()->get_current_process();
+	if(fd < 0 || proc->open_files[fd] < 0)
+		return -EBADF;
+
+	if(!buffer)
+		return -EINVAL;
+
+        if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+                return -EFAULT;
+
+	return vfs::fstat(proc->open_files[fd], buffer);
 }
 
 ssize_t sys_getdents(int fd, byte* buffer, size_t length)
@@ -206,6 +271,9 @@ void syscall_handler(cpu_context_t* ctx)
 	case OPEN:
 		ctx->rax = static_cast<uint64_t>(sys_open((const char*)ctx->rsi, (int)ctx->rdx));
 		break;
+	case OPENAT:
+		ctx->rax = static_cast<uint64_t>(sys_openat((int)ctx->rsi, (const char*)ctx->rdx, (int)ctx->rcx));
+		break;
 	case CLOSE:
 		ctx->rax = static_cast<uint64_t>(sys_close((int)ctx->rsi));
 		break;
@@ -218,6 +286,9 @@ void syscall_handler(cpu_context_t* ctx)
 	case SPAWN:
 		ctx->rax = static_cast<uint64_t>(sys_spawn((const char*)ctx->rsi, (const char**)ctx->rdx));
 		break;
+	case SPAWNAT:
+		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rsi, (const char*)ctx->rdx, (const char**)ctx->rcx));
+		break;
 	case EXIT:
 		sys_exit((int)ctx->rsi);
 		break;
@@ -229,6 +300,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case STAT:
 		ctx->rax = static_cast<uint64_t>(sys_stat((const char*)ctx->rsi, (vfs::stat_t*)ctx->rdx));
+		break;
+	case FSTAT:
+		ctx->rax = static_cast<uint64_t>(sys_fstat((int)ctx->rsi, (vfs::stat_t*)ctx->rdx));
 		break;
 	case GETDENTS:
 		ctx->rax = static_cast<uint64_t>(sys_getdents((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx));

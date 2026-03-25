@@ -5,14 +5,17 @@
 enum class syscall_id : uint64_t
 {
 	OPEN,
+	OPENAT,
 	CLOSE,
 	READ,
 	WRITE,
 	SPAWN,
+	SPAWNAT,
 	EXIT,
 	WAIT,
 	IOCTL,
 	STAT,
+	FSTAT,
 	GETDENTS,
 	CHDIR,
 	MKDIR,

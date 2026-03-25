@@ -233,6 +233,42 @@ int open(const char* path, int flags)
 	return fd;
 }
 
+int openat(int fd, const char* path, int flags)
+{
+	if(flags)
+		return -EINVAL;
+
+	auto query = lookup_at(context->open_files[fd].path, path, 0);
+	if(!query.result)
+		return -ENOENT;
+
+	auto* node = query.result->node;
+
+	int fs_id = 0 ;
+	if(node->ops->open)
+		fs_id = node->ops->open(node, flags);
+
+	if(fs_id < 0)
+		return fs_id;
+
+	int s_fd = -1;
+	for(int i = 0; i < 64; i++)
+	{
+		if(context->open_files[i].inode == nullptr)
+		{
+			s_fd = i;
+			context->open_files[i].read_pos = 0;
+			context->open_files[i].write_pos = 0;
+			context->open_files[i].inode = node;
+			context->open_files[i].path = query.result;
+			context->open_files[i].fs_id = fs_id;
+			break;
+		}
+	}
+
+	return s_fd;
+}
+
 ssize_t read(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
@@ -311,6 +347,14 @@ int stat(const char* path, stat_t* output)
 	output->type = node->type;
 	output->size = node->size;
 
+	return 0;
+}
+
+int fstat(int fd, stat_t* output)
+{
+	auto* node = context->open_files[fd].inode;
+	output->type = node->type;
+	output->size = node->size;
 	return 0;
 }
 
