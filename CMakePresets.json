@@ -5,7 +5,7 @@
 		"name": "default",
 		"generator": "Ninja",
 		"cacheVariables": {
-			"CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -fno-omit-frame-pointer -O2 -g",
+			"CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -fno-omit-frame-pointer -fstack-protector-strong",
 			"CMAKE_BUILD_TYPE" : "RelWithDebInfo"
 		}
 	}

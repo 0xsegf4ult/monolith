@@ -26,6 +26,7 @@ target_sources(vmmonolith PRIVATE
 	lib/elf.cpp
 	lib/klog.cpp
 	lib/kstd.cpp
+	lib/stackchk.cpp
 	mm/address_space.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
