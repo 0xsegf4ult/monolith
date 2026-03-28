@@ -1,4 +1,5 @@
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 
 #include <dev/tty.hpp>
 #include <dev/ps2.hpp>
@@ -67,7 +68,7 @@ ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 	while(tty->read_buffer_head == tty->read_buffer_tail)
 	{
-		auto* proc = CPU::get_current()->get_current_process();
+		auto* proc = smp_current_cpu()->get_current_process();
 		proc->next = tty->waitqueue;
 		tty->waitqueue = proc;
 	

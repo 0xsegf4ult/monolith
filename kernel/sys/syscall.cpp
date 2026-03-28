@@ -5,6 +5,7 @@
 
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/context.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <fs/vfs.hpp>
 #include <sys/err.hpp>
 #include <sys/executable.hpp>
@@ -22,7 +23,7 @@ int sys_open(const char* path, int flags)
 	if(v_fd < 0)
 		return v_fd;
 	
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	int fd = -1;
 	for(int i = 0; i < 32; i++)
 	{
@@ -44,7 +45,7 @@ int sys_open(const char* path, int flags)
 
 int sys_openat(int fd, const char* path, int flags)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0 || !path)
 		return -EINVAL;
 
@@ -76,7 +77,7 @@ int sys_close(int fd)
 	if(fd < 0)
 		return -EBADF;
 
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	auto v_fd = proc->open_files[fd];
 	proc->open_files[fd] = -1;
 
@@ -85,7 +86,7 @@ int sys_close(int fd)
 
 ssize_t sys_read(int fd, byte* buffer, size_t length)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
 	       return -EBADF;
 
@@ -97,7 +98,7 @@ ssize_t sys_read(int fd, byte* buffer, size_t length)
 
 ssize_t sys_write(int fd, const byte* buffer, size_t length)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
 		return -EBADF;
 
@@ -109,7 +110,7 @@ ssize_t sys_write(int fd, const byte* buffer, size_t length)
 
 int common_spawn_fd(int fd, const char* path, const char** argv)
 {
-	auto* parent = CPU::get_current()->get_current_process();
+	auto* parent = smp_current_cpu()->get_current_process();
 
 	auto* proc = create_process(path, argv, true);
 	proc->parent = parent;
@@ -145,7 +146,7 @@ int sys_spawn(const char* path, const char** argv)
 
 int sys_spawnat(int fd, const char* path, const char** argv)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(proc->open_files[fd] < 0 || !path || !argv)
 		return -EINVAL;
 	
@@ -160,17 +161,19 @@ int sys_spawnat(int fd, const char* path, const char** argv)
 
 void sys_exit(int status)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	log::debug("process {} exited with status {}", proc->name, uint32_t(status)); 
+	proc->return_status = status;
 	if(proc->parent && proc->parent->status == process_status::sleeping)
 		sched_unblock(proc->parent);
 
-	sched_kill();	
+	process_zombify(proc);	
+	sched_block(process_status::terminated);	
 }
 
 int sys_wait()
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(!proc->children)
 		return -ECHILD;
 	
@@ -182,7 +185,7 @@ int sys_wait()
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
 		return -EBADF;
 
@@ -202,7 +205,7 @@ int sys_stat(const char* path, vfs::stat_t* buffer)
 
 int sys_fstat(int fd, vfs::stat_t* buffer)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
 		return -EBADF;
 
@@ -217,7 +220,7 @@ int sys_fstat(int fd, vfs::stat_t* buffer)
 
 ssize_t sys_getdents(int fd, byte* buffer, size_t length)
 {
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	if(fd < 0 || proc->open_files[fd] < 0)
 		return -EBADF;
 	
@@ -239,7 +242,7 @@ int sys_chdir(const char* path)
 	if(query.result->node->type != vfs::vnode_type::directory)
 	       return -ENOTDIR;	
 
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	proc->cwd = query.result;
 
 	return 0;

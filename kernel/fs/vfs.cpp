@@ -1,4 +1,5 @@
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 
 #include <fs/vfs.hpp>
 #include <fs/ramfs.hpp>
@@ -186,7 +187,7 @@ lookup_result lookup(const char* path, int flags)
 	if(path[0] == '/')
 		return lookup_at(get_root_dentry(), path,  flags);
 	else
-		return lookup_at(CPU::get_current()->get_current_process()->cwd, path, flags);
+		return lookup_at(smp_current_cpu()->get_current_process()->cwd, path, flags);
 }
 
 int open(const char* path, int flags)

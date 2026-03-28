@@ -9,13 +9,17 @@
 namespace lapic
 {
 
-static physaddr_t base_address = 0;
+static virtaddr_t base_address = 0;
 
-void enable(physaddr_t base)
+void set_base(physaddr_t base)
 {
 	base_address = base + mm::direct_mapping_offset;
 	vm_map(base, base_address, vm_write | vm_mmio);
-	CPU::wrmsr(LAPIC_BASE, base | 0x800);
+}
+
+void enable()
+{
+	wrmsr(LAPIC_BASE, (base_address - mm::direct_mapping_offset) | 0x800);
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0xf0) = 0x1ff;
 }
 

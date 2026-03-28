@@ -36,9 +36,12 @@ struct process_t
 	vfs::ventry_t* cwd;
 	int open_files[32];
 
+	int return_status;
+
 	process_t* next;
 };
 
 static_assert(__builtin_offsetof(process_t, rsp0) == 40, "asm context switch expects rsp0 at 40 bytes"); 
 process_t* create_process(const char* name, const char** argv, bool is_user);
+void process_zombify(process_t* proc);
 void destroy_process(process_t* proc);

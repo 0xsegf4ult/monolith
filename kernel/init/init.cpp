@@ -1,8 +1,8 @@
 #include <arch/x86_64/acpi.hpp>
 #include <arch/x86_64/apic.hpp>
-#include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/pic.hpp>
 #include <arch/x86_64/serial.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/timer.hpp>
 
 #include <dev/pcie.hpp>
@@ -86,13 +86,11 @@ extern "C" void __assertion_fail_handler(const char* str)
         early_serial_write("\nassertion failed: ");
         early_serial_write(str);
         early_serial_putchar('\n');
-        CPU::halt();
+	asm volatile("cli; hlt");
 }
 
-extern "C" [[noreturn]] void init()
+extern "C" void init()
 {
-	CPU bootCPU;
-	
 	for(ctor_func_t* ctor = start_ctors; ctor < end_ctors; ctor++)
 	{
 		(*ctor)();
@@ -115,7 +113,6 @@ extern "C" [[noreturn]] void init()
 	if(module_request.response == nullptr || module_request.response->module_count < 1)
 		panic("failed to load initramfs");
 
-
 	for(uint32_t i = 0; i < module_request.response->module_count; i++)
 	{
 		limine_file* mod = module_request.response->modules[i];
@@ -134,16 +131,18 @@ extern "C" [[noreturn]] void init()
 
 	auto* rsdp = reinterpret_cast<const acpi::rsdp_v1*>(reinterpret_cast<byte*>(rsdp_request.response->address) + mm::direct_mapping_offset);
 
-	bootCPU.early_init(0);
+
+	smp_start_bsp();
+
+	pic::disable();
 
 	pmm_initialize(memmap);
 	mm::slab_init();
 	vmm_init_kpages(memmap, phys_kernel_start);
+	vfs::init();
+	vfs::mkdir("/dev");	
 
 	auto acpi_tables = acpi::parse_tables(rsdp);
-
-	pic::disable();
-	lapic::enable(acpi_tables.madt->lapic_address);
 	
 	pit::init(1193);
 	log::info("timer: initialized source PIT 1ms period");
@@ -151,15 +150,14 @@ extern "C" [[noreturn]] void init()
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
 		ps2::init();
 
-	vfs::init();
-	sched_start();
+
+	smp_init();
 
 	panic("idle process died");
 }
 
 void kernel_main()
 {
-	vfs::mkdir("dev");	
 	vfs::mkdir("proc");
 	vfs::mkdir("sys");
 

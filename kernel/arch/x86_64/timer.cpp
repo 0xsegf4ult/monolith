@@ -21,6 +21,13 @@ uint64_t get_ticks()
 namespace pit
 {
 
+static uint8_t gsi = 0x0;
+
+void set_gsi(uint8_t p_gsi)
+{
+	gsi = p_gsi;
+}
+
 void irq_handler()
 {
 	timer::ticks++;
@@ -35,7 +42,7 @@ void init(uint16_t count)
 	io::outb(count >> 8, 0x40);
 
 	auto irq = allocate_irq();
-	ioapic::get(0).write_redirection_entry(0x2, irq);
+	ioapic::get(0).write_redirection_entry(pit::gsi, irq);
 	install_irq_handler(irq, irq_handler);
 }
 

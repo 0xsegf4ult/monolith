@@ -1,6 +1,7 @@
 #include <sys/process.hpp>
 
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/context.hpp>
 
 #include <lib/kstd.hpp>
@@ -20,8 +21,8 @@ typedef void (*entry_function_t)();
 
 void thread_entry_stub()
 {
-	CPU::enable_interrupts();
-	auto self = CPU::get_current()->get_current_process();
+	enable_interrupts();
+	auto self = smp_current_cpu()->get_current_process();
 /*
 	log::debug("started process {}", self->name);
 	log::debug("entrypoint {:#x}", self->entry);
@@ -69,6 +70,7 @@ process_t* create_process(const char* name, const char** argv, bool is_user)
 	process->children = nullptr;
 	process->sibling = nullptr;
 	process->cwd = vfs::get_root_dentry();
+	process->return_status = 0;
 
 	for(int i = 0; i < 32; i++)
 		process->open_files[i] = -1;
@@ -114,10 +116,19 @@ process_t* create_process(const char* name, const char** argv, bool is_user)
 	return process;	
 }
 
-void destroy_process(process_t* proc)
+void process_zombify(process_t* proc)
 {
+	for(int i = 0; i < 32; i++)
+	{
+		if(proc->open_files[i] >= 0)
+			vfs::close(i);
+	}
+	
 	proc->vm_space->destroy();
 	kfree(proc->vm_space);
+}
 
+void destroy_process(process_t* proc)
+{
 	kfree(proc);
 }

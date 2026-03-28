@@ -1,5 +1,7 @@
 #include <arch/x86_64/acpi.hpp>
 #include <arch/x86_64/apic.hpp>
+#include <arch/x86_64/smp.hpp>
+#include <arch/x86_64/timer.hpp>
 #include <dev/pcie.hpp>
 #include <mm/layout.hpp>
 #include <lib/kstd.hpp>
@@ -39,6 +41,9 @@ void parse_madt(const madt* table)
 		{
 		case MADTEntryType::LAPIC:
 		{
+			auto* data = reinterpret_cast<const madt_lapic_entry*>(entry);
+			if(data->apic_id)
+				smp_discover_cpu(data->apic_id);
 			break;
 		}
 		case MADTEntryType::IOAPIC:
@@ -51,6 +56,9 @@ void parse_madt(const madt* table)
 		{
 			auto* data = reinterpret_cast<const madt_ioapic_iso_entry*>(entry);
 			log::info("acpi: interrupt override (bus {} irq {} GSI {} (flags {:b})", data->bus_source, data->irq_source, data->gsi, data->flags);
+			if(data->irq_source == pit::isa_irq)
+				pit::set_gsi(data->gsi);
+
 			break;
 		}
 		case MADTEntryType::IOAPIC_NMI_SOURCE:
@@ -84,6 +92,8 @@ void parse_madt(const madt* table)
 		raw += entry->entry_length;
 		len -= entry->entry_length;
 	}
+
+	lapic::set_base(table->lapic_address);
 }
 
 void parse_mcfg(const mcfg* table)

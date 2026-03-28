@@ -5,6 +5,7 @@
 #include <mm/layout.hpp>
 
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/mmu.hpp>
 
 #include <lib/types.hpp>
@@ -36,7 +37,7 @@ void address_space::destroy()
 
 void address_space::switch_to()
 {
-	CPU::get_current()->set_pagetable(root_pml4);
+	smp_current_cpu()->set_pagetable(root_pml4);
 }
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)

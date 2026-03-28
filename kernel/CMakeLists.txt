@@ -6,13 +6,15 @@ target_include_directories(vmmonolith PRIVATE ${CMAKE_SOURCE_DIR}/buildroot/usr/
 target_sources(vmmonolith PRIVATE
 	arch/x86_64/acpi.cpp
 	arch/x86_64/apic.cpp
+	arch/x86_64/arch.S
 	arch/x86_64/cpu.cpp
 	arch/x86_64/context.S
-	arch/x86_64/gdt.S
+	arch/x86_64/gdt.cpp
 	arch/x86_64/interrupts.cpp
 	arch/x86_64/isr_stubs.S
 	arch/x86_64/mmu.cpp
 	arch/x86_64/serial.cpp
+	arch/x86_64/smp.cpp
 	arch/x86_64/timer.cpp
 	dev/block.cpp
 	dev/character.cpp

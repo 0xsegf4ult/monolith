@@ -5,7 +5,8 @@
 namespace lapic
 {
 
-void enable(physaddr_t base);
+void set_base(physaddr_t base);
+void enable();
 void eoi();
 
 }

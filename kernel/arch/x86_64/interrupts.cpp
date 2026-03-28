@@ -1,16 +1,51 @@
+#include <arch/x86_64/interrupts.hpp>
 #include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/interrupts.hpp>
+#include <arch/x86_64/gdt.hpp>
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/serial.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
 #include <sys/process.hpp>
 #include <sys/syscall.hpp>
 
+extern "C" void isr_stubs();
+static idt_entry_t idt_entries[256];
+
 static dev_irq_handler_t irq_handlers[32]{nullptr};
 static uint32_t irq_handler_counter = 0;
+
+void load_idt()
+{
+	idtr_t idtr;
+	idtr.limit = 256 * sizeof(idt_entry_t) - 1;
+	idtr.base = idt_entries;
+
+	asm volatile("lidt %0" : : "m"(idtr) : "memory");
+}
+
+void setup_idt()
+{
+	virtaddr_t isr_start = reinterpret_cast<virtaddr_t>(&isr_stubs);
+
+	for(int i = 0; i < 32; i++)
+		idt_entries[i] = idt_entry_t(isr_start + (i * 16), KERNEL_CS, IDT_TRAP_GATE, DPL_KERNEL);
+
+	for(int i = 32; i < 256; i++)
+	{
+		auto dpl = DPL_KERNEL;
+
+		//syscall
+		if(i == 0x80)
+			dpl = DPL_USER;
+
+		idt_entries[i] = idt_entry_t(isr_start + (i * 16), KERNEL_CS, IDT_INTR_GATE, dpl);
+	}
+
+	load_idt();
+}
 
 uint32_t allocate_irq()
 {
@@ -52,7 +87,9 @@ void handle_pagefault(cpu_context_t* ctx)
 	early_serial_write(trace_buf);
 	format_to(string_span{&trace_buf[0], 64}, " RBP: {:#x}\n", ctx->rbp);
 	early_serial_write(trace_buf);
-	
+	format_to(string_span{&trace_buf[0], 64}, "RIP: {:#x} mem: {:#x}", ctx->rip, cr2);
+	early_serial_write(trace_buf);
+
 	struct stack_frame
 	{
 		stack_frame* rbp;
@@ -72,7 +109,7 @@ void handle_pagefault(cpu_context_t* ctx)
 		stk = stk->rbp;
 	}
 
-	auto* proc = CPU::get_current()->get_current_process();
+	auto* proc = smp_current_cpu()->get_current_process();
 	panic("unhandled page fault in [{}] at RIP {:#x} memory access {:#x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
 }
 
@@ -112,6 +149,8 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 				irq_handlers[ctx->interrupt_id - 32]();
 		}
 	}
+	else
+		panic("unhandled interrupt {}", ctx->interrupt_id);
 
 	lapic::eoi();
 	return ctx;

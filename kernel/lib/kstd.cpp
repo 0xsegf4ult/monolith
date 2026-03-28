@@ -10,9 +10,8 @@ void panic_inner(const char* string)
         early_serial_write("\033[31mkernel panic:\033[0m ");
         early_serial_write(string);
         early_serial_putchar('\n');
-
-
-        CPU::halt();
+        
+	asm volatile("cli; hlt");
 }
 
 char* strncpy(char* dst, const char* src, size_t n)

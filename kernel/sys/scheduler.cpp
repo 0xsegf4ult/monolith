@@ -2,6 +2,7 @@
 #include <sys/process.hpp>
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <fs/vfs.hpp>
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
@@ -18,32 +19,19 @@ static process_t boot_proc = {};
 static process_t* idle_process = nullptr;
 static process_t* ready_list_head = nullptr;
 static process_t* ready_list_tail = nullptr;
-static process_t* kill_list = nullptr;
 static bool sched_locked = false;
-
 
 void idle_process_entry(void* arg)
 {
 	log::info("sched: running on bsp");
 	
+	enable_interrupts();
+	
 	kernel_main();
-
-	CPU::enable_interrupts();
 
 	for(;;)
 	{
 		asm volatile("hlt");
-	}
-}
-
-void sched_cleaner()
-{
-	while(kill_list)
-	{
-		log::debug("cleaner walk {:#x}", kill_list);
-		auto last = kill_list;
-		kill_list = kill_list->next;
-		destroy_process(last);
 	}
 }
 
@@ -55,11 +43,11 @@ void schedule()
 
 	sched_locked = true;
 
-	auto* current_process = CPU::get_current()->get_current_process();
+	auto* current_process = smp_current_cpu()->get_current_process();
 	if(!ready_list_head && current_process->status == process_status::running)
 		return;
 
-	CPU::disable_interrupts();
+	disable_interrupts();
 
 	if(current_process->status == process_status::running)
 	{
@@ -92,7 +80,7 @@ void schedule()
 
 void sched_block(process_status status)
 {
-	auto* current_process = CPU::get_current()->get_current_process();
+	auto* current_process = smp_current_cpu()->get_current_process();
 	current_process->status = status;
 	if(!sched_locked) schedule();
 }
@@ -107,15 +95,6 @@ void sched_unblock(process_t* proc)
 	proc->status = process_status::ready;
 	sched_add_ready(proc);
 	sched_locked = false;
-}
-
-void sched_kill()
-{
-	auto* current_process = CPU::get_current()->get_current_process();
-	
-	current_process->next = kill_list;
-	kill_list = current_process;
-	sched_block(process_status::terminated);	
 }
 
 void sched_start()
@@ -163,7 +142,7 @@ void sched_add_ready(process_t* proc)
 
 void sched_dump_state()
 {
-	auto* current_process = CPU::get_current()->get_current_process();
+	auto* current_process = smp_current_cpu()->get_current_process();
 	log::debug("SCHEDULER STATE: ");
 	generic_log("current: {}", current_process->name);
 	generic_log("ready_list");
@@ -172,12 +151,5 @@ void sched_dump_state()
 	{
 		generic_log(" -> {}", r_cur->name);
 		r_cur = r_cur->next;
-	}
-	generic_log("kill_list");
-	auto* k_cur = kill_list;
-	while(k_cur)
-	{
-		generic_log(" -> {}", k_cur->name);
-		k_cur = k_cur->next;
 	}
 }

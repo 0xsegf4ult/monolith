@@ -8,15 +8,15 @@ inline void* operator new[](size_t, void* p) { return p; }
 inline void operator delete(void*, void*) {};
 inline void operator delete[](void*, void*) {};
 
-[[noreturn]] void panic_inner(const char* string);
+void panic_inner(const char* string);
 
-[[noreturn]] constexpr void panic(const char* string)
+constexpr void panic(const char* string)
 {
 	panic_inner(string);
 }
 
 template <typename... Args>
-[[noreturn]] void panic(const char* fmt_string, Args&&... args)
+void panic(const char* fmt_string, Args&&... args)
 {
 	static char buffer[512];
 	format_to(string_span{&buffer[0], 512}, fmt_string, args...);
