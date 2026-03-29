@@ -52,6 +52,7 @@ struct file_descriptor_t
 	vnode_t* inode;
 	ventry_t* path;
 	int fs_id;
+	uint32_t refcount;
 };
 
 struct context_t
@@ -108,5 +109,6 @@ int ioctl(int fd, uint64_t op, uint64_t arg = 0);
 int stat(const char* path, stat_t* output);
 int fstat(int fd, stat_t* output); 
 ssize_t getdents(int fd, byte* buffer, size_t length);
+int dup(int fd);
 
 }

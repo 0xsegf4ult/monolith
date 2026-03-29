@@ -122,7 +122,10 @@ int common_spawn_fd(int fd, const char* path, const char** argv)
 	parent->children = proc;
 
 	for(int i = 0; i < 32; i++)
-		proc->open_files[i] = parent->open_files[i];
+	{
+		if(parent->open_files[i] >= 0)
+			proc->open_files[i] = vfs::dup(parent->open_files[i]);
+	}
 
 	load_executable(fd, proc);
 

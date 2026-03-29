@@ -25,8 +25,9 @@ void execute()
 
 	const char* argv[3];
 	argv[0] = buffer;
-	argv[1] = buffer + sp_offset + 1;
-	if(argv[1][0] == '\0')
+	if(sp_offset + 1 <= b_count)
+		argv[1] = buffer + sp_offset + 1;
+	else
 		argv[1] = nullptr;
 
 	argv[2] = nullptr;
@@ -76,6 +77,7 @@ void execute()
 		{
 			stat_t ex_stat;
 			int st_r = fstat(ex_fd, &ex_stat);
+			close(ex_fd);
 			if(st_r >= 0 && ex_stat.mode == S_IFREG)
 			{
 				printf("\n");
@@ -83,7 +85,6 @@ void execute()
 				wait();
 				return;
 			}
-			close(ex_fd);
 		}
 	}
 

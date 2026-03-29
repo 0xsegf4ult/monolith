@@ -208,6 +208,8 @@ int open(const char* path, int flags)
 	}
 
 	auto* node = query.result->node;
+	if(!node)
+		return -EBADF;
 
 	int fs_id = 0;
 	if(node->ops->open)
@@ -227,10 +229,12 @@ int open(const char* path, int flags)
 			context->open_files[i].inode = node;
 			context->open_files[i].path = query.result;
 			context->open_files[i].fs_id = fs_id;
+			context->open_files[i].refcount = 1;
 			break;
 		}
 	}
-	
+
+
 	return fd;
 }
 
@@ -244,6 +248,8 @@ int openat(int fd, const char* path, int flags)
 		return -ENOENT;
 
 	auto* node = query.result->node;
+	if(!node)
+		return -EBADF;
 
 	int fs_id = 0 ;
 	if(node->ops->open)
@@ -263,6 +269,7 @@ int openat(int fd, const char* path, int flags)
 			context->open_files[i].inode = node;
 			context->open_files[i].path = query.result;
 			context->open_files[i].fs_id = fs_id;
+			context->open_files[i].refcount = 1;
 			break;
 		}
 	}
@@ -273,8 +280,14 @@ int openat(int fd, const char* path, int flags)
 ssize_t read(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
+	if(!inode)
+		return -EBADF;
+
 	if(inode->type == vnode_type::directory)
 	       return -EISDIR;	
+
+	if(!inode->ops->read)
+		return -EINVAL;
 
 	return inode->ops->read(&context->open_files[fd], buffer, length);
 }
@@ -282,9 +295,15 @@ ssize_t read(int fd, byte* buffer, size_t length)
 ssize_t write(int fd, const byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
+	if(!inode)
+		return -EBADF;
+
 	if(inode->type == vnode_type::directory)
 	       return -EISDIR;	
-	
+
+	if(!inode->ops->write)
+		return -EINVAL;
+
 	return inode->ops->write(&context->open_files[fd], buffer, length);
 }
 
@@ -293,6 +312,10 @@ int close(int fd)
 	auto* node = context->open_files[fd].inode;
 	if(!node)
 		return -EBADF;
+	
+	context->open_files[fd].refcount--;
+	if(context->open_files[fd].refcount > 0)
+		return 0;
 
 	int cres = 0;
 	if(node->ops->close)
@@ -370,5 +393,16 @@ ssize_t getdents(int fd, byte* buffer, size_t length)
 
 	return inode->ops->getdents(&context->open_files[fd], buffer, length);	
 }	
+
+int dup(int fd)
+{
+	auto* inode = context->open_files[fd].inode;
+	if(!inode)
+		return -EBADF;
+
+	context->open_files[fd].refcount++;
+
+	return fd;
+}
 
 }
