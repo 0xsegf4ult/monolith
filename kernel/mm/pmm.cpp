@@ -13,7 +13,7 @@ void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 {
 	auto rlen = end - begin;
 	auto rbegin = begin;
-	physmem_available += rbegin;
+	physmem_available += (rlen / 0x1000);
 
 	while(rlen >= 4096)
 	{
@@ -54,7 +54,7 @@ void pmm_initialize(mm::memory_map& memmap)
 		if(region.type == mm::mem_region::RegionType::Usable)
 			pmm_mark_range_free(region.begin, region.end);
 		else
-			physmem_used += (region.end - region.begin);
+			physmem_used += ((region.end - region.begin) / 0x1000);
 	}
 }
 
@@ -84,8 +84,8 @@ void pmm_free(physaddr_t addr)
 	auto bit_offset = (addr / 4096) % 64;
 
 	pmm_bitmap[bmp_offset] |= (1ull << bit_offset);
-	physmem_used -= 4096;
-	physmem_available += 4096;
+	physmem_used--;;
+	physmem_available++;
 }
 
 

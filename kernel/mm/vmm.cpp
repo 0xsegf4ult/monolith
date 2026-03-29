@@ -62,7 +62,7 @@ virtaddr_t vmalloc(size_t length, uint64_t flags)
 	return kernel_address_space->alloc(length, flags);
 }
 
-void vfree(virtaddr_t addr)
+void vmfree(virtaddr_t addr)
 {
 	kernel_address_space->free(addr);
 }

@@ -105,3 +105,22 @@ void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t l
 		length -= cur_pgsz;
 	}
 }
+
+void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free)
+{
+	auto pml4_index = get_pagetable_index(virt, 4);
+	auto pdpt_index = get_pagetable_index(virt, 3);
+	auto pd_index = get_pagetable_index(virt, 2);
+	auto pt_index = get_pagetable_index(virt, 1);
+
+	page_table* pdpt = get_pte(table, pml4_index);
+	page_table* pd = get_pte(pdpt, pdpt_index);
+	page_table* pt = get_pte(pd, pd_index);
+
+	physaddr_t phys = pt[pt_index].get();
+	pt[pt_index] = 0;
+	asm volatile("invlpg (%0)" :: "r"(virt) : "memory");	
+
+	if(do_pmm_free)
+		pmm_free(phys);
+}

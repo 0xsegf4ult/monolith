@@ -27,6 +27,7 @@ struct slab_cache
 void slab_init();
 byte* slab_alloc(slab_cache& cache);
 void slab_free(virtaddr_t addr);
+void slab_debug(size_t size);
 
 }
 

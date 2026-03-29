@@ -10,6 +10,7 @@
 
 #include <lib/types.hpp>
 #include <lib/klog.hpp>
+#include <lib/kstd.hpp>
 
 void address_space::init(virtaddr_t base)
 {
@@ -29,10 +30,22 @@ void address_space::destroy()
 		auto last = objects;
 		objects = objects->next;
 
+		virtaddr_t base = last->base;
+		size_t length = last->length;
+		while(length)
+		{
+			mmu_unmap(root_pml4, base, last->flags & vm_mmio ? false : true);
+			base += 0x1000;
+			if(length >= 0x1000)
+				length -= 0x1000;
+			else
+				length = 0;
+		}
+
 		kfree(last);
 	}
 
-	pmm_free(reinterpret_cast<physaddr_t>(root_pml4 - mm::direct_mapping_offset));
+	pmm_free(reinterpret_cast<physaddr_t>(root_pml4) - mm::direct_mapping_offset);
 }
 
 void address_space::switch_to()
@@ -146,7 +159,38 @@ physaddr_t address_space::get_mapping(virtaddr_t virt)
 
 void address_space::free(virtaddr_t addr)
 {
+	vm_object* prev = nullptr;
+	vm_object* cur = objects;
+	while(cur)
+	{
+		if(cur->base == addr)
+		{
+			size_t len = cur->length;
+			if(prev)
+				prev->next = cur->next;
+			else
+				objects = cur->next;
 
+			while(len)
+			{
+				mmu_unmap(root_pml4, addr, cur->flags & vm_mmio ? false : true); 
+
+				addr += 0x1000;
+				if(len >= 0x1000)
+					len -= 0x1000;
+				else
+					len = 0;
+			}			
+
+			kfree(cur);
+			return;	
+		}
+
+		prev = cur;
+		cur = cur->next;
+	}
+
+	panic("vm_free: invalid address");
 }
 
 int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
@@ -169,7 +213,6 @@ int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, ui
 		mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
 		return 0;
 	}
-
 
 	return -1;
 }

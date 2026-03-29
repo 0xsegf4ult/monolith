@@ -93,3 +93,4 @@ void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags
 void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0, bool allow_huge = false);
+void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free = true);

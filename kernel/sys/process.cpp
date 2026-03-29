@@ -130,5 +130,6 @@ void process_zombify(process_t* proc)
 
 void destroy_process(process_t* proc)
 {
+	vmfree(proc->rsp0);
 	kfree(proc);
 }
