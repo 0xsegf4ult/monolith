@@ -17,63 +17,101 @@ void set_base(physaddr_t base)
 	vm_map_range(base, base_address, 256 * 8 * 8 * 4096, vm_write | vm_mmio);
 }
 
+}
 
-struct pcie_device
+uint32_t pcie_device::read_config32(uint32_t offset) const
 {
-	uint8_t bus;
-	uint8_t device;
-	uint8_t function;
+	return *reinterpret_cast<const volatile uint32_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
+}
 
-	const byte* read_config(uint32_t offset) const
-	{
-		return reinterpret_cast<const byte*>(base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
-	}
+uint64_t pcie_device::read_config64(uint32_t offset) const
+{
+	return *reinterpret_cast<const volatile uint64_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
+}
 
-	uint16_t vendor_id() const
-	{
-		return *reinterpret_cast<const uint16_t*>(read_config(0));
-	}
+void pcie_device::write_config32(uint32_t offset, uint32_t data)
+{
+	*(reinterpret_cast<volatile uint32_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
+}
 
-	uint16_t device_id() const
-	{
-		return *reinterpret_cast<const uint16_t*>(read_config(2));
-	}	
-	
-	uint8_t class_code() const
-	{
-		return *reinterpret_cast<const uint8_t*>(read_config(0xb));
-	}
+void pcie_device::write_config64(uint32_t offset, uint64_t data)
+{
+	*(reinterpret_cast<volatile uint64_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
+}
 
-	uint8_t subclass_code() const
-	{
-		return *reinterpret_cast<const uint8_t*>(read_config(0xa));
-	}
+uint16_t pcie_device::vendor_id() const
+{
+	return read_config32(0) & 0xFFFF;
+}
 
-	uint8_t header_type() const
-	{
-		return *reinterpret_cast<const uint8_t*>(read_config(0xe)) & ~(1 << 7);
-	}
+uint16_t pcie_device::device_id() const
+{
+	return read_config32(0) >> 16;
+}	
 
-	bool is_valid() const
-	{
-		return vendor_id() != 0xFFFF && device_id() != 0xFFFF;
-	}
+uint8_t pcie_device::class_code() const
+{
+	return (read_config32(0x8) >> 24) & 0xFF;
+}
 
-	bool is_bridge() const
-	{
-		return header_type() == 0x1 && class_code() == 0x6;
-	}
+uint8_t pcie_device::subclass_code() const
+{
+	return (read_config32(0x8) >> 16) & 0xFF;
+}
 
-	uint8_t sub_bus() const
-	{
-		return *reinterpret_cast<const uint8_t*>(read_config(0xe)) & (1 << 7);
-	}
+uint8_t pcie_device::header_type() const
+{
+	return ((read_config32(0xc) >> 16) & 0xFF) & ~(1 << 7);
+}
 
-	bool has_multiple_functions() const
-	{
-		return *reinterpret_cast<const uint8_t*>(read_config(0xe)) & (1 << 7);
-	}
-};	
+bool pcie_device::is_valid() const
+{
+	return vendor_id() != 0xFFFF && device_id() != 0xFFFF;
+}
+
+bool pcie_device::is_bridge() const
+{
+	return header_type() == 0x1 && class_code() == 0x6;
+}
+
+uint8_t pcie_device::sub_bus() const
+{
+	return ((read_config32(0xc) >> 16) & 0xFF) & (1 << 7);
+}
+
+bool pcie_device::has_multiple_functions() const
+{
+	return sub_bus();
+}
+
+uint64_t pcie_device::read_bar() const
+{
+	return read_config64(0x10) & 0xFFFFFFFFFFFFF000;
+}
+
+size_t pcie_device::get_bar_size()
+{
+	auto old_value = read_bar();
+
+	write_config64(0x10, 0xFFFFFFFFFFFFFFFF);
+
+	auto val = read_bar();
+
+	log::debug("readback lines {:#x}", val);
+
+	size_t len = ~val;
+
+	write_config64(0x10, old_value); 
+
+	return len + 1;
+}
+
+namespace pcie
+{
+
+void device_dispatch_driver(pcie_device& dev)
+{
+}
 
 void scan_bus(uint8_t bus);
 
@@ -117,8 +155,12 @@ void scan_device(uint8_t bus, uint8_t device)
 				log::info("pcie: {:02x}:{:02x}.{:x} {}", bus, device, i, s_cname);
 			else
 				log::info("pcie: {:02x}:{:02x}.{:x} {:#x}:{:#x}", bus, device, i, sub_dev.vendor_id(), sub_dev.device_id());
+
+			device_dispatch_driver(sub_dev); 
 		}
 	}
+	
+	device_dispatch_driver(dev);
 }
 
 void scan_bus(uint8_t bus)
