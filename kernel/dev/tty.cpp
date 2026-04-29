@@ -3,6 +3,7 @@
 
 #include <dev/tty.hpp>
 #include <dev/ps2.hpp>
+#include <dev/efifb.hpp>
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 
@@ -51,7 +52,7 @@ void tty_consume(tty_device* tty, char c)
        	tty->read_buffer_tail = (tty->read_buffer_tail + 1) % tty_device::buffer_size;
 
 	if(tty->echo)
-		klog_internal(&c, 1);	
+		efifb_write(&c, 1u);
 
 	while(tty->waitqueue)
 	{
@@ -94,7 +95,7 @@ ssize_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t lengt
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 
-	klog_internal((const char*)buffer, length);
+	efifb_write((const char*)buffer, length);
 
 	return length;
 }

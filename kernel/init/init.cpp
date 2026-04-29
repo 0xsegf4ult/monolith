@@ -5,6 +5,7 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/timer.hpp>
 
+#include <dev/efifb.hpp>
 #include <dev/pcie.hpp>
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
@@ -26,6 +27,8 @@
 #include <sys/executable.hpp>
 #include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
+
+#include <sys/spinlock.hpp>
 
 #define LIMINE_API_REVISION 3
 #include <limine.h>
@@ -66,6 +69,12 @@ __attribute__((used, section(".limine_requests")))
 static volatile limine_module_request module_request =
 {
         .id = LIMINE_MODULE_REQUEST
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_framebuffer_request framebuffer_request =
+{
+	.id = LIMINE_FRAMEBUFFER_REQUEST
 };
 
 __attribute__((used, section(".limine_requests_end")))
@@ -132,6 +141,24 @@ extern "C" void init()
 
 	auto* rsdp = reinterpret_cast<const acpi::rsdp_v1*>(reinterpret_cast<byte*>(rsdp_request.response->address) + mm::direct_mapping_offset);
 
+	size_t max_fb = 0;
+	efifb_framebuffer framebuffer;
+	if(framebuffer_request.response)
+	{
+		for(size_t i = 0; i < framebuffer_request.response->framebuffer_count; i++)
+		{
+			auto* fb = framebuffer_request.response->framebuffers[i];
+			auto fsize = fb->width * fb->height * fb->bpp;
+			if(fsize > max_fb)
+			{
+				max_fb = fsize;
+				framebuffer.address = (virtaddr_t)fb->address - mm::direct_mapping_offset;
+				framebuffer.width = fb->width;
+				framebuffer.height = fb->height;
+				framebuffer.bpp = fb->bpp;
+			}
+		}
+	}
 
 	smp_start_bsp();
 
@@ -151,6 +178,7 @@ extern "C" void init()
 	if(acpi_tables.fadt->boot_architecture_flags & 0x2)
 		ps2::init();
 
+	efifb_init(framebuffer);
 
 	smp_init();
 
