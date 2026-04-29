@@ -16,13 +16,16 @@ int main(int argc, const char** argv)
 	if(fd < 0)
 	{
 		printf("ls: cannot access %s: %s", argc == 2 ? argv[1] : ".", strerrordesc_np(-fd));
-		return fd;
+		return -1;
 	}
 
 	ssize_t read_count = getdents(fd, buffer, 1024);
 	close(fd);
 	if(read_count < 0)
-		return read_count;
+	{
+		printf("ls: %s: %s", argc == 2 ? argv[1] : ".", strerrordesc_np(-read_count));
+		return -1;
+	}
 
 	if(read_count == 0)
 		return 0;

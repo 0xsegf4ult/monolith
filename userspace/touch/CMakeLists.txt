@@ -1,8 +1,8 @@
 add_executable(touch)
 
-target_compile_options(touch PRIVATE -target x86_64-none-elf -ffreestanding -mno-red-zone -mgeneral-regs-only -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
-target_link_options(touch PRIVATE -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
-target_link_libraries(touch PRIVATE crt0 c)
+target_compile_options(touch PRIVATE ${USERSPACE_COMPILE_OPTIONS})
+target_link_options(touch PRIVATE ${USERSPACE_LINK_OPTIONS})
+target_link_libraries(touch PRIVATE ${USERSPACE_LINK_LIBRARIES})
 target_sources(touch
         PRIVATE
         main.c)

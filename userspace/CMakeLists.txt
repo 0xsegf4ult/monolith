@@ -1,4 +1,9 @@
+set(USERSPACE_COMPILE_OPTIONS -target x86_64-none-elf -ffreestanding -mno-red-zone -msse2 -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
+set(USERSPACE_LINK_OPTIONS -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
+set(USERSPACE_LINK_LIBRARIES crt0 c)
+
 add_subdirectory("shell")
 add_subdirectory("ls")
 add_subdirectory("touch")
 add_subdirectory("mkdir")
+add_subdirectory("cat")

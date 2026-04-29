@@ -1,8 +1,8 @@
 add_executable(ls)
 
-target_compile_options(ls PRIVATE -target x86_64-none-elf -ffreestanding -mno-red-zone -mgeneral-regs-only -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
-target_link_options(ls PRIVATE -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
-target_link_libraries(ls PRIVATE crt0 c)
+target_compile_options(ls PRIVATE ${USERSPACE_COMPILE_OPTIONS})
+target_link_options(ls PRIVATE ${USERSPACE_LINK_OPTIONS})
+target_link_libraries(ls PRIVATE ${USERSPACE_LINK_LIBRARIES})
 target_sources(ls
         PRIVATE
         main.c)
