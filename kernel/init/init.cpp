@@ -97,6 +97,7 @@ extern "C" void init()
 	}
 
 	early_serial_init();
+	klog_init();
 	log::info("monolith kernel version git-");
 	
 	log::info("kernel virt memory [{:#x} - {:#x}]", &virt_kernel_start, &virt_kernel_end);

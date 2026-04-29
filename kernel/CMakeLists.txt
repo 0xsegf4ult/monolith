@@ -15,6 +15,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/mmu.cpp
 	arch/x86_64/serial.cpp
 	arch/x86_64/smp.cpp
+	arch/x86_64/smpboot.S
 	arch/x86_64/timer.cpp
 	dev/block.cpp
 	dev/character.cpp

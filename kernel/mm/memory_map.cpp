@@ -68,7 +68,7 @@ memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 		region.end = entry->base + entry->length;
 
 		if(region.begin == 0)
-			region.begin = 0x1000;
+			region.begin = 0x2000;
 
 		switch(entry->type)
 		{

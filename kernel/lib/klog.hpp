@@ -4,6 +4,7 @@
 #include <lib/kfmt.hpp>
 #include <lib/types.hpp>
 
+void klog_init();
 void klog_internal(const char* buffer);
 void klog_internal(const char* buffer, size_t length);
 void klog_internal_newline();
