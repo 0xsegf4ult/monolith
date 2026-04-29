@@ -21,6 +21,7 @@ target_sources(vmmonolith PRIVATE
 	dev/character.cpp
 	dev/efifb.cpp
 	dev/efifb_font.cpp
+	dev/nvme/nvme.cpp
 	dev/pcie.cpp
 	dev/ps2.cpp
 	dev/tty.cpp

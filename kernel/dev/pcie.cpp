@@ -1,5 +1,6 @@
 #include <dev/pcie.hpp>
 #include <dev/pci_class.hpp>
+#include <dev/nvme/nvme.hpp>
 
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
@@ -111,6 +112,8 @@ namespace pcie
 
 void device_dispatch_driver(pcie_device& dev)
 {
+	if(dev.class_code() == 1 && dev.subclass_code() == 8)
+		nvme_init_controller(dev);
 }
 
 void scan_bus(uint8_t bus);
