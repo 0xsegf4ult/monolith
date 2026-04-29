@@ -39,3 +39,24 @@ enable_xsave:
 	bts $1, %eax # XCR0_SSE
 	xsetbv
 	ret
+
+.global disable_interrupts
+.type disable_interrupts, @function
+disable_interrupts:
+	pushq %rbp
+	movq %rsp, %rbp
+	pushfq
+	popq %rax
+	cli
+	popq %rbp
+	ret
+
+.global restore_flags
+.type restore_flags, @function
+restore_flags:
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rdi
+	popfq
+	popq %rbp
+	ret

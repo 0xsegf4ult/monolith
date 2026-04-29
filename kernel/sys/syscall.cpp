@@ -9,7 +9,7 @@
 #include <fs/vfs.hpp>
 #include <sys/err.hpp>
 #include <sys/executable.hpp>
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
 
 #include <lib/klog.hpp>
@@ -23,11 +23,11 @@ int sys_open(const char* path, int flags)
 	if(v_fd < 0)
 		return v_fd;
 	
-	auto* proc = smp_current_cpu()->get_current_process();
+	auto* thr = smp_current_cpu()->get_current_thread();
 	int fd = -1;
 	for(int i = 0; i < 32; i++)
 	{
-		if(proc->open_files[i] == -1)
+		if(thr->open_files[i] == -1)
 		{
 			fd = i;
 			break;
@@ -39,37 +39,37 @@ int sys_open(const char* path, int flags)
 		vfs::close(v_fd);
 		return -EMFILE;
 	}
-	proc->open_files[fd] = v_fd;
+	thr->open_files[fd] = v_fd;
 	return fd;
 }	
 
 int sys_openat(int fd, const char* path, int flags)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0 || !path)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0 || !path)
 		return -EINVAL;
 
-	int v_fd = vfs::openat(proc->open_files[fd], path, flags);
+	int v_fd = vfs::openat(thr->open_files[fd], path, flags);
 	if(v_fd < 0)
 		return v_fd;
 
-	int proc_fd = -1;
+	int thr_fd = -1;
 	for(int i = 0; i < 32; i++)
 	{
-		if(proc->open_files[i] == -1)
+		if(thr->open_files[i] == -1)
 		{
-			proc_fd = i;
+			thr_fd = i;
 			break;
 		}
 	}
 
-	if(proc_fd < 0)
+	if(thr_fd < 0)
 	{
 		vfs::close(v_fd);
 		return -EMFILE;
 	}
-	proc->open_files[proc_fd] = v_fd;
-	return proc_fd;
+	thr->open_files[thr_fd] = v_fd;
+	return thr_fd;
 }
 
 int sys_close(int fd)
@@ -77,59 +77,59 @@ int sys_close(int fd)
 	if(fd < 0)
 		return -EBADF;
 
-	auto* proc = smp_current_cpu()->get_current_process();
-	auto v_fd = proc->open_files[fd];
-	proc->open_files[fd] = -1;
+	auto* thr = smp_current_cpu()->get_current_thread();
+	auto v_fd = thr->open_files[fd];
+	thr->open_files[fd] = -1;
 
 	return vfs::close(v_fd);
 }
 
 ssize_t sys_read(int fd, byte* buffer, size_t length)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0)
 	       return -EBADF;
 
 	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
 		return -EFAULT;
 
-	return vfs::read(proc->open_files[fd], buffer, length);
+	return vfs::read(thr->open_files[fd], buffer, length);
 }	
 
 ssize_t sys_write(int fd, const byte* buffer, size_t length)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0)
 		return -EBADF;
 
 	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
 		return -EFAULT;
 
-	return vfs::write(proc->open_files[fd], buffer, length);
+	return vfs::write(thr->open_files[fd], buffer, length);
 }
 
 int common_spawn_fd(int fd, const char* path, const char** argv)
 {
-	auto* parent = smp_current_cpu()->get_current_process();
+	auto* parent = smp_current_cpu()->get_current_thread();
 
-	auto* proc = create_process(path, argv, true);
-	proc->parent = parent;
-	proc->cwd = parent->cwd;
+	auto* thr = create_thread(path, argv, true);
+	thr->parent = parent;
+	thr->cwd = parent->cwd;
 
 	if(parent->children)
-		proc->sibling = parent->children;
+		thr->sibling = parent->children;
 
-	parent->children = proc;
+	parent->children = thr;
 
 	for(int i = 0; i < 32; i++)
 	{
 		if(parent->open_files[i] >= 0)
-			proc->open_files[i] = vfs::dup(parent->open_files[i]);
+			thr->open_files[i] = vfs::dup(parent->open_files[i]);
 	}
 
-	load_executable(fd, proc);
+	load_executable(fd, thr);
 
-	sched_add_ready(proc);
+	sched_add_ready(thr);
 	return 0;
 }
 
@@ -149,11 +149,11 @@ int sys_spawn(const char* path, const char** argv)
 
 int sys_spawnat(int fd, const char* path, const char** argv)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(proc->open_files[fd] < 0 || !path || !argv)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr->open_files[fd] < 0 || !path || !argv)
 		return -EINVAL;
 	
-	int efd = vfs::openat(proc->open_files[fd], path, 0);
+	int efd = vfs::openat(thr->open_files[fd], path, 0);
 	if(efd < 0)
 		return efd;
 
@@ -164,35 +164,35 @@ int sys_spawnat(int fd, const char* path, const char** argv)
 
 void sys_exit(int status)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	log::debug("process {} exited with status {}", proc->name, uint32_t(status)); 
-	proc->return_status = status;
-	if(proc->parent && proc->parent->status == process_status::sleeping)
-		sched_unblock(proc->parent);
+	auto* thr = smp_current_cpu()->get_current_thread();
+	log::debug("thread {} exited with status {}", thr->name, uint32_t(status)); 
+	thr->return_status = status;
+	if(thr->parent && thr->parent->status == thread_status::sleeping)
+		sched_unblock(thr->parent);
 
-	process_zombify(proc);	
-	sched_block(process_status::terminated);	
+	thread_zombify(thr);	
+	sched_block(thread_status::terminated);	
 }
 
 int sys_wait()
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(!proc->children)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(!thr->children)
 		return -ECHILD;
 	
-	if(proc->children->status != process_status::terminated)
-		sched_block(process_status::sleeping);
+	if(thr->children->status != thread_status::terminated)
+		sched_block(thread_status::sleeping);
 
 	return 0;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0)
 		return -EBADF;
 
-	return vfs::ioctl(proc->open_files[fd], op, arg); 
+	return vfs::ioctl(thr->open_files[fd], op, arg); 
 }
 
 int sys_stat(const char* path, vfs::stat_t* buffer)
@@ -208,8 +208,8 @@ int sys_stat(const char* path, vfs::stat_t* buffer)
 
 int sys_fstat(int fd, vfs::stat_t* buffer)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0)
 		return -EBADF;
 
 	if(!buffer)
@@ -218,13 +218,13 @@ int sys_fstat(int fd, vfs::stat_t* buffer)
         if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
                 return -EFAULT;
 
-	return vfs::fstat(proc->open_files[fd], buffer);
+	return vfs::fstat(thr->open_files[fd], buffer);
 }
 
 ssize_t sys_getdents(int fd, byte* buffer, size_t length)
 {
-	auto* proc = smp_current_cpu()->get_current_process();
-	if(fd < 0 || proc->open_files[fd] < 0)
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(fd < 0 || thr->open_files[fd] < 0)
 		return -EBADF;
 	
 	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
@@ -245,8 +245,8 @@ int sys_chdir(const char* path)
 	if(query.result->node->type != vfs::vnode_type::directory)
 	       return -ENOTDIR;	
 
-	auto* proc = smp_current_cpu()->get_current_process();
-	proc->cwd = query.result;
+	auto* thr = smp_current_cpu()->get_current_thread();
+	thr->cwd = query.result;
 
 	return 0;
 }

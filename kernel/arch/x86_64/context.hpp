@@ -30,7 +30,7 @@ struct __attribute__((packed)) cpu_context_t
 	uint64_t ss;
 };
 
-struct process_t;
+struct thread_t;
 
-extern "C" void arch_context_switch(process_t* prev, process_t* next);
+extern "C" void arch_context_switch(thread_t* prev, thread_t* next);
 extern "C" void arch_switch_to_usermode(virtaddr_t rsp, virtaddr_t rip);

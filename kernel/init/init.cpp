@@ -24,7 +24,7 @@
 #include <mm/vmm.hpp>
 
 #include <sys/executable.hpp>
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
 
 #define LIMINE_API_REVISION 3
@@ -47,7 +47,7 @@ __attribute__((used, section(".limine_requests")))
 static volatile limine_stack_size_request ss_request =
 {
         .id = LIMINE_STACK_SIZE_REQUEST,
-        .stack_size = 8192
+        .stack_size = 4096
 };
 
 __attribute__((used, section(".limine_requests")))
@@ -153,7 +153,7 @@ extern "C" void init()
 
 	smp_init();
 
-	panic("idle process died");
+	panic("idle thread died");
 }
 
 void kernel_main()
@@ -174,7 +174,7 @@ void kernel_main()
 		panic("could not find /bin/init");
 
 	const char* argv[2] = {"init", nullptr};
-	auto* init_proc = create_process("init", argv, true);
+	auto* init_proc = create_thread("init", argv, true);
 	load_executable(init_f, init_proc);
 	vfs::close(init_f);
 	sched_add_ready(init_proc);

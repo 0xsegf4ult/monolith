@@ -13,7 +13,7 @@
 #include <lib/types.hpp>
 
 #include <sys/err.hpp>
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 
 namespace vfs
 {
@@ -187,7 +187,7 @@ lookup_result lookup(const char* path, int flags)
 	if(path[0] == '/')
 		return lookup_at(get_root_dentry(), path,  flags);
 	else
-		return lookup_at(smp_current_cpu()->get_current_process()->cwd, path, flags);
+		return lookup_at(smp_current_cpu()->get_current_thread()->cwd, path, flags);
 }
 
 int open(const char* path, int flags)

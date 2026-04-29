@@ -13,7 +13,7 @@ enum msr_registers
 };
 
 struct page_table;
-struct process_t;
+struct thread_t;
 
 struct cpu_t
 {
@@ -23,17 +23,17 @@ struct cpu_t
 		return pt;
 	}
 
-	void set_current_process(process_t* proc);
-	constexpr process_t* get_current_process()
+	void set_current_thread(thread_t* thr);
+	constexpr thread_t* get_current_thread()
 	{
-		return current_process;
+		return current_thread;
 	}
 
 	uint32_t id;
 	uint32_t lapic_id;
 	
 	page_table* pt{nullptr};
-	process_t* current_process{nullptr};
+	thread_t* current_thread{nullptr};
 	
 	alignas(16) gdt_entry_t gdt_entries[8]; 
 	tss_t tss;
@@ -55,14 +55,12 @@ inline void wrmsr(uint64_t msr, uint64_t value)
 	asm volatile("wrmsr" : : "c"(msr), "a"(low), "d"(high));
 }
 
-inline void disable_interrupts()
-{
-	asm volatile("cli");
-}
+extern "C" uint64_t disable_interrupts();
+extern "C" void restore_flags(uint64_t rflags);
 
 inline void enable_interrupts()
 {
 	asm volatile("sti");
 }
 
-extern "C" void cpu_switch_process(process_t* prev, process_t* next);
+extern "C" void cpu_switch_thread(thread_t* prev, thread_t* next);

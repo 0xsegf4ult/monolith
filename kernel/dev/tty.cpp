@@ -12,7 +12,7 @@
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
 
 #include <mm/slab.hpp>
@@ -27,7 +27,7 @@ struct tty_device
 	uint32_t read_buffer_head;
 	uint32_t read_buffer_tail;
 
-	process_t* waitqueue;
+	thread_t* waitqueue;
 
 	bool echo;
 };
@@ -55,11 +55,11 @@ void tty_consume(tty_device* tty, char c)
 
 	while(tty->waitqueue)
 	{
-		auto* proc = tty->waitqueue;
+		auto* thr = tty->waitqueue;
 		tty->waitqueue = tty->waitqueue->next;
-		proc->next = nullptr;
+		thr->next = nullptr;
 		
-		sched_unblock(proc);
+		sched_unblock(thr);
 	}
 }
 
@@ -68,11 +68,11 @@ ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
 	while(tty->read_buffer_head == tty->read_buffer_tail)
 	{
-		auto* proc = smp_current_cpu()->get_current_process();
-		proc->next = tty->waitqueue;
-		tty->waitqueue = proc;
+		auto* thr = smp_current_cpu()->get_current_thread();
+		thr->next = tty->waitqueue;
+		tty->waitqueue = thr;
 	
-		sched_block(process_status::sleeping);
+		sched_block(thread_status::sleeping);
 	}
 
 	size_t read_count = 0;

@@ -8,7 +8,7 @@
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 #include <sys/syscall.hpp>
 
 extern "C" void isr_stubs();
@@ -109,8 +109,8 @@ void handle_pagefault(cpu_context_t* ctx)
 		stk = stk->rbp;
 	}
 
-	auto* proc = smp_current_cpu()->get_current_process();
-	panic("unhandled page fault in [{}] at RIP {:#x} memory access {:#x} {:b}", proc->name, ctx->rip, cr2, ctx->error_code);
+	auto* thr = smp_current_cpu()->get_current_thread();
+	panic("unhandled page fault in [{}] at RIP {:#x} memory access {:#x} {:b}", thr->name, ctx->rip, cr2, ctx->error_code);
 }
 
 void handle_gpf(cpu_context_t* ctx)

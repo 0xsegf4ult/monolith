@@ -1,5 +1,5 @@
 #pragma once
 
-struct process_t;
+struct thread_t;
 
-int load_executable(int exec_fd, process_t* process); 
+int load_executable(int exec_fd, thread_t* thread); 

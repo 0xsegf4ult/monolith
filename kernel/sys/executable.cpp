@@ -1,5 +1,5 @@
 #include <sys/executable.hpp>
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 
 #include <fs/vfs.hpp>
 #include <mm/address_space.hpp>
@@ -11,14 +11,14 @@
 #include <lib/klog.hpp>
 #include <lib/types.hpp>
 
-int load_executable(int exec_fd, process_t* proc)
+int load_executable(int exec_fd, thread_t* thr)
 {
 	auto* ebuf = (Elf64_Ehdr*)kmalloc(sizeof(Elf64_Ehdr));
 	vfs::read(exec_fd, (byte*)ebuf, sizeof(Elf64_Ehdr));
 	if(!elf_validate(ebuf))
 		return -1;
 
-	proc->entry = ebuf->e_entry;
+	thr->entry = ebuf->e_entry;
 	auto* phdrs = (Elf64_Phdr*)kmalloc(ebuf->e_phentsize * ebuf->e_phnum);
 	vfs::seek(exec_fd, ebuf->e_phoff);
 	vfs::read(exec_fd, (byte*)phdrs, ebuf->e_phentsize * ebuf->e_phnum);
@@ -42,8 +42,8 @@ int load_executable(int exec_fd, process_t* proc)
 			uint64_t page_offset = phdr->p_vaddr % 0x1000;
 			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
 //			log::debug("vmalloc {:x} size {:x}", aligned_vaddr, phdr->p_memsz + page_offset);
-			proc->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags);
-			virtaddr_t user_page = proc->vm_space->get_mapping(aligned_vaddr) + mm::direct_mapping_offset;
+			thr->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags);
+			virtaddr_t user_page = thr->vm_space->get_mapping(aligned_vaddr) + mm::direct_mapping_offset;
 //			log::debug("pages mapped at {:x}", user_page);
 			vfs::seek(exec_fd, phdr->p_offset);
 //			log::debug("copy {:x} bytes from EHDR + {:x}", phdr->p_filesz, phdr->p_offset);

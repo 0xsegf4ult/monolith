@@ -1,15 +1,17 @@
 #pragma once
 
-#include <sys/process.hpp>
+#include <sys/thread.hpp>
 
 struct cpu_context_t;
 void schedule();
 
-struct process_t;
+struct thread_t;
 
-void sched_start();
-void sched_add_ready(process_t* proc);
-void sched_block(process_status status);
-void sched_unblock(process_t* proc);
+void sched_init(uint32_t cpu_count);
+void sched_start_bsp();
+void sched_start_ap();
+void sched_add_ready(thread_t* thr);
+void sched_block(thread_status status);
+void sched_unblock(thread_t* thr);
 
 void sched_dump_state();

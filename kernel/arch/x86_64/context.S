@@ -2,7 +2,7 @@
 .global arch_context_switch
 .type arch_context_switch, @function
 
-.extern cpu_switch_process;
+.extern cpu_switch_thread;
 arch_context_switch:
 	pushq %rbp # System V ABI preserved registers
 	pushq %rbx 
@@ -11,7 +11,7 @@ arch_context_switch:
 	pushq %r14
 	pushq %r15
 
-	movq %rsp, 40(%rdi) # next (process_t->rsp0)
+	movq %rsp, 40(%rdi) # next (thread_t->rsp0)
 	movq 40(%rsi), %rsp # last 
 
 	popq %r15
@@ -21,7 +21,7 @@ arch_context_switch:
 	popq %rbx
 	popq %rbp
 
-	jmp cpu_switch_process
+	jmp cpu_switch_thread
 
 .global arch_switch_to_usermode
 .type arch_switch_to_usermode, @function
