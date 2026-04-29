@@ -2,12 +2,22 @@
 
 #include <lib/types.hpp>
 
+constexpr uint32_t APIC_INIT_IPI = 0x500;
+constexpr uint32_t APIC_STARTUP_IPI = 0x600;
+constexpr uint32_t APIC_REGISTER_LVT_TIMER = 0x320;
+constexpr uint32_t APIC_REGISTER_TIMER_INITCNT = 0x380;
+constexpr uint32_t APIC_REGISTER_TIMER_CURRCNT = 0x390;
+constexpr uint32_t APIC_REGISTER_TIMER_DIVIDER = 0x3e0;
+
 namespace lapic
 {
 
 void set_base(physaddr_t base);
 void enable();
 void eoi();
+void send_ipi(uint32_t id, uint32_t ipi);
+void write(uint32_t address, uint32_t value);
+uint32_t read(uint32_t address);
 
 }
 

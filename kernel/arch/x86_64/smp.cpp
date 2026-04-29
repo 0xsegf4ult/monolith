@@ -3,13 +3,19 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/gdt.hpp>
 #include <arch/x86_64/interrupts.hpp>
+#include <arch/x86_64/mmu.hpp>
+#include <arch/x86_64/timer.hpp>
 
 #include <lib/types.hpp>
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp> 
 
+#include <mm/layout.hpp>
+#include <mm/vmm.hpp>
+
 #include <sys/scheduler.hpp>
 #include <cpuid.h>
+#include <stdatomic.h>
 
 static cpu_t cpus[arch_max_cpus];
 static size_t cpu_count = 1;
@@ -59,12 +65,17 @@ void smp_init()
 	
 	log::info("smp: bringing up {} CPUs", cpu_count);
 	lapic::enable();
-	sched_start();
+	apic_timer_calibrate();
+	apic_timer_enable();
+
+	sched_init(cpu_count);
+
+	sched_start_bsp();
 }
 
 void smp_discover_cpu(uint32_t lapic_id)
 {
-	if(cpu_count == arch_max_cpus)
+	if(cpu_count >= arch_max_cpus)
 		panic("cpu_count >= arch_max_cpus");
 
 	cpu_t* cpu = &cpus[cpu_count];

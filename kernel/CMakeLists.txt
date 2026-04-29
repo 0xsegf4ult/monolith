@@ -35,7 +35,7 @@ target_sources(vmmonolith PRIVATE
 	mm/slab.cpp
 	mm/vmm.cpp
 	sys/executable.cpp
-	sys/process.cpp
+	sys/thread.cpp
 	sys/scheduler.cpp
 	sys/syscall.cpp)
 set_target_properties(vmmonolith PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/boot")

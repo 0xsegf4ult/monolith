@@ -6,6 +6,7 @@ namespace timer
 {
 
 uint64_t get_ticks();
+void sleep(uint64_t ticks);
 
 }
 
@@ -17,3 +18,6 @@ void set_gsi(uint8_t gsi);
 void init(uint16_t freq);
 
 }
+
+void apic_timer_calibrate();
+void apic_timer_enable();

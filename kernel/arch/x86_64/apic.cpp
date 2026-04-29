@@ -28,6 +28,23 @@ void eoi()
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0xb0) = 0;
 }
 
+void send_ipi(uint32_t id, uint32_t ipi)
+{
+	*reinterpret_cast<volatile uint32_t*>(base_address + 0x310) = id << 24;
+	*reinterpret_cast<volatile uint32_t*>(base_address + 0x300) = ipi;
+}
+
+void write(uint32_t address, uint32_t data)
+{
+	*reinterpret_cast<volatile uint32_t*>(base_address + address) = data;
+}
+
+uint32_t read(uint32_t address)
+{
+	uint32_t data = *reinterpret_cast<volatile uint32_t*>(base_address + address);
+	return data;
+}
+
 }
 
 namespace ioapic

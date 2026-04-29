@@ -16,6 +16,15 @@ uint64_t get_ticks()
 	return ticks;
 }
 
+void sleep(uint64_t num)
+{
+	auto target_ticks = ticks + num;
+       	while(ticks < target_ticks)
+	{
+		asm volatile("pause");
+	}	
+}
+
 }
 
 namespace pit
@@ -31,8 +40,6 @@ void set_gsi(uint8_t p_gsi)
 void irq_handler()
 {
 	timer::ticks++;
-	if(timer::ticks % 10 == 0)
-		schedule();
 }
 
 void init(uint16_t count)
@@ -46,4 +53,39 @@ void init(uint16_t count)
 	install_irq_handler(irq, irq_handler);
 }
 
+}
+
+static uint64_t apic_timer_interval = 0;
+static uint64_t apic_timer_gsi = 0;
+
+void apic_timer_handler()
+{
+	schedule();
+}
+
+void apic_timer_calibrate()
+{
+	lapic::write(APIC_REGISTER_TIMER_DIVIDER, 0x3);
+	
+	lapic::write(APIC_REGISTER_TIMER_INITCNT, 0xFFFFFFFF);
+	asm volatile("sti");
+	timer::sleep(10);
+	asm volatile("cli");
+	lapic::write(APIC_REGISTER_LVT_TIMER, 1 << 16); // MASKED
+
+	auto ticks = 0xFFFFFFFF - lapic::read(APIC_REGISTER_TIMER_CURRCNT);
+	apic_timer_interval = ticks;
+}
+
+void apic_timer_enable()
+{
+	if(!apic_timer_gsi)
+	{
+		apic_timer_gsi = allocate_irq();
+		install_irq_handler(apic_timer_gsi, apic_timer_handler);
+	}
+
+	lapic::write(APIC_REGISTER_LVT_TIMER, apic_timer_gsi | 0x20000);
+	lapic::write(APIC_REGISTER_TIMER_DIVIDER, 0x3);
+	lapic::write(APIC_REGISTER_TIMER_INITCNT, apic_timer_interval);	
 }
