@@ -31,6 +31,7 @@ void init()
 	rnode->size = 0;
 	rnode->data = nullptr;
 	rnode->ops = &ramfs->ops;
+	mutex_init(rnode->lock);
 
 	context->root_node = (ventry_t*)kmalloc(sizeof(ventry_t));
 	context->root_node->name[0] = '/';
@@ -38,6 +39,7 @@ void init()
 	context->root_node->node = rnode;
 	context->root_node->parent = nullptr;
 	context->root_node->children = nullptr;
+	mutex_init(context->root_node->lock);
 
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
 }
@@ -141,8 +143,12 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 		if(!current)
 			break;
 
+		mutex_lock(current->lock);
 		if(current->node->type != vnode_type::directory)
+		{
+			mutex_unlock(current->lock);
 			break;
+		}
 
 		basename = &path[i];
 
@@ -157,7 +163,10 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 		}
 
 		if(is_last && (flags & LOOKUP_PARENT))
+		{
+			mutex_unlock(current->lock);
 			break;
+		}
 
 		ventry_t* next;
 		
@@ -175,6 +184,7 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 		}
 
 		i += clen;
+		mutex_unlock(current->lock);
 		current = next;
 	}
 

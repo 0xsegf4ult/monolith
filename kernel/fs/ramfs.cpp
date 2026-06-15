@@ -20,10 +20,17 @@ ventry_t* ramfs_lookup(ventry_t* parent, const char* path)
 	auto* current = parent->children;
 	while(current != nullptr)
 	{
+		mutex_lock(current->lock);
+	
 		if(!strncmp(current->name, path, 64))
+		{
+			mutex_unlock(current->lock);
 			return current;
+		}
 
-		current = current->sibling; 
+		auto* sibling = current->sibling;
+		mutex_unlock(current->lock);
+		current = sibling; 
 	}
 
 	return nullptr;
@@ -31,11 +38,14 @@ ventry_t* ramfs_lookup(ventry_t* parent, const char* path)
 
 int ramfs_create(ventry_t* parent, const char* path)
 {
+	mutex_lock(parent->lock);
+	
 	auto* inode = (vnode_t*)kmalloc(sizeof(vnode_t));
 	inode->type = vnode_type::file;
 	inode->size = 0;
 	inode->data = nullptr;
 	inode->ops = parent->node->ops;
+	mutex_init(inode->lock);
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);
@@ -47,21 +57,28 @@ int ramfs_create(ventry_t* parent, const char* path)
 	dirent->parent = parent;
 	dirent->children = nullptr;
 	dirent->sibling = nullptr;
+	mutex_init(dirent->lock);
 
 	if(parent->children)
 		dirent->sibling = parent->children;
 
 	parent->children = dirent;
+	
+	mutex_unlock(parent->lock);
+
 	return 0;
 }
 
 int ramfs_mkdir(ventry_t* parent, const char* path)
 {
+	mutex_lock(parent->lock);	
+
 	auto* inode = (vnode_t*)kmalloc(sizeof(vnode_t));
 	inode->type = vnode_type::directory;
 	inode->size = 0;
 	inode->data = nullptr;
 	inode->ops = parent->node->ops;
+	mutex_init(inode->lock);
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);
@@ -71,13 +88,15 @@ int ramfs_mkdir(ventry_t* parent, const char* path)
 	dirent->node = inode;
 	dirent->parent = parent;
 	dirent->sibling = nullptr;
-	
+	mutex_init(dirent->lock);
+
 	auto* dot_dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	dot_dirent->name[0] = '.';
 	dot_dirent->name[1] = '\0';
 	dot_dirent->node = inode;
 	dot_dirent->parent = dirent;
 	dot_dirent->children = nullptr;
+	mutex_init(dot_dirent->lock);
 
 	auto* doubledot_dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	doubledot_dirent->name[0] = '.';
@@ -87,6 +106,7 @@ int ramfs_mkdir(ventry_t* parent, const char* path)
 	doubledot_dirent->parent = dirent;
 	doubledot_dirent->children = nullptr;
 	doubledot_dirent->sibling = nullptr;
+	mutex_init(doubledot_dirent->lock);
 
 	dirent->children = dot_dirent;
 	dot_dirent->sibling = doubledot_dirent;
@@ -96,11 +116,15 @@ int ramfs_mkdir(ventry_t* parent, const char* path)
 
 	parent->children = dirent;
 
+	mutex_unlock(parent->lock);
+
 	return 0;
 }
 
 int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
 {
+	mutex_lock(parent->lock);
+
 	auto* inode = (vnode_t*)kmalloc(sizeof(vnode_t));
 	switch(type)
 	{
@@ -119,6 +143,7 @@ int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
 	inode->size = 0;
 	inode->data = nullptr;
 	inode->dev = dev;
+	mutex_init(inode->lock);
 
 	auto* dirent = (ventry_t*)kmalloc(sizeof(ventry_t));
 	strncpy(dirent->name, path, 64);
@@ -129,11 +154,13 @@ int ramfs_mknod(ventry_t* parent, const char* path, char type, dev_t dev)
 	dirent->parent = parent;
 	dirent->children = nullptr;
 	dirent->sibling = nullptr;
+	mutex_init(dirent->lock);
 
 	if(parent->children)
 		dirent->sibling = parent->children;
 
 	parent->children = dirent;
+	mutex_unlock(parent->lock);
 
 	return 0;
 }
@@ -164,6 +191,7 @@ struct ramfs_data
 
 ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 {
+	mutex_lock(file->inode->lock);
 	ramfs_page* spage = reinterpret_cast<ramfs_data*>(file->inode->data)->head;
 	if(file->read_pos)
 	{
@@ -190,11 +218,13 @@ ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 		length -= amount;
 		spage = spage->next;
 	}
+	mutex_unlock(file->inode->lock);
 	return orig_l - length;
 }
 
 ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 {
+	mutex_lock(file->inode->lock);
 	auto fsize = file->inode->size;
 	auto wr_len = file->write_pos + length;
 
@@ -262,6 +292,7 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 		spage = spage->next;
 	}
 
+	mutex_unlock(file->inode->lock);
 	return orig_l - length;
 }
 
@@ -283,7 +314,10 @@ ssize_t ramfs_getdents(file_descriptor_t* file, byte* buffer, size_t length)
 		memcpy(write_head, dentry->name, name_len);
 		write_head += name_len;
 
-		dentry = dentry->sibling;
+		mutex_lock(dentry->lock);
+		auto sibling = dentry->sibling;
+		mutex_unlock(dentry->lock);
+		dentry = sibling;
 	}
 
 	return static_cast<ssize_t>(write_head - buffer);

@@ -3,6 +3,7 @@
 #include <fs/ops.hpp>
 #include <lib/types.hpp>
 #include <dev/device.hpp>
+#include <sys/mutex.hpp>
 
 namespace vfs
 {
@@ -29,6 +30,7 @@ struct ventry_t
 	ventry_t* parent;
 	ventry_t* children;
 	ventry_t* sibling;
+	mutex_t lock;
 };
 
 struct vnode_t
@@ -38,6 +40,7 @@ struct vnode_t
 	void* data;
 	fs_ops* ops;
 	dev_t dev;
+	mutex_t lock;
 };
 
 struct mountpoint_t
