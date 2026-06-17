@@ -11,6 +11,8 @@
 #include <sys/executable.hpp>
 #include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/cred.hpp>
+#include <sys/stat.hpp>
 
 #include <lib/klog.hpp>
 
@@ -108,13 +110,14 @@ ssize_t sys_write(int fd, const byte* buffer, size_t length)
 	return vfs::write(thr->open_files[fd], buffer, length);
 }
 
-int common_spawn_fd(int fd, const char* path, const char** argv)
+int common_spawn(const char** argv, int at_fd)
 {
 	auto* parent = smp_current_cpu()->get_current_thread();
 
-	auto* thr = create_thread(path, argv, true);
+	auto* thr = create_thread(argv[0], argv, true);
 	thr->parent = parent;
 	thr->cwd = parent->cwd;
+	thr->cred = parent->cred;
 
 	if(parent->children)
 		thr->sibling = parent->children;
@@ -127,38 +130,35 @@ int common_spawn_fd(int fd, const char* path, const char** argv)
 			thr->open_files[i] = vfs::dup(parent->open_files[i]);
 	}
 
-	load_executable(fd, thr);
+	auto* exec_dir = at_fd >= 0 ? vfs::get_open_fd(at_fd).path : thr->cwd;
+	int exec_status = load_executable(argv[0], thr, exec_dir);
+       	if(exec_status < 0)
+	{
+		thr->status = thread_status::terminated;
+		thread_zombify(thr);	
+		return exec_status;
+	}	
 
 	sched_add_ready(thr);
 	return 0;
 }
 
-int sys_spawn(const char* path, const char** argv)
+int sys_spawn(const char** argv)
 {
-	if(!path || !argv)
+	if(!argv || !argv[0])
 		return -EINVAL;
 
-	int fd = vfs::open(path, 0);
-	if(fd < 0)
-		return fd;
-
-	auto res = common_spawn_fd(fd, path, argv);
-	vfs::close(fd);
+	auto res = common_spawn(argv, -1);
 	return res;
 }
 
-int sys_spawnat(int fd, const char* path, const char** argv)
+int sys_spawnat(int fd, const char** argv)
 {
 	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr->open_files[fd] < 0 || !path || !argv)
+	if(thr->open_files[fd] < 0 || !argv || !argv[0])
 		return -EINVAL;
 	
-	int efd = vfs::openat(thr->open_files[fd], path, 0);
-	if(efd < 0)
-		return efd;
-
-	auto res = common_spawn_fd(efd, path, argv);
-	vfs::close(efd);
+	auto res = common_spawn(argv, thr->open_files[fd]);
 	return res;
 }
 
@@ -183,7 +183,7 @@ int sys_wait()
 	if(thr->children->status != thread_status::terminated)
 		sched_block(thread_status::sleeping);
 
-	return 0;
+	return thr->children->return_status;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
@@ -259,6 +259,22 @@ int sys_mkdir(const char* path)
 	return vfs::mkdir(path);
 }
 
+int sys_getcwd(char* buffer, size_t max_len)
+{
+	if(!buffer)
+		return -EINVAL;
+
+	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
+		return -EFAULT;
+
+	auto* thr = smp_current_cpu()->get_current_thread();
+	
+	//FIXME: resolve full name from root
+	strncpy(buffer, thr->cwd->name, max_len);
+
+	return 0;
+}
+
 void sys_dbgwrite(const char* message)
 {
 	if(!message)
@@ -290,10 +306,10 @@ void syscall_handler(cpu_context_t* ctx)
 		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rsi, (const byte*)ctx->rdx, (size_t)ctx->rcx));
 		break;
 	case SPAWN:
-		ctx->rax = static_cast<uint64_t>(sys_spawn((const char*)ctx->rsi, (const char**)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_spawn((const char**)ctx->rsi));
 		break;
 	case SPAWNAT:
-		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rsi, (const char*)ctx->rdx, (const char**)ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rsi, (const char**)ctx->rdx));
 		break;
 	case EXIT:
 		sys_exit((int)ctx->rsi);
@@ -318,6 +334,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case MKDIR:
 		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rsi));
+		break;
+	case GETCWD:
+		ctx->rax = static_cast<uint64_t>(sys_getcwd((char*)ctx->rsi, (size_t)ctx->rdx));
 		break;
 	case DEBUG_PRINT:
 		sys_dbgwrite((const char*)ctx->rsi);

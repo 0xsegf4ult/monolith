@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <syscall.h>
+#include <unistd.h>
 
 static char buffer[0x1000];
 
@@ -29,7 +29,7 @@ int main(int argc, const char** argv)
 			return -1;
 		}
 
-		if(stat_info.mode == S_IFDIR)
+		if(S_ISDIR(stat_info.mode))
 		{
 			printf("cat: %s: Is a directory", argv[1]);
 			return -1;

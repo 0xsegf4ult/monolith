@@ -198,13 +198,10 @@ void kernel_main()
 	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
 	initramfs_unpack(initramfs_address, initramfs_size);
 
-	auto init_f = vfs::open("/bin/init");
-	if(init_f < 0)
-		panic("could not find /bin/init");
-
-	const char* argv[2] = {"init", nullptr};
+	const char* argv[2] = {"/bin/init", nullptr};
 	auto* init_proc = create_thread("init", argv, true);
-	load_executable(init_f, init_proc);
-	vfs::close(init_f);
+	int init_status = load_executable("/bin/init", init_proc, nullptr);
+	if(init_status < 0)
+		panic("could not execute /bin/init!");
 	sched_add_ready(init_proc);
 }

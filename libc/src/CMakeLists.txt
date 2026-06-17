@@ -6,4 +6,5 @@ target_include_directories(c PUBLIC ${CMAKE_SOURCE_DIR}/libc/include)
 target_sources(c PRIVATE
 	exit.c
 	printf.c
-	string.c)
+	string.c
+	getopt.c)

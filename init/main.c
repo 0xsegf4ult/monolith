@@ -1,5 +1,5 @@
-#include <syscall.h>
 #include <stdio.h>
+#include <unistd.h>
 
 int main()
 {
@@ -13,7 +13,7 @@ int main()
 	const char* argv[2] = {"/bin/sh", nullptr};
 	for(;;)
 	{
-		spawn("/bin/sh", argv);
+		spawn(argv);
 		wait();
 		printf("\ninit: /bin/sh exited\n");
 	}

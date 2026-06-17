@@ -2,6 +2,7 @@
 
 #include <arch/x86_64/context.hpp>
 #include <lib/types.hpp>
+#include <sys/cred.hpp>
 
 enum class thread_status : uint32_t
 {
@@ -33,6 +34,7 @@ struct thread_t
 	thread_t* children;
 	thread_t* sibling;
 
+	cred_t cred;
 	vfs::ventry_t* cwd;
 	int open_files[32];
 

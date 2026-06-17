@@ -13,7 +13,10 @@ enum _LIBC_ERRNO : int
 	EISDIR,
 	EINVAL,
 	EMFILE,
-	ENOTTY
+	ENOTTY,
+	ENOEXEC,
+	ENOMEM,
+	EACCES
 };
 
 #endif

@@ -6,5 +6,6 @@
 #define stderr 2
 
 int printf(const char* fmt, ...);
+int sprintf(char* buffer, const char* fmt, ...);
 
 #endif

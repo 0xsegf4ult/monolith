@@ -248,12 +248,12 @@ int open(const char* path, int flags)
 	return fd;
 }
 
-int openat(int fd, const char* path, int flags)
+int openat(ventry_t* dir, const char* path, int flags)
 {
 	if(flags)
 		return -EINVAL;
 
-	auto query = lookup_at(context->open_files[fd].path, path, 0);
+	auto query = lookup_at(dir, path, 0);
 	if(!query.result)
 		return -ENOENT;
 
@@ -285,6 +285,11 @@ int openat(int fd, const char* path, int flags)
 	}
 
 	return s_fd;
+}
+
+int openat(int fd, const char* path, int flags)
+{
+	return openat(context->open_files[fd].path, path, flags);
 }
 
 ssize_t read(int fd, byte* buffer, size_t length)
@@ -413,6 +418,11 @@ int dup(int fd)
 	context->open_files[fd].refcount++;
 
 	return fd;
+}
+
+file_descriptor_t& get_open_fd(int fd)
+{
+	return context->open_files[fd];
 }
 
 }

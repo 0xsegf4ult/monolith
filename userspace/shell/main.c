@@ -1,7 +1,7 @@
-#include <syscall.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 static char input_buf[256];
 static char buffer[4096];
@@ -10,7 +10,7 @@ static int bindir;
 
 void execute()
 {
-	size_t sp_offset = 0;
+/*	size_t sp_offset = 0;
 	const char* cur = buffer;
 	while(cur && sp_offset < b_count)
 	{
@@ -31,8 +31,26 @@ void execute()
 		argv[1] = nullptr;
 
 	argv[2] = nullptr;
+*/
+	const char* argv[8];
+	int argc = 0;
+	char* token = strtok(buffer, " \n");
+	while(token)
+	{
+		argv[argc] = token;
+		token = strtok(NULL, " \n");
+		argc++;
+		if(argc == 8)
+			break;
+	}
 
-	if(buffer[0] == '/')
+	if(argc < 8)
+	{
+		for(int i = argc; i < 8; i++)
+			argv[i] = NULL;
+	}
+
+	if(buffer[0] == '/' || buffer[0] == '.')
 	{
 		stat_t ex_stat;
 		int st_r = stat(buffer, &ex_stat);
@@ -42,16 +60,20 @@ void execute()
 			return;
 		}
 
-		if(ex_stat.mode == S_IFDIR)
+		if(S_ISDIR(ex_stat.mode))
 		{
 			printf("\nsh: %s: Is a directory\n", buffer);
 			return;
 		}
 
-		if(ex_stat.mode == S_IFREG)
+		if(S_ISREG(ex_stat.mode))
 		{
 			printf("\n");
-			spawn(buffer, argv);
+			int s_res = spawn(argv);
+			if(s_res < 0)
+			{
+				printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
+			}
 			wait();
 			return;
 		}
@@ -78,10 +100,14 @@ void execute()
 			stat_t ex_stat;
 			int st_r = fstat(ex_fd, &ex_stat);
 			close(ex_fd);
-			if(st_r >= 0 && ex_stat.mode == S_IFREG)
+			if(st_r >= 0 && S_ISREG(ex_stat.mode))
 			{
 				printf("\n");
-				spawnat(bindir, buffer, argv);
+				int s_res = spawnat(bindir, argv);
+				if(s_res < 0)
+				{
+					printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
+				}
 				wait();
 				return;
 			}

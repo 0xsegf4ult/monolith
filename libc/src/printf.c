@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include <syscall.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 static const char *digits= "0123456789abcdef";
 
@@ -115,5 +115,16 @@ int printf(const char* fmt, ...)
 	va_end(args);
 
 	write(0, buffer, i);
+	return i;
+}
+
+int sprintf(char* buffer, const char* fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	int i = vsprintf(buffer, fmt, args);
+	va_end(args);
+
 	return i;
 }

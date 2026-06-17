@@ -103,6 +103,7 @@ enum OPEN_FLAGS
 };
 
 int open(const char* path, int flags = 0);
+int openat(ventry_t* dir, const char* path, int flags = 0);
 int openat(int fd, const char* path, int flags = 0);
 int close(int fd);
 ssize_t read(int fd, byte* buffer, size_t len);
@@ -113,5 +114,6 @@ int stat(const char* path, stat_t* output);
 int fstat(int fd, stat_t* output); 
 ssize_t getdents(int fd, byte* buffer, size_t length);
 int dup(int fd);
+file_descriptor_t& get_open_fd(int fd)
 
 }
