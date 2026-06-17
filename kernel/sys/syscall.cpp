@@ -242,7 +242,7 @@ int sys_chdir(const char* path)
 	if(!query.result)
 		return -ENOENT;
 
-	if(query.result->node->type != vfs::vnode_type::directory)
+	if(!S_ISDIR(query.result->node->mode))
 	       return -ENOTDIR;	
 
 	auto* thr = smp_current_cpu()->get_current_thread();
@@ -251,12 +251,12 @@ int sys_chdir(const char* path)
 	return 0;
 }
 
-int sys_mkdir(const char* path)
+int sys_mkdir(const char* path, mode_t mode)
 {
 	if(!path)
 		return -EINVAL;
 
-	return vfs::mkdir(path);
+	return vfs::mkdir(path, mode);
 }
 
 int sys_getcwd(char* buffer, size_t max_len)
@@ -333,7 +333,7 @@ void syscall_handler(cpu_context_t* ctx)
 		ctx->rax = static_cast<uint64_t>(sys_chdir((const char*)ctx->rsi));
 		break;
 	case MKDIR:
-		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rsi));
+		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rsi, (mode_t)ctx->rdx));
 		break;
 	case GETCWD:
 		ctx->rax = static_cast<uint64_t>(sys_getcwd((char*)ctx->rsi, (size_t)ctx->rdx));

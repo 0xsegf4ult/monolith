@@ -16,6 +16,9 @@
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
+#include <sys/executable.hpp>
+#include <sys/scheduler.hpp>
+
 static uint32_t next_pid = 1;
 typedef void (*entry_function_t)();
 

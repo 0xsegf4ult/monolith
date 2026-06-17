@@ -15,6 +15,7 @@
 
 #include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/mutex.hpp>
 
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
@@ -70,6 +71,7 @@ ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	while(tty->read_buffer_head == tty->read_buffer_tail)
 	{
 		auto* thr = smp_current_cpu()->get_current_thread();
+	
 		thr->next = tty->waitqueue;
 		tty->waitqueue = thr;
 	
@@ -135,6 +137,6 @@ void tty_init()
 	device->echo = true;
 	tty->data = device;
 
-	auto dev_node = vfs::mknod("/dev/tty0", 'c', dev_t{3, 0});
+	auto dev_node = vfs::mknod("/dev/tty0", S_IFCHR | S_IRUSR | S_IWUSR, dev_t{3, 0});
 	ps2::set_tty(device);
 }

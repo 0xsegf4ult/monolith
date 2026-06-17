@@ -91,7 +91,7 @@ void nvme_register_namespace(nvme_device* device, uint32_t ns)
 	
 	blkdev->data = nvme_ns;
 
-	auto dev_node = vfs::mknod("/dev/nvme0n1", 'b', dev_t{4, uint16_t(ns)});
+	auto dev_node = vfs::mknod("/dev/nvme0n1", S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{4, uint16_t(ns)});
 
 	nvme_ns->identify = (nvme_identify_namespace*)vmalloc(0x1000, vm_write);
 
@@ -137,7 +137,7 @@ void nvme_init_controller(pcie_device& dev)
 	chdev->data = device;
 
 	//FIXME: format
-	auto dev_node = vfs::mknod("/dev/nvme0", 'c', dev_t{4, 0});
+	auto dev_node = vfs::mknod("/dev/nvme0", S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{4, 0});
 
 	auto pcie_reg1 = device->pcie.read_config32(0x4);
 	pcie_reg1 |= ((0x400 | 0x4 | 0x2) & ~(0x1)); // INTERRUPT_DISABLE |  BUS_MASTER | MEMORY_SPACE | ~IO_SPACE

@@ -20,7 +20,7 @@ void efifb_init(efifb_framebuffer framebuffer)
 	auto* dev = chardev_alloc(dev_t{6, 0});
 	dev->data = (void*)&fb;
 
-	vfs::mknod("/dev/fb0", 'c', dev_t{6, 0});	
+	vfs::mknod("/dev/fb0", S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{6, 0});	
 
 	fb = framebuffer;
 	log::info("efifb: fb0: {}x{}", fb.width, fb.height);

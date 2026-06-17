@@ -168,7 +168,7 @@ extern "C" void init()
 	mm::slab_init();
 	vmm_init_kpages(memmap, phys_kernel_start);
 	vfs::init();
-	vfs::mkdir("/dev");	
+	vfs::mkdir("/dev", 0755);	
 
 	auto acpi_tables = acpi::parse_tables(rsdp);
 	
@@ -187,8 +187,8 @@ extern "C" void init()
 
 void kernel_main()
 {
-	vfs::mkdir("proc");
-	vfs::mkdir("sys");
+	vfs::mkdir("proc", 0755);
+	vfs::mkdir("sys", 0755);
 
 	tty_init();
 	

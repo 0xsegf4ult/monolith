@@ -4,18 +4,11 @@
 #include <lib/types.hpp>
 #include <dev/device.hpp>
 #include <sys/mutex.hpp>
+#include <sys/cred.hpp>
+#include <sys/stat.hpp>
 
 namespace vfs
 {
-
-enum class vnode_type : uint8_t
-{
-	directory,
-	file,
-	link,
-	char_device,
-	block_device
-};
 
 struct vfilesystem_t
 {
@@ -35,11 +28,14 @@ struct ventry_t
 
 struct vnode_t
 {
-	vnode_type type;
+	mode_t mode;
 	size_t size;
+	uid_t uid;
+	gid_t gid;
+	dev_t dev;
+	
 	void* data;
 	fs_ops* ops;
-	dev_t dev;
 	mutex_t lock;
 };
 
@@ -66,10 +62,12 @@ struct context_t
 
 void init();
 ventry_t* get_root_dentry();
+vnode_t* create_node(mode_t mode);
+ventry_t* create_dentry(const char* name, vnode_t* node);
 
-int create(const char* path);
-int mkdir(const char* path);
-int mknod(const char* path, char type, dev_t device);
+int create(const char* path, mode_t mode);
+int mkdir(const char* path, mode_t mode);
+int mknod(const char* path, mode_t mode, dev_t device);
 
 enum LOOKUP_FLAGS
 {
@@ -87,14 +85,14 @@ lookup_result lookup(const char* path, int flags);
 
 struct stat_t
 {
-	vnode_type type;
+	mode_t mode;
 	size_t size;
 };
 
 struct dirent_info
 {
 	uint16_t length;
-	vnode_type type;
+	uint8_t type;
 };
 
 enum OPEN_FLAGS

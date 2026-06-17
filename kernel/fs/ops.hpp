@@ -2,6 +2,7 @@
 
 #include <lib/types.hpp>
 #include <dev/device.hpp>
+#include <sys/stat.hpp>
 
 namespace vfs
 {
@@ -11,9 +12,9 @@ struct vnode_t;
 struct file_descriptor_t;
 
 typedef ventry_t* (*fs_lookup_t)(ventry_t*, const char*);
-typedef int (*fs_mkdir_t)(ventry_t*, const char*);
-typedef int (*fs_create_t)(ventry_t*, const char*);
-typedef int (*fs_mknod_t)(ventry_t*, const char*, char, dev_t); 
+typedef int (*fs_mkdir_t)(ventry_t*, const char*, mode_t);
+typedef int (*fs_create_t)(ventry_t*, const char*, mode_t);
+typedef int (*fs_mknod_t)(ventry_t*, const char*, mode_t, dev_t); 
 typedef int (*fs_open_t)(vnode_t*, int);
 typedef int (*fs_close_t)(int);
 typedef ssize_t (*fs_read_t)(file_descriptor_t*, byte*, size_t);

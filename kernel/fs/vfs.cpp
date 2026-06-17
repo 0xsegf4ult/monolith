@@ -26,20 +26,10 @@ void init()
 
 	auto* ramfs = ramfs_create();
 
-	auto* rnode = (vnode_t*)kmalloc(sizeof(vnode_t));
-	rnode->type = vnode_type::directory;
-	rnode->size = 0;
-	rnode->data = nullptr;
+	auto* rnode = create_node(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
 	rnode->ops = &ramfs->ops;
-	mutex_init(rnode->lock);
 
-	context->root_node = (ventry_t*)kmalloc(sizeof(ventry_t));
-	context->root_node->name[0] = '/';
-	context->root_node->name[1] = '\0';
-	context->root_node->node = rnode;
-	context->root_node->parent = nullptr;
-	context->root_node->children = nullptr;
-	mutex_init(context->root_node->lock);
+	context->root_node = create_dentry("/", rnode);
 
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
 }
@@ -49,53 +39,38 @@ ventry_t* get_root_dentry()
 	return context->root_node;
 }
 
-int create(const char* path)
+vnode_t* create_node(mode_t mode)
 {
-	auto parent = lookup(path, LOOKUP_PARENT);
-	if(!parent.result)
-		return -ENOENT;
-
-	auto plen = string_length(path);
-	const char* basename = path;
-	for(size_t i = 0; i < plen - 1; i++)
-	{
-		if(path[i] == '/')
-			basename = &path[i + 1];
-	}
-	if(!basename)
-		return -EINVAL;
-
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
-		return -EEXIST;
-
-	return parent.result->node->ops->create(parent.result, basename);	
+	vnode_t* node = (vnode_t*)kmalloc(sizeof(vnode_t));
+	node->mode = mode;
+	node->size = 0;
+	node->uid = 0;
+	node->gid = 0;
+	node->dev = dev_t{0};
+	node->data = nullptr;
+	node->ops = nullptr;
+	mutex_init(node->lock);
+	return node;
 }
 
-int mkdir(const char* path)
+ventry_t* create_dentry(const char* name, vnode_t* node)
 {
-	auto parent = lookup(path, LOOKUP_PARENT);
-	if(!parent.result)
-		return -ENOENT;
-
-	auto plen = string_length(path);
-	const char* basename = path;
-	for(size_t i = 0; i < plen - 1; i++)
-	{
-		if(path[i] == '/')
-			basename = &path[i + 1];
-	}
-	if(!basename)
-		return -EINVAL;
-
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
-		return -EEXIST;
-
-	return parent.result->node->ops->mkdir(parent.result, basename);
+	ventry_t* dentry = (ventry_t*)kmalloc(sizeof(ventry_t));
+	strncpy(dentry->name, name, 64);
+	auto namel = string_length(dentry->name);
+	if(dentry->name[namel - 1] == '/' && namel > 1)
+		dentry->name[namel - 1] = '\0';
+	dentry->name[63] = '\0';
+	
+	dentry->node = node;
+	dentry->parent = nullptr;
+	dentry->children = nullptr;
+	dentry->sibling = nullptr;
+	mutex_init(dentry->lock);
+	return dentry;
 }
 
-int mknod(const char* path, char type, dev_t device)
+int create(const char* path, mode_t mode)
 {
 	auto parent = lookup(path, LOOKUP_PARENT);
 	if(!parent.result)
@@ -115,7 +90,53 @@ int mknod(const char* path, char type, dev_t device)
 	if(query.result)
 		return -EEXIST;
 
-	return parent.result->node->ops->mknod(parent.result, basename, type, device);
+	return parent.result->node->ops->create(parent.result, basename, mode);	
+}
+
+int mkdir(const char* path, mode_t mode)
+{
+	auto parent = lookup(path, LOOKUP_PARENT);
+	if(!parent.result)
+		return -ENOENT;
+
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return -EINVAL;
+
+	auto query = lookup_at(parent.result, basename, 0);
+	if(query.result)
+		return -EEXIST;
+
+	return parent.result->node->ops->mkdir(parent.result, basename, mode & 0777);
+}
+
+int mknod(const char* path, mode_t mode, dev_t device)
+{
+	auto parent = lookup(path, LOOKUP_PARENT);
+	if(!parent.result)
+		return -ENOENT;
+
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return -EINVAL;
+
+	auto query = lookup_at(parent.result, basename, 0);
+	if(query.result)
+		return -EEXIST;
+
+	return parent.result->node->ops->mknod(parent.result, basename, mode, device);
 }
 
 lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
@@ -144,7 +165,7 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 			break;
 
 		mutex_lock(current->lock);
-		if(current->node->type != vnode_type::directory)
+		if(!S_ISDIR(current->node->mode))
 		{
 			mutex_unlock(current->lock);
 			break;
@@ -207,7 +228,7 @@ int open(const char* path, int flags)
 	{
 		if(flags & O_CREAT)
 		{
-			auto c_res = create(path);
+			auto c_res = create(path, 0666);
 			if(c_res < 0)
 				return c_res;
 		
@@ -298,7 +319,7 @@ ssize_t read(int fd, byte* buffer, size_t length)
 	if(!inode)
 		return -EBADF;
 
-	if(inode->type == vnode_type::directory)
+	if(S_ISDIR(inode->mode))
 	       return -EISDIR;	
 
 	if(!inode->ops->read)
@@ -313,7 +334,7 @@ ssize_t write(int fd, const byte* buffer, size_t length)
 	if(!inode)
 		return -EBADF;
 
-	if(inode->type == vnode_type::directory)
+	if(S_ISDIR(inode->mode))
 	       return -EISDIR;	
 
 	if(!inode->ops->write)
@@ -383,7 +404,7 @@ int stat(const char* path, stat_t* output)
 
 	auto* node = query.result->node;
 	
-	output->type = node->type;
+	output->mode= node->mode;
 	output->size = node->size;
 
 	return 0;
@@ -392,7 +413,7 @@ int stat(const char* path, stat_t* output)
 int fstat(int fd, stat_t* output)
 {
 	auto* node = context->open_files[fd].inode;
-	output->type = node->type;
+	output->mode= node->mode;
 	output->size = node->size;
 	return 0;
 }
@@ -403,7 +424,7 @@ ssize_t getdents(int fd, byte* buffer, size_t length)
 	if(!inode)
 		return -EBADF;
 
-	if(inode->type != vnode_type::directory)
+	if(!S_ISDIR(inode->mode))
 		return -ENOTDIR;
 
 	return inode->ops->getdents(&context->open_files[fd], buffer, length);	
