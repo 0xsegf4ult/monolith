@@ -112,6 +112,6 @@ int stat(const char* path, stat_t* output);
 int fstat(int fd, stat_t* output); 
 ssize_t getdents(int fd, byte* buffer, size_t length);
 int dup(int fd);
-file_descriptor_t& get_open_fd(int fd)
+file_descriptor_t& get_open_fd(int fd);
 
 }

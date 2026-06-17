@@ -3,11 +3,13 @@
 #include <mm/layout.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
+#include <sys/spinlock.hpp>
 
 static uint64_t* pmm_bitmap = nullptr;
 static size_t pmm_bitmap_length = 0;
 static size_t physmem_available = 0;
 static size_t physmem_used = 0;
+static spinlock_t lock;
 
 void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 {
@@ -56,10 +58,14 @@ void pmm_initialize(mm::memory_map& memmap)
 		else
 			physmem_used += ((region.end - region.begin) / 0x1000);
 	}
+
+	spinlock_init(lock);
 }
 
 physaddr_t pmm_allocate()
 {
+	spinlock_acquire(lock);
+
 	for(size_t i = 0; i < pmm_bitmap_length; i++)
 	{
 		auto cur_word = pmm_bitmap[i];
@@ -71,9 +77,11 @@ physaddr_t pmm_allocate()
 		physmem_available -= 4096;
 		physmem_used += 4096;
 
+		spinlock_release(lock);
 		return (i * 64ull + index) * 4096ull;
 	}
 
+	spinlock_release(lock);
 	panic("out of physical memory");
 	return ~(0ull);
 }
@@ -83,9 +91,11 @@ void pmm_free(physaddr_t addr)
 	auto bmp_offset = (addr / 4096) / 64;
 	auto bit_offset = (addr / 4096) % 64;
 
+	spinlock_acquire(lock);
 	pmm_bitmap[bmp_offset] |= (1ull << bit_offset);
 	physmem_used--;;
 	physmem_available++;
+	spinlock_release(lock);
 }
 
 

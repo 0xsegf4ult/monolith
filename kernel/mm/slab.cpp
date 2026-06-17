@@ -5,6 +5,7 @@
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
 #include <lib/klog.hpp>
+#include <sys/spinlock.hpp>
 
 namespace mm
 {
@@ -26,11 +27,15 @@ static constexpr uint32_t km_cache_count = 8;
 void slab_init()
 {
 	for(auto i = 0; i < km_cache_count; i++)
+	{
 		km_caches[i].obj_per_slab = (4096 - sizeof(slab)) / km_caches[i].block_size;
+		spinlock_init(km_caches[i].lock);
+	}
 }
 
 byte* slab_alloc(slab_cache& cache)
 {
+	spinlock_acquire(cache.lock);
 	slab* prev = nullptr;
 	slab* target_slab = cache.slabs;
 	while(target_slab != nullptr)
@@ -46,6 +51,8 @@ byte* slab_alloc(slab_cache& cache)
 			byte* mem = target_slab->memory + (cache.block_size * target_slab->free);
 			target_slab->free = *reinterpret_cast<uint32_t*>(mem);
 			target_slab->in_use++;
+
+			spinlock_release(cache.lock);
 			return mem;
 		}
 
@@ -70,6 +77,7 @@ byte* slab_alloc(slab_cache& cache)
 	for(uint32_t i = 1; i < cache.obj_per_slab; i++)
 		*reinterpret_cast<uint32_t*>(new_slab->memory + (i * cache.block_size)) = i + 1;
 
+	spinlock_release(cache.lock);
 	return new_slab->memory;
 }
 
@@ -83,12 +91,14 @@ void slab_free(virtaddr_t addr)
 		panic("slab: free on metadata pointer");
 
 	slab_cache& cache = *(o_slab->cache);
+	spinlock_acquire(cache.lock);
 
 	*reinterpret_cast<uint32_t*>(addr) = o_slab->free;
 
 	auto obj_index = (addr - reinterpret_cast<virtaddr_t>(o_slab->memory)) / cache.block_size;
 	o_slab->in_use--;
 	o_slab->free = obj_index;
+	spinlock_release(cache.lock);
 }
 
 void slab_debug(size_t size)

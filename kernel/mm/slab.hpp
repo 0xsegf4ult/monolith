@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lib/types.hpp>
+#include <sys/spinlock.hpp>
 
 namespace mm
 {
@@ -22,6 +23,7 @@ struct slab_cache
 	slab* slabs{nullptr};
 	uint16_t block_size{0};
 	uint16_t obj_per_slab{0};
+	spinlock_t lock;
 };
 
 void slab_init();

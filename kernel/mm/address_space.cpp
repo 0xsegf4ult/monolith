@@ -21,10 +21,14 @@ void address_space::init(virtaddr_t base)
 		root_pml4[i] = page_table(0);
 
 	objects = nullptr;
+
+	mutex_init(this->lock);
 }
 
 void address_space::destroy()
 {
+	mutex_lock(lock);
+
 	while(objects)
 	{
 		auto last = objects;
@@ -46,6 +50,8 @@ void address_space::destroy()
 	}
 
 	pmm_free(reinterpret_cast<physaddr_t>(root_pml4) - mm::direct_mapping_offset);
+
+	mutex_unlock(lock);
 }
 
 void address_space::switch_to()
@@ -55,6 +61,8 @@ void address_space::switch_to()
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
+	mutex_lock(lock);
+	
 	//log::debug("vmalloc {:#x} bytes", length);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
@@ -79,7 +87,10 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 
 
 	if(!alloc_base)
+	{
+		mutex_unlock(lock);
 		return 0;
+	}
 
 	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
 	range->base = alloc_base;
@@ -110,6 +121,7 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 			length -= 0x1000;
 	}	
 
+	mutex_unlock(lock);
 	return range->base;
 }
 
@@ -121,11 +133,14 @@ virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t 
 
 	if(reserve_range(base, length, flags) != 0)
 		return 0;
-	
+
+	mutex_lock(lock);	
 	while(length)
 	{
 		auto phys = pmm_allocate();
-		mmu_map(root_pml4, phys, base, vm_flags_to_x86(flags));		
+	
+		mmu_map(root_pml4, phys, base, vm_flags_to_x86(flags));	
+
 		base += 0x1000;
 
 		if(length < 0x1000)
@@ -133,6 +148,7 @@ virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t 
 		else
 			length -= 0x1000;
 	}
+	mutex_unlock(lock);
 
 	return base;
 }
@@ -144,21 +160,33 @@ physaddr_t address_space::get_mapping(virtaddr_t virt)
 	auto pd_index = get_pagetable_index(virt, 2);
 	auto pt_index = get_pagetable_index(virt, 1);
 
+	mutex_lock(lock);
 	page_table* pdpt = get_pte(root_pml4, pml4_index);
 	if(!pdpt)
+	{
+		mutex_unlock(lock);
 		return 0;
+	}
 	page_table* pd = get_pte(pdpt, pdpt_index);
 	if(!pd)
+	{
+		mutex_unlock(lock);
 		return 0;
+	}
 	page_table* pt = get_pte(pd, pd_index);
 	if(!pt)
+	{
+		mutex_unlock(lock);
 		return 0;
+	}
 
+	mutex_unlock(lock);
 	return pt[pt_index].get();
 }
 
 void address_space::free(virtaddr_t addr)
 {
+	mutex_lock(lock);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
 	while(cur)
@@ -183,6 +211,7 @@ void address_space::free(virtaddr_t addr)
 			}			
 
 			kfree(cur);
+			mutex_unlock(lock);
 			return;	
 		}
 
@@ -190,6 +219,7 @@ void address_space::free(virtaddr_t addr)
 		cur = cur->next;
 	}
 
+	mutex_unlock(lock);
 	panic("vm_free: invalid address");
 }
 
@@ -198,7 +228,9 @@ int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 	//log::debug("vm_map {:#x}", virt);
 	if(reserve_range(virt, 0x1000, flags) == 0)
 	{
+		mutex_lock(lock);
 		mmu_map(root_pml4, phys, virt, vm_flags_to_x86(flags));
+		mutex_unlock(lock);
 		return 0;
 	}
 
@@ -210,7 +242,9 @@ int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, ui
 	//log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
 	if(reserve_range(virt, length, flags) == 0)
 	{
+		mutex_lock(lock);
 		mmu_map_range(root_pml4, phys, virt, length, vm_flags_to_x86(flags));
+		mutex_unlock(lock);
 		return 0;
 	}
 
@@ -219,6 +253,7 @@ int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, ui
 
 int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 {
+	mutex_lock(lock);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
 	
@@ -227,12 +262,18 @@ int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 		if(cur->base <= base)	
 		{
 			if(cur->base + cur->length > base)
+			{
+				mutex_unlock(lock);
 				return -1;
+			}
 		}
 		else
 		{
 			if(cur->base < base + length)
+			{
+				mutex_unlock(lock);
 				return -1;
+			}
 		}
 
 		prev = cur;
@@ -260,6 +301,7 @@ int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 		current->next = range;
 	}
 
+	mutex_unlock(lock);
 	return 0;
 }
 

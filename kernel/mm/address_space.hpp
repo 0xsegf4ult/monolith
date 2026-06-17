@@ -2,6 +2,7 @@
 
 #include <mm/vm_object.hpp>
 #include <lib/types.hpp>
+#include <sys/mutex.hpp>
 
 struct page_table;
 
@@ -11,6 +12,7 @@ struct address_space
 	virtaddr_t base_addr{0};
 
 	page_table* root_pml4;
+	mutex_t lock;
 
 	void init(virtaddr_t base = 0x10000);
 	void destroy();
