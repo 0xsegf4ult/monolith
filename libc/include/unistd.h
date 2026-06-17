@@ -3,6 +3,9 @@
 
 #include <syscall.h>
 
+typedef int64_t ssize_t;
+typedef int64_t off_t;
+
 enum OPEN_FLAGS
 {
 	O_CREAT = 1
@@ -10,47 +13,47 @@ enum OPEN_FLAGS
 
 inline int open(const char* path, int flags)
 {
-	return (int)(_syscall(SYS_OPEN, (uint64_t)path, (uint64_t)flags, 0, 0, 0));
+	return (int)(_syscall(SYS_OPEN, (uint64_t)path, (uint64_t)flags, 0, 0, 0, 0));
 }
 
 inline int openat(int dirfd, const char* path, int flags)
 {
-	return (int)(_syscall(SYS_OPENAT, (uint64_t)dirfd, (uint64_t)path, (uint64_t)flags, 0, 0));
+	return (int)(_syscall(SYS_OPENAT, (uint64_t)dirfd, (uint64_t)path, (uint64_t)flags, 0, 0, 0));
 }
 
 inline int close(int fd)
 {
-	return (int)(_syscall(SYS_CLOSE, (uint64_t)fd, 0, 0, 0, 0));
+	return (int)(_syscall(SYS_CLOSE, (uint64_t)fd, 0, 0, 0, 0, 0));
 }
 
 inline ssize_t read(int fd, void* buffer, size_t size)
 {
-	return (ssize_t)(_syscall(SYS_READ, fd, (uint64_t)buffer, size, 0, 0));
+	return (ssize_t)(_syscall(SYS_READ, fd, (uint64_t)buffer, size, 0, 0, 0));
 }
 
 inline ssize_t write(int fd, const void* buffer, size_t size)
 {
-	return (ssize_t)(_syscall(SYS_WRITE, fd, (uint64_t)buffer, size, 0, 0));
+	return (ssize_t)(_syscall(SYS_WRITE, fd, (uint64_t)buffer, size, 0, 0, 0));
 }
 
 inline int spawn(const char** argv)
 {
-	return (int)_syscall(SYS_SPAWN, (uint64_t)argv, 0, 0, 0, 0);
+	return (int)_syscall(SYS_SPAWN, (uint64_t)argv, 0, 0, 0, 0, 0);
 }
 
 inline int spawnat(int dirfd, const char** argv)
 {
-	return (int)_syscall(SYS_SPAWNAT, (uint64_t)dirfd, (uint64_t)argv, 0, 0, 0);
+	return (int)_syscall(SYS_SPAWNAT, (uint64_t)dirfd, (uint64_t)argv, 0, 0, 0, 0);
 }
 
 inline int wait()
 {
-	return (int)_syscall(SYS_WAIT, 0, 0, 0, 0, 0);
+	return (int)_syscall(SYS_WAIT, 0, 0, 0, 0, 0, 0);
 }
 
 inline int ioctl(int fd, uint64_t op, uint64_t arg)
 {
-	return (int)_syscall(SYS_IOCTL, fd, op, arg, 0, 0);
+	return (int)_syscall(SYS_IOCTL, fd, op, arg, 0, 0, 0);
 }
 
 typedef enum
@@ -115,32 +118,42 @@ typedef struct
 
 inline int stat(const char* path, stat_t* buffer)
 {
-	return (int)_syscall(SYS_STAT, (uint64_t)path, (uint64_t)buffer, 0, 0, 0);
+	return (int)_syscall(SYS_STAT, (uint64_t)path, (uint64_t)buffer, 0, 0, 0, 0);
 }
 
 inline int fstat(int fd, stat_t* buffer)
 {
-	return (int)_syscall(SYS_FSTAT, (uint64_t)fd, (uint64_t)buffer, 0, 0, 0);
+	return (int)_syscall(SYS_FSTAT, (uint64_t)fd, (uint64_t)buffer, 0, 0, 0, 0);
 }
 
 inline ssize_t getdents(int fd, void* buffer, size_t length)
 {
-	return (ssize_t)_syscall(SYS_GETDENTS, (uint64_t)fd, (uint64_t)buffer, (uint64_t)length, 0, 0);
+	return (ssize_t)_syscall(SYS_GETDENTS, (uint64_t)fd, (uint64_t)buffer, (uint64_t)length, 0, 0, 0);
 }
 
 inline int chdir(const char* path)
 {
-	return (int)_syscall(SYS_CHDIR, (uint64_t)path, 0, 0, 0, 0);
+	return (int)_syscall(SYS_CHDIR, (uint64_t)path, 0, 0, 0, 0, 0);
 }
 
 inline int mkdir(const char* path, mode_t mode)
 {
-	return (int)_syscall(SYS_MKDIR, (uint64_t)path, (uint64_t)mode, 0, 0, 0);
+	return (int)_syscall(SYS_MKDIR, (uint64_t)path, (uint64_t)mode, 0, 0, 0, 0);
 }
 
 inline int getcwd(const char* buffer, size_t length)
 {
-	return (int)_syscall(SYS_GETCWD, (uint64_t)buffer, (uint64_t)length, 0, 0, 0);
+	return (int)_syscall(SYS_GETCWD, (uint64_t)buffer, (uint64_t)length, 0, 0, 0, 0);
+}
+
+inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+	return (void*)_syscall(SYS_MMAP, (uint64_t)addr, (uint64_t)length, (uint64_t)prot, (uint64_t) flags, (uint64_t)fd, (uint64_t)offset);
+}
+
+inline int munmap(void* addr, size_t length)
+{
+	return (int)_syscall(SYS_MUNMAP, (uint64_t)addr, (uint64_t)length, 0, 0, 0, 0);
 }
 
 extern char* optarg;

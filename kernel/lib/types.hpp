@@ -5,6 +5,7 @@
 
 using size_t = uint64_t;
 using ssize_t = int64_t;
+using off_t = int64_t;
 enum class byte : unsigned char {};
 using physaddr_t = uint64_t;
 using virtaddr_t = uint64_t;

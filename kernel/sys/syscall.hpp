@@ -20,6 +20,8 @@ enum class syscall_id : uint64_t
 	CHDIR,
 	MKDIR,
 	GETCWD,
+	MMAP,
+	MUNMAP,
 	DEBUG_PRINT
 };
 

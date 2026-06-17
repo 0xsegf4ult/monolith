@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-typedef int64_t ssize_t;
 
 enum SYSCALL_ID
 {
@@ -23,26 +22,29 @@ enum SYSCALL_ID
 	SYS_CHDIR,
 	SYS_MKDIR,
 	SYS_GETCWD,
+	SYS_MMAP,
+	SYS_MUNMAP,
 	SYS_DEBUGMSG
 };
 
-__attribute__((always_inline)) inline uint64_t _syscall(uint64_t id, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4)
+__attribute__((always_inline)) inline uint64_t _syscall(uint64_t id, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
-	register uint64_t r_rdi asm("rdi") = id;
-	register uint64_t r_rsi asm("rsi") = arg0;
-	register uint64_t r_rdx asm("rdx") = arg1;
-	register uint64_t r_rcx asm("rcx") = arg2;
-	register uint64_t r_r8 asm("r8") = arg3;
-	register uint64_t r_r9 asm("r9") = arg4;
+	register uint64_t r_rax asm("rax") = id;
+	register uint64_t r_rdi asm("rdi") = arg0;
+	register uint64_t r_rsi asm("rsi") = arg1;
+	register uint64_t r_rdx asm("rdx") = arg2;
+	register uint64_t r_rcx asm("rcx") = arg3;
+	register uint64_t r_r8 asm("r8") = arg4;
+	register uint64_t r_r9 asm("r9") = arg5;
 
 	uint64_t ret;
-	asm volatile("int $0x80" : "=a"(ret) : "r"(r_rdi), "r"(r_rsi), "r"(r_rdx), "r"(r_rcx), "r"(r_r8), "r"(r_r9));
+	asm volatile("int $0x80" : "=a"(ret) : "r"(r_rax), "r"(r_rdi), "r"(r_rsi), "r"(r_rdx), "r"(r_rcx), "r"(r_r8), "r"(r_r9));
 	return ret;
 }
 
 inline void debugmsg(const char* message)
 {
-	_syscall(SYS_DEBUGMSG, (uint64_t)message, 0, 0, 0, 0);
+	_syscall(SYS_DEBUGMSG, (uint64_t)message, 0, 0, 0, 0, 0);
 }
 
 #endif

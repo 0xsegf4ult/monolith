@@ -275,6 +275,16 @@ int sys_getcwd(char* buffer, size_t max_len)
 	return 0;
 }
 
+void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+	return nullptr;
+}
+
+int sys_munmap(void* addr, size_t length)
+{
+	return -1;
+}
+
 void sys_dbgwrite(const char* message)
 {
 	if(!message)
@@ -285,61 +295,67 @@ void sys_dbgwrite(const char* message)
 
 void syscall_handler(cpu_context_t* ctx)
 {
-	auto id = syscall_id(ctx->rdi);
+	auto id = syscall_id(ctx->rax);
 
 	switch(id)
 	{
 	using enum syscall_id;
 	case OPEN:
-		ctx->rax = static_cast<uint64_t>(sys_open((const char*)ctx->rsi, (int)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_open((const char*)ctx->rdi, (int)ctx->rsi));
 		break;
 	case OPENAT:
-		ctx->rax = static_cast<uint64_t>(sys_openat((int)ctx->rsi, (const char*)ctx->rdx, (int)ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_openat((int)ctx->rdi, (const char*)ctx->rsi, (int)ctx->rdx));
 		break;
 	case CLOSE:
-		ctx->rax = static_cast<uint64_t>(sys_close((int)ctx->rsi));
+		ctx->rax = static_cast<uint64_t>(sys_close((int)ctx->rdi));
 		break;
 	case READ:
-		ctx->rax = static_cast<uint64_t>(sys_read((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_read((int)ctx->rdi, (byte*)ctx->rsi, (size_t)ctx->rdx));
 		break;
 	case WRITE:
-		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rsi, (const byte*)ctx->rdx, (size_t)ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rdi, (const byte*)ctx->rsi, (size_t)ctx->rdx));
 		break;
 	case SPAWN:
-		ctx->rax = static_cast<uint64_t>(sys_spawn((const char**)ctx->rsi));
+		ctx->rax = static_cast<uint64_t>(sys_spawn((const char**)ctx->rdi));
 		break;
 	case SPAWNAT:
-		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rsi, (const char**)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rdi, (const char**)ctx->rsi));
 		break;
 	case EXIT:
-		sys_exit((int)ctx->rsi);
+		sys_exit((int)ctx->rdi);
 		break;
 	case WAIT:
 		ctx->rax = static_cast<uint64_t>(sys_wait());
 		break;
 	case IOCTL:
-		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rsi, ctx->rdx, ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rdi, ctx->rsi, ctx->rdx));
 		break;
 	case STAT:
-		ctx->rax = static_cast<uint64_t>(sys_stat((const char*)ctx->rsi, (vfs::stat_t*)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_stat((const char*)ctx->rdi, (vfs::stat_t*)ctx->rsi));
 		break;
 	case FSTAT:
-		ctx->rax = static_cast<uint64_t>(sys_fstat((int)ctx->rsi, (vfs::stat_t*)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_fstat((int)ctx->rdi, (vfs::stat_t*)ctx->rsi));
 		break;
 	case GETDENTS:
-		ctx->rax = static_cast<uint64_t>(sys_getdents((int)ctx->rsi, (byte*)ctx->rdx, (size_t)ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_getdents((int)ctx->rdi, (byte*)ctx->rsi, (size_t)ctx->rdx));
 		break;
 	case CHDIR:
-		ctx->rax = static_cast<uint64_t>(sys_chdir((const char*)ctx->rsi));
+		ctx->rax = static_cast<uint64_t>(sys_chdir((const char*)ctx->rdi));
 		break;
 	case MKDIR:
-		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rsi, (mode_t)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_mkdir((const char*)ctx->rdi, (mode_t)ctx->rsi));
 		break;
 	case GETCWD:
-		ctx->rax = static_cast<uint64_t>(sys_getcwd((char*)ctx->rsi, (size_t)ctx->rdx));
+		ctx->rax = static_cast<uint64_t>(sys_getcwd((char*)ctx->rdi, (size_t)ctx->rsi));
+		break;
+	case MMAP:
+		ctx->rax = reinterpret_cast<uint64_t>(sys_mmap((void*)ctx->rdi, (size_t)ctx->rsi, (int)ctx->rdx, (int)ctx->rcx, (int)ctx->r8, (off_t)ctx->r9));
+		break;
+	case MUNMAP:
+		ctx->rax = static_cast<uint64_t>(sys_munmap((void*)ctx->rdi, (size_t)ctx->rsi));
 		break;
 	case DEBUG_PRINT:
-		sys_dbgwrite((const char*)ctx->rsi);
+		sys_dbgwrite((const char*)ctx->rdi);
 		break;
 	default:
 		log::error("unknown syscall {:x}", uint64_t(id));
