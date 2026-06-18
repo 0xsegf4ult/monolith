@@ -147,6 +147,20 @@ inline int getcwd(const char* buffer, size_t length)
 	return (int)_syscall(SYS_GETCWD, (uint64_t)buffer, (uint64_t)length, 0, 0, 0, 0);
 }
 
+typedef enum 
+{
+	MAP_PRIVATE = 1,
+	MAP_ANONYMOUS = 2,
+} mmap_flags;
+
+typedef enum 
+{
+	PROT_NONE = 0,
+	PROT_READ = 1,
+	PROT_WRITE = 2,
+	PROT_EXEC = 4
+} mmap_prot_flags;
+
 inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	return (void*)_syscall(SYS_MMAP, (uint64_t)addr, (uint64_t)length, (uint64_t)prot, (uint64_t) flags, (uint64_t)fd, (uint64_t)offset);

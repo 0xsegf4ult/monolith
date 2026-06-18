@@ -13,6 +13,7 @@
 #include <sys/scheduler.hpp>
 #include <sys/cred.hpp>
 #include <sys/stat.hpp>
+#include <mm/address_space.hpp>
 
 #include <lib/klog.hpp>
 
@@ -283,7 +284,35 @@ int sys_getcwd(char* buffer, size_t max_len)
 
 void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	return nullptr;
+	if(!length)
+		return (void*)-EINVAL;
+
+	if(!(flags & MAP_PRIVATE))
+		return (void*)-EINVAL;
+
+	auto* thr = smp_current_cpu()->get_current_thread();
+	bool is_anon = (flags & MAP_ANONYMOUS);
+	if(is_anon)
+	{
+		if(addr)
+			return (void*)-EINVAL;
+
+		uint64_t vmflags = 0;
+		if(prot & PROT_WRITE)
+			vmflags |= vm_write;
+		if(prot & PROT_EXEC)
+			vmflags |= vm_exec;
+
+		auto virt = thr->vm_space->alloc(length, vmflags | vm_user);
+		if(!virt)
+			return (void*)-ENOMEM;
+
+		return (void*)virt;
+	}
+	else
+	{
+		return (void*)-EINVAL;
+	}
 }
 
 int sys_munmap(void* addr, size_t length)
