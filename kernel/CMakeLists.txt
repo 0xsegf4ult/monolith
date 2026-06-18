@@ -25,6 +25,7 @@ target_sources(vmmonolith PRIVATE
 	dev/pcie.cpp
 	dev/ps2.cpp
 	dev/tty.cpp
+	fs/procfs/procfs.cpp
 	fs/ramfs/ramfs.cpp
 	fs/generic.cpp
 	fs/vfs.cpp

@@ -9,6 +9,7 @@
 #include <lib/types.hpp>
 
 #include <fs/vfs.hpp>
+#include <fs/procfs/procfs.hpp>
 
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
@@ -76,6 +77,10 @@ thread_t* create_thread(const char* name, const char** argv, bool is_user)
 	thread->tty = nullptr;
 	thread->return_status = 0;
 
+	char str_buf[16];
+	format_to(string_span{&str_buf[0], 16}, "{}", thread->pid);
+	procfs_mkdir(str_buf);
+
 	for(int i = 0; i < 32; i++)
 		thread->open_files[i] = -1;
 
@@ -86,7 +91,7 @@ thread_t* create_thread(const char* name, const char** argv, bool is_user)
 		for(argc = 0; argv[argc]; ++argc)
 			argv_size += string_length(argv[argc]) + 1;
 
-		thread->rsp = thread->vm_space->alloc(user_stack_size, vm_write | vm_user) + user_stack_size - 8;
+		thread->rsp = thread->vm_space->alloc(user_stack_size, vm_write | vm_user | vm_present) + user_stack_size - 8;
 		auto rsp_phys = thread->vm_space->get_mapping(thread->rsp) + ((user_stack_size - 8) & 0xfff) + mm::direct_mapping_offset;
 		auto rsp_phys_orig = rsp_phys;
 
@@ -134,6 +139,9 @@ void thread_zombify(thread_t* thr)
 
 void destroy_thread(thread_t* thr)
 {
-	vmfree(thr->rsp0);
+	char str_buf[16];
+	format_to(string_span{&str_buf[0], 16}, "{}", thr->pid);
+	procfs_remove(str_buf);
+	vmfree(thr->rsp0_top - kernel_stack_size + 56);
 	kfree(thr);
 }

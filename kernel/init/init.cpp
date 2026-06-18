@@ -10,6 +10,7 @@
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
 
+#include <fs/procfs/procfs.hpp>
 #include <fs/vfs.hpp>
 
 #include <init/initramfs.hpp>
@@ -168,7 +169,7 @@ extern "C" void init()
 	mm::slab_init();
 	vmm_init_kpages(memmap, phys_kernel_start);
 	vfs::init();
-	vfs::mkdir("/dev", 0755);	
+	vfs::mkdir("/dev", 0755);
 
 	auto acpi_tables = acpi::parse_tables(rsdp);
 	
@@ -188,6 +189,9 @@ extern "C" void init()
 void kernel_main()
 {
 	vfs::mkdir("proc", 0755);
+	auto* procfs = procfs_create();
+	vfs::mount("/proc", procfs);
+
 	vfs::mkdir("sys", 0755);
 
 	tty_init();
