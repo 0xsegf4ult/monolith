@@ -184,7 +184,12 @@ int sys_wait()
 	if(thr->children->status != thread_status::terminated)
 		sched_block(thread_status::sleeping);
 
-	return thr->children->return_status;
+	auto* child = thr->children;
+	auto status = child->return_status;
+	thr->children = nullptr;
+	destroy_thread(child);
+
+	return status;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
