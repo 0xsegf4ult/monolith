@@ -78,7 +78,7 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 
 			uint64_t page_offset = phdr->p_vaddr % 0x1000;
 			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
-			thr->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags);
+			thr->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags | vm_present);
 			vfs::seek(exec_fd, phdr->p_offset);
 
 			virtaddr_t cur_page = aligned_vaddr;

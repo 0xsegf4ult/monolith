@@ -49,7 +49,7 @@ void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags
 	page_table* pd = get_or_create_pte(pdpt, pdpt_index, secflags);
 	page_table* pt = get_or_create_pte(pd, pd_index, secflags);
 	pt[pt_index] = page_table(phys & page_mask_4K);
-	pt[pt_index].set_flags(flags | PTE_PRESENT);
+	pt[pt_index].set_flags(flags);
 }
 
 void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags)
@@ -61,7 +61,7 @@ void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t fl
 	page_table* pdpt = get_or_create_pte(table, pml4_index, secflags);
 	page_table* pd = get_or_create_pte(pdpt, pdpt_index, secflags);
 	pd[pd_index] = page_table(phys & page_mask_2M);
-	pd[pd_index].set_flags(flags | PTE_PRESENT | PTE_HUGE);
+	pd[pd_index].set_flags(flags | PTE_HUGE);
 }
 
 void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags)
@@ -71,7 +71,7 @@ void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t fl
 
 	page_table* pdpt = get_or_create_pte(table, pml4_index, secflags);
 	pdpt[pdpt_index] = page_table(phys & page_mask_1G);
-	pdpt[pdpt_index].set_flags(flags | PTE_PRESENT | PTE_HUGE);
+	pdpt[pdpt_index].set_flags(flags | PTE_HUGE);
 }
 
 void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags, bool allow_huge)

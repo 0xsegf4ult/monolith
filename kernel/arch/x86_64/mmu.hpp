@@ -18,6 +18,15 @@ enum PTEBits : uint64_t
 	PTE_NOEXEC = 0x8000000000000000
 };
 
+enum PFBits : uint64_t
+{
+	PF_PRESENT = 0x1,
+	PF_WRITE = 0x2,
+	PF_USER = 0x4,
+	PF_RESERVED_WRITE = 0x8,
+	PF_FETCH = 0x10
+};
+
 constexpr uint64_t page_mask_4K = 0xfff0fffffffff000;
 constexpr uint64_t page_mask_2M = 0xfff0ffffffe00000;
 constexpr uint64_t page_mask_1G = 0xfff0ffffe0000000;
@@ -74,6 +83,8 @@ constexpr PTEBits vm_flags_to_x86(uint64_t flags)
 {
 	uint64_t result{0};
 
+	if(flags & vm_present)
+		result |= PTE_PRESENT;
 	if(flags & vm_write)
 		result |= PTE_WRITABLE;
 	if(!(flags & vm_exec))

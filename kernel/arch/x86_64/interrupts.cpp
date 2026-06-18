@@ -5,11 +5,15 @@
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/serial.hpp>
 #include <arch/x86_64/smp.hpp>
+#include <arch/x86_64/mmu.hpp>
+#include <mm/vmm.hpp>
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
 #include <sys/thread.hpp>
 #include <sys/syscall.hpp>
+#include <sys/scheduler.hpp>
+#include <dev/tty.hpp>
 
 extern "C" void isr_stubs();
 static idt_entry_t idt_entries[256];
@@ -65,12 +69,45 @@ void remove_irq_handler(uint8_t irq)
 static int pf_counter = 0;
 static char trace_buf[64];
 
-void handle_pagefault(cpu_context_t* ctx)
+cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 {
-	pf_counter++;
 	uint64_t cr2;
 	asm volatile("movq %%cr2, %0" : "=r"(cr2));
 	
+	if(!(ctx->error_code & PF_PRESENT)) 
+	{
+		uint64_t pflags = 0;
+		if(ctx->error_code & PF_WRITE)
+			pflags |= pf_write;
+		if(ctx->error_code & PF_USER)
+			pflags |= pf_user;
+		if(ctx->error_code & PF_FETCH)
+			pflags |= pf_fetch;
+
+		if(vm_page_fault(cr2, pflags))
+			return ctx;
+	}
+
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr && thr->pid > 0)
+	{
+		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
+		if(thr->tty)
+		{
+			const char* msg = "Segmentation fault\n";
+			tty_write(thr->tty, (byte*)msg, string_length(msg));
+		}
+
+		if(thr->parent && thr->parent->status == thread_status::sleeping)
+			sched_unblock(thr->parent);
+
+		thread_zombify(thr);
+		sched_block(thread_status::terminated);
+		return ctx;
+	}
+
+	pf_counter++;
+
 	format_to(string_span{&trace_buf[0], 64}, "RAX: {:#x}", ctx->rax);
 	early_serial_write(trace_buf);
 	format_to(string_span{&trace_buf[0], 64}, " RBX: {:#x}", ctx->rbx);
@@ -109,8 +146,8 @@ void handle_pagefault(cpu_context_t* ctx)
 		stk = stk->rbp;
 	}
 
-	auto* thr = smp_current_cpu()->get_current_thread();
-	panic("unhandled page fault in [{}] at RIP {:#x} memory access {:#x} {:b}", thr->name, ctx->rip, cr2, ctx->error_code);
+	panic("unhandled page fault");
+	return ctx;
 }
 
 void handle_gpf(cpu_context_t* ctx)
@@ -127,7 +164,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 
 	if(ctx->interrupt_id == InterruptID::PageFault)
 	{
-		handle_pagefault(ctx);
+		return handle_pagefault(ctx);
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{

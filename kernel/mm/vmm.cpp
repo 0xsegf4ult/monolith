@@ -3,8 +3,13 @@
 #include <mm/memory_map.hpp>
 #include <mm/layout.hpp>
 #include <mm/slab.hpp>
+#include <mm/pmm.hpp>
 
+#include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/mmu.hpp>
+#include <arch/x86_64/smp.hpp>
+
+#include <sys/thread.hpp>
 
 #include <lib/klog.hpp>
 #include <lib/kstd.hpp>
@@ -59,7 +64,7 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 
 virtaddr_t vmalloc(size_t length, uint64_t flags)
 {
-	return kernel_address_space->alloc(length, flags);
+	return kernel_address_space->alloc(length, flags | vm_present);
 }
 
 void vmfree(virtaddr_t addr)
@@ -86,4 +91,56 @@ void clone_kernel_vm(address_space* dest)
 address_space* get_kernel_vmspace()
 {
 	return kernel_address_space;
+}
+
+bool vm_page_fault(virtaddr_t addr, uint64_t flags)
+{
+	log::debug("vm_page_fault {:x}", addr);
+
+	if(flags & pf_present)
+		return false;
+
+	address_space* as = smp_current_cpu()->get_current_thread()->vm_space;
+	uint64_t status = 0;
+	physaddr_t phys = as->get_mapping(addr, &status);
+	log::debug("mapped to phys {:x} flags {:b} fault {:b}", phys, status, flags);
+	if(!phys)
+		return false;
+
+	if((flags & pf_write) && !(status & vm_write))
+	{
+		log::debug("tried write to readonly page");
+		return false;
+	}
+	if((flags & pf_user) && !(status & vm_user))
+	{
+		log::debug("tried userspace write to kernel page");
+		return false;
+	}
+	if((flags & pf_fetch) && !(status & vm_exec))
+	{
+		log::debug("tried instruction fetch from noexec page");
+		return false;
+	}
+
+	if(status & vm_swapped)
+	{
+		log::debug("page is swapped out");
+		if(phys == vm_allocate)
+		{
+			phys = pmm_allocate();
+			if(!phys)
+				return false;
+
+			// FIXME: wont update flags in vm_object, but those are unused for now
+			mutex_lock(as->lock);
+			mmu_map(as->root_pml4, phys, addr, vm_flags_to_x86(status | vm_present));
+			mutex_unlock(as->lock);
+			log::debug("allocated lazy page {:x} for {:x}", phys, addr);
+			return true;
+		}
+		return false;
+	}
+
+	return false;
 }
