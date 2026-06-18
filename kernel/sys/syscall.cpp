@@ -118,6 +118,7 @@ int common_spawn(const char** argv, int at_fd)
 	thr->parent = parent;
 	thr->cwd = parent->cwd;
 	thr->cred = parent->cred;
+	thr->tty = parent->tty;
 
 	if(parent->children)
 		thr->sibling = parent->children;

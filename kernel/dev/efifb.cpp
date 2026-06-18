@@ -48,7 +48,11 @@ void efifb_putchar(char c)
 {
 	bool done = false;
 
-	if(c == '\n')
+	if(c == '\r')
+	{
+		return;
+	}
+	else if(c == '\n')
 	{
 		fb.cursor_x = 0;
 		fb.cursor_y += 16;

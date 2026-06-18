@@ -19,6 +19,8 @@ namespace vfs
 	struct ventry_t;
 }
 
+struct tty_device;
+
 struct thread_t
 {
 	char name[32];
@@ -36,6 +38,7 @@ struct thread_t
 
 	cred_t cred;
 	vfs::ventry_t* cwd;
+	tty_device* tty;
 	int open_files[32];
 
 	int return_status;

@@ -7,4 +7,5 @@ target_sources(c PRIVATE
 	exit.c
 	printf.c
 	string.c
+	termios.c
 	getopt.c)

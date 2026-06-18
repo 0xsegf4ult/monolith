@@ -22,6 +22,28 @@
 
 #include <sys/err.hpp>
 
+// only ECHO works
+constexpr termios_t default_termios = {
+	.c_iflag = ICRNL,
+	.c_oflag = OPOST | ONLCR,
+	.c_cflag = B38400,
+	.c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOCTL,
+	.c_cc =
+	{
+		[VINTR] = 0x03,
+		[VERASE] = 0x7F,
+		[VSUSP] = 0x1A,
+		[VEOF] = 0x04
+	}
+};
+
+constexpr winsize_t default_winsize = {
+	.ws_row = 25,
+	.ws_col = 80,
+	.ws_xpixel = 0,
+	.ws_ypixel = 0
+};
+
 struct tty_device
 {
 	constexpr static size_t buffer_size = 0x1000;
@@ -30,13 +52,27 @@ struct tty_device
 	uint32_t read_buffer_tail;
 
 	thread_t* waitqueue;
+	mutex_t lock;
 
-	bool echo;
+	termios_t termios;
+	winsize_t winsize;
 };
 
 int tty_open(vfs::vnode_t* node, int flags)
 {
-	return node->dev.minor();
+	auto* thr = smp_current_cpu()->get_current_thread();
+
+	auto minor = node->dev.minor();
+	auto* tty = (tty_device*)(chardev_get(node->dev)->data);
+	if(!tty)
+		return -ENXIO;	
+
+	if(!thr->tty)
+	{
+		thr->tty = tty;
+	}
+
+	return 0;
 }
 
 int tty_close(int fd)
@@ -46,13 +82,24 @@ int tty_close(int fd)
 
 void tty_consume(tty_device* tty, char c)
 {
+	mutex_lock(tty->lock);
 	if((tty->read_buffer_tail + 1) % tty_device::buffer_size == tty->read_buffer_head)
+	{
+		mutex_unlock(tty->lock);
 		return;
+	}
 
 	*reinterpret_cast<char*>(tty->read_buffer + tty->read_buffer_tail) = c;
        	tty->read_buffer_tail = (tty->read_buffer_tail + 1) % tty_device::buffer_size;
 
-	if(tty->echo)
+	/* send signal if ISIG 
+	if(tty->termios.c_lflag & ISIG)
+	*/
+
+	if(tty->termios.c_iflag & ICRNL && c == '\r')
+		c = '\n';
+
+	if(tty->termios.c_lflag & ECHO)
 		efifb_write(&c, 1u);
 
 	while(tty->waitqueue)
@@ -63,11 +110,12 @@ void tty_consume(tty_device* tty, char c)
 		
 		sched_unblock(thr);
 	}
+	mutex_unlock(tty->lock);
 }
 
-ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+ssize_t tty_read(tty_device* tty, byte* buffer, size_t length)
 {
-	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
+	mutex_lock(tty->lock);
 	while(tty->read_buffer_head == tty->read_buffer_tail)
 	{
 		auto* thr = smp_current_cpu()->get_current_thread();
@@ -75,7 +123,9 @@ ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 		thr->next = tty->waitqueue;
 		tty->waitqueue = thr;
 	
+		mutex_unlock(tty->lock);
 		sched_block(thread_status::sleeping);
+		mutex_lock(tty->lock);
 	}
 
 	size_t read_count = 0;
@@ -90,29 +140,92 @@ ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	memcpy(buffer, tty->read_buffer + tty->read_buffer_head, read_count);
 	tty->read_buffer_head = (tty->read_buffer_head + read_count) % tty_device::buffer_size;
 
+	mutex_unlock(tty->lock);
 	return read_count;
+}
+
+ssize_t tty_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
+	return tty_read(tty, buffer, length);
+}
+
+ssize_t tty_write(tty_device* tty, const byte* buffer, size_t length)
+{
+	for(size_t i = 0; i < length; i++)
+	{
+		if(!(char)buffer[i])
+			break;
+
+		if((tty->termios.c_oflag & ONLCR) && ((char)buffer[i] == '\n'))
+		{
+			char cr = '\r';
+			efifb_write(&cr, 1);
+		}
+		efifb_write((const char*)buffer + i, 1);
+	}
+
+	return length;
 }
 
 ssize_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
-
-	efifb_write((const char*)buffer, length);
-
-	return length;
+	return tty_write(tty, buffer, length);
 }
 
 int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(!tty || tty != thr->tty)
+		return -ENOTTY;
 
-	if(op == 1)
+	switch(op)
 	{
-		tty->echo = (arg > 0);
+	case TCGETS:
+	{
+		termios_t tmp_t;
+		mutex_lock(tty->lock);
+		tmp_t = tty->termios;
+		mutex_unlock(tty->lock);
+
+		if(arg > 0x7fffffffffff)
+			return -EFAULT;
+
+		memcpy((byte*)arg, &tmp_t, sizeof(termios_t));
 		return 0;
 	}
+	case TCSETS:
+	{
+		termios_t tmp_t;
+		if(arg > 0x7fffffffffff)
+			return -EFAULT;
 
-	return -ENOTTY;
+		memcpy(&tmp_t, (byte*)arg, sizeof(termios_t));
+
+		mutex_lock(tty->lock);
+		tty->termios = tmp_t;
+		mutex_unlock(tty->lock);
+
+		return 0;
+	}
+	case TIOCGWINSZ:
+	{
+		winsize_t tmp_t;
+		mutex_lock(tty->lock);
+		tmp_t = tty->winsize;
+		mutex_unlock(tty->lock);
+
+		if(arg > 0x7fffffffffff)
+			return -EFAULT;
+
+		memcpy((byte*)arg, &tmp_t, sizeof(winsize_t));
+		return 0;
+	}
+	}
+
+	return -EINVAL;
 }
 
 static vfs::fs_file_ops tty_fops =
@@ -134,7 +247,9 @@ void tty_init()
 	device->read_buffer_head = 0;
 	device->read_buffer_tail = 0;
 	device->waitqueue = nullptr;
-	device->echo = true;
+	device->termios = default_termios;
+	device->winsize = default_winsize;
+	mutex_init(device->lock);
 	tty->data = device;
 
 	auto dev_node = vfs::mknod("/dev/tty0", S_IFCHR | S_IRUSR | S_IWUSR, dev_t{3, 0});

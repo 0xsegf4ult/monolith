@@ -73,6 +73,7 @@ thread_t* create_thread(const char* name, const char** argv, bool is_user)
 	thread->children = nullptr;
 	thread->sibling = nullptr;
 	thread->cwd = vfs::get_root_dentry();
+	thread->tty = nullptr;
 	thread->return_status = 0;
 
 	for(int i = 0; i < 32; i++)

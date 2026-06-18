@@ -96,6 +96,9 @@ int vsprintf(char* buf, const char* fmt, va_list args)
 		case 'x':
 			buf = num_to_str(buf, va_arg(args, uint32_t), 16, flags);
 			break;
+		case 'o':
+			buf = num_to_str(buf, va_arg(args, uint32_t), 8, flags);
+			break;
 		}
 
 		fmt++;

@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <termios.h>
 #include <unistd.h>
 
 static char input_buf[256];
@@ -119,7 +120,10 @@ void execute()
 
 int main()
 {
-	ioctl(0, 1, 0);
+	struct termios tm;
+	tcgetattr(0, &tm);
+	tm.c_lflag &= ~ECHO;
+	tcsetattr(0, &tm);
 
 	bindir = open("/bin", 0);
 
@@ -145,8 +149,16 @@ int main()
 
 			if(data == '\n')
 			{
-				buffer[b_count++] = '\0';
-				execute();
+				if(b_count > 0)
+				{
+					buffer[b_count++] = '\0';
+					execute();
+				}
+				else
+				{
+					printf("\n");
+				}
+
 				b_count = 0;
 				printf("[root@monolith]# ");
 				break;
