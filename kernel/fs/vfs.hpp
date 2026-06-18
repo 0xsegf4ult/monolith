@@ -12,8 +12,20 @@ namespace vfs
 
 struct vfilesystem_t
 {
-	fs_ops ops;
+	fs_inode_ops iops;
+	fs_file_ops fops;
+	ventry_t* root;
 	void* data;	
+};
+
+struct ventry_t;
+struct vnode_t;
+
+struct mount_t
+{
+	vfilesystem_t* fs;	
+	ventry_t* mountpoint;
+	mount_t* next;
 };
 
 struct ventry_t
@@ -22,7 +34,10 @@ struct ventry_t
 	vnode_t* node;
 	ventry_t* parent;
 	ventry_t* children;
-	ventry_t* sibling;
+	ventry_t* sibling_prev;
+	ventry_t* sibling_next;
+
+	mount_t* mount;
 	mutex_t lock;
 };
 
@@ -33,15 +48,12 @@ struct vnode_t
 	uid_t uid;
 	gid_t gid;
 	dev_t dev;
-	
-	void* data;
-	fs_ops* ops;
-	mutex_t lock;
-};
+	uint32_t nlinks;
 
-struct mountpoint_t
-{
-	
+	void* data;
+	fs_inode_ops* iops;
+	fs_file_ops* fops;
+	mutex_t lock;
 };
 
 struct file_descriptor_t
@@ -57,6 +69,7 @@ struct file_descriptor_t
 struct context_t
 {
 	ventry_t* root_node;	
+	mount_t* mounts;
 	file_descriptor_t open_files[64];
 };
 
@@ -64,10 +77,12 @@ void init();
 ventry_t* get_root_dentry();
 vnode_t* create_node(mode_t mode);
 ventry_t* create_dentry(const char* name, vnode_t* node);
+int mount(const char* path, vfilesystem_t* fs);
 
 int create(const char* path, mode_t mode);
 int mkdir(const char* path, mode_t mode);
 int mknod(const char* path, mode_t mode, dev_t device);
+int unlink(const char* path);
 
 enum LOOKUP_FLAGS
 {
@@ -86,6 +101,7 @@ lookup_result lookup(const char* path, int flags);
 struct stat_t
 {
 	mode_t mode;
+	uint32_t nlinks;
 	size_t size;
 };
 

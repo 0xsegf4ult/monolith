@@ -68,7 +68,7 @@ int main(int argc, char* argv[])
 				stat_t f_stat;
 				int st_r = stat(pbuf, &f_stat);
 
-				auto mode = f_stat.mode;
+				mode_t mode = f_stat.mode;
 
 				char type = '-';
 				if(S_ISDIR(mode))
@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
 				else if(S_ISLNK(mode))
 					type = 'l';
 
-				printf("%c%c%c%c%c%c%c%c%c%c root root %d %s", type,
+				printf("%c%c%c%c%c%c%c%c%c%c %d root root %d %s", type,
 					mode & S_IRUSR ? 'r' : '-',
 					mode & S_IWUSR ? 'w' : '-',
 					mode & S_IXUSR ? 'x' : '-',
@@ -90,12 +90,14 @@ int main(int argc, char* argv[])
 					mode & S_IROTH ? 'r' : '-',
 					mode & S_IWOTH ? 'w' : '-',
 					mode & S_IXOTH ? 'x' : '-',
+					f_stat.nlinks,
 					f_stat.size, (const char*)d + sizeof(dirent_info));
 			}
 			else
 				printf(first ? "%s" : " %s", (const char*)d + sizeof(dirent_info));
+		
+			first = 0;
 		}
-		first = 0;
 
 		bpos += d->length;
 	}

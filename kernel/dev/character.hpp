@@ -7,7 +7,7 @@
 struct char_device_t
 {
 	dev_t dev;
-	vfs::fs_ops* ops;
+	vfs::fs_file_ops* fops;
 	void* data;
 	char_device_t* next;
 };

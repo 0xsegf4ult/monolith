@@ -1,6 +1,8 @@
 #pragma once
 
-#include <fs/vfs.hpp>
-#include <lib/types.hpp>
+namespace vfs
+{
+struct vfilesystem_t;
+}
 
 vfs::vfilesystem_t* ramfs_create();

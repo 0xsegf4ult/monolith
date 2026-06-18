@@ -115,7 +115,7 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 	return -ENOTTY;
 }
 
-static vfs::fs_ops tty_fops =
+static vfs::fs_file_ops tty_fops =
 {
 	.open = tty_open,
 	.close = tty_close,
@@ -127,7 +127,7 @@ static vfs::fs_ops tty_fops =
 void tty_init()
 {
 	auto* tty = chardev_alloc(dev_t{3, 0});
-	tty->ops = &tty_fops;
+	tty->fops = &tty_fops;
 
 	auto* device = (tty_device*)kmalloc(sizeof(tty_device));
 	device->read_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));

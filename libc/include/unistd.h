@@ -98,6 +98,7 @@ typedef uint32_t mode_t;
 typedef struct 
 {
 	mode_t mode;
+	uint32_t nlinks;
 	size_t size;
 } stat_t;
 

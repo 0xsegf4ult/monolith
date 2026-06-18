@@ -2,7 +2,7 @@
 #include <arch/x86_64/smp.hpp>
 
 #include <fs/vfs.hpp>
-#include <fs/ramfs.hpp>
+#include <fs/ramfs/ramfs.hpp>
 
 #include <mm/layout.hpp>
 #include <mm/pmm.hpp>
@@ -27,9 +27,16 @@ void init()
 	auto* ramfs = ramfs_create();
 
 	auto* rnode = create_node(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-	rnode->ops = &ramfs->ops;
+	rnode->iops = &ramfs->iops;
+	rnode->fops = &ramfs->fops;
 
 	context->root_node = create_dentry("/", rnode);
+	context->mounts = (mount_t*)kmalloc(sizeof(mount_t));
+	context->root_node->mount = context->mounts;
+	context->mounts->mountpoint = context->root_node;
+	context->mounts->fs = ramfs;
+	context->mounts->next = nullptr;
+	ramfs->root = context->root_node;
 
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
 }
@@ -47,8 +54,10 @@ vnode_t* create_node(mode_t mode)
 	node->uid = 0;
 	node->gid = 0;
 	node->dev = dev_t{0};
+	node->nlinks = 0;
 	node->data = nullptr;
-	node->ops = nullptr;
+	node->iops = nullptr;
+	node->fops = nullptr;
 	mutex_init(node->lock);
 	return node;
 }
@@ -61,13 +70,36 @@ ventry_t* create_dentry(const char* name, vnode_t* node)
 	if(dentry->name[namel - 1] == '/' && namel > 1)
 		dentry->name[namel - 1] = '\0';
 	dentry->name[63] = '\0';
-	
+	node->nlinks++;
+
 	dentry->node = node;
 	dentry->parent = nullptr;
 	dentry->children = nullptr;
-	dentry->sibling = nullptr;
+	dentry->sibling_prev = nullptr;
+	dentry->sibling_next = nullptr;
+	dentry->mount = nullptr;
 	mutex_init(dentry->lock);
 	return dentry;
+}
+
+int mount(const char* path, vfilesystem_t* fs)
+{
+	auto query = lookup(path, 0);
+	if(!query.result)
+		return -ENOENT;
+
+	auto* mp = (mount_t*)kmalloc(sizeof(mount_t));
+	mp->mountpoint = query.result;
+	mp->fs = fs;
+	mp->next = nullptr;
+
+	auto* mhead = context->mounts;
+	while(mhead && mhead->next)
+		mhead = mhead->next;
+	mhead->next = mp;
+
+	query.result->mount = mp;
+	return 0;
 }
 
 int create(const char* path, mode_t mode)
@@ -90,7 +122,10 @@ int create(const char* path, mode_t mode)
 	if(query.result)
 		return -EEXIST;
 
-	return parent.result->node->ops->create(parent.result, basename, mode);	
+	if(!parent.result->node->iops->create)
+		return -ENOENT;
+
+	return parent.result->node->iops->create(parent.result, basename, mode);	
 }
 
 int mkdir(const char* path, mode_t mode)
@@ -113,7 +148,10 @@ int mkdir(const char* path, mode_t mode)
 	if(query.result)
 		return -EEXIST;
 
-	return parent.result->node->ops->mkdir(parent.result, basename, mode & 0777);
+	if(!parent.result->node->iops->mkdir)
+		return -ENOENT;
+
+	return parent.result->node->iops->mkdir(parent.result, basename, mode & 0777);
 }
 
 int mknod(const char* path, mode_t mode, dev_t device)
@@ -136,7 +174,50 @@ int mknod(const char* path, mode_t mode, dev_t device)
 	if(query.result)
 		return -EEXIST;
 
-	return parent.result->node->ops->mknod(parent.result, basename, mode, device);
+	if(!parent.result->node->iops->mknod)
+		return -ENOENT;
+
+	return parent.result->node->iops->mknod(parent.result, basename, mode, device);
+}
+
+int unlink(const char* path)
+{
+	auto query = lookup(path, 0);
+	if(!query.result)
+		return -ENOENT;
+
+	auto* dentry = query.result;
+	mutex_lock(dentry->lock);
+
+	if(S_ISDIR(dentry->node->mode))
+	{
+		mutex_unlock(dentry->lock);
+		return -EISDIR;
+	}
+
+	if(dentry->node->nlinks <= 1)
+	{
+		dentry->node->nlinks = 0;
+	}
+	else
+		dentry->node->nlinks--;
+
+	dentry->node = nullptr;
+
+	if(dentry->parent && dentry->parent->children == dentry)
+	{
+		dentry->sibling_next->sibling_prev = nullptr;
+		dentry->parent->children = dentry->sibling_next;
+	}
+	else if(dentry->sibling_prev)
+	{
+		dentry->sibling_prev->sibling_next = dentry->sibling_next;
+	}
+
+	mutex_unlock(dentry->lock);
+	kfree(dentry);
+
+	return 0;
 }
 
 lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
@@ -197,11 +278,41 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 		{
 			if(i + clen >= len)
 				c_parent = current;
+				
 			next = current->parent;
+
+			if(!current->parent)
+			{
+				mount_t* mp = context->mounts;
+				while(mp)
+				{
+					if(mp->fs->root == current)
+					{
+						next = (mp->mountpoint == context->root_node) ? context->root_node : mp->mountpoint->parent;
+						break;
+					}	
+					mp = mp->next;
+				}
+			}
 		}
 		else
 		{
-			next = current->node->ops->lookup(current, component);
+			if(current->mount)
+			{
+				auto mount_traverse = current->mount->fs->root;
+				mutex_unlock(current->lock);
+				current = mount_traverse;
+				mutex_lock(current->lock);
+			}
+
+			if(!current->node->iops->lookup)
+			{
+				mutex_unlock(current->lock);
+				current = nullptr;
+				break;
+			}
+
+			next = current->node->iops->lookup(current, component);
 		}
 
 		i += clen;
@@ -210,6 +321,9 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 	}
 
 	kfree(cbuffer);
+	if(current && current->mount)
+		current = current->mount->fs->root;
+
 	return {current, basename};
 }
 
@@ -243,8 +357,8 @@ int open(const char* path, int flags)
 		return -EBADF;
 
 	int fs_id = 0;
-	if(node->ops->open)
-		fs_id = node->ops->open(node, flags);
+	if(node->fops->open)
+		fs_id = node->fops->open(node, flags);
 	
 	if(fs_id < 0)
 		return fs_id;
@@ -282,9 +396,9 @@ int openat(ventry_t* dir, const char* path, int flags)
 	if(!node)
 		return -EBADF;
 
-	int fs_id = 0 ;
-	if(node->ops->open)
-		fs_id = node->ops->open(node, flags);
+	int fs_id = 0;
+	if(node->fops->open)
+		fs_id = node->fops->open(node, flags);
 
 	if(fs_id < 0)
 		return fs_id;
@@ -322,10 +436,10 @@ ssize_t read(int fd, byte* buffer, size_t length)
 	if(S_ISDIR(inode->mode))
 	       return -EISDIR;	
 
-	if(!inode->ops->read)
+	if(!inode->fops->read)
 		return -EINVAL;
 
-	return inode->ops->read(&context->open_files[fd], buffer, length);
+	return inode->fops->read(&context->open_files[fd], buffer, length);
 }
 
 ssize_t write(int fd, const byte* buffer, size_t length)
@@ -337,10 +451,10 @@ ssize_t write(int fd, const byte* buffer, size_t length)
 	if(S_ISDIR(inode->mode))
 	       return -EISDIR;	
 
-	if(!inode->ops->write)
+	if(!inode->fops->write)
 		return -EINVAL;
 
-	return inode->ops->write(&context->open_files[fd], buffer, length);
+	return inode->fops->write(&context->open_files[fd], buffer, length);
 }
 
 int close(int fd)
@@ -354,8 +468,8 @@ int close(int fd)
 		return 0;
 
 	int cres = 0;
-	if(node->ops->close)
-		cres = node->ops->close(context->open_files[fd].fs_id);
+	if(node->fops->close)
+		cres = node->fops->close(context->open_files[fd].fs_id);
 	
 	if(cres < 0)
 		return cres;
@@ -388,10 +502,10 @@ int ioctl(int fd, uint64_t op, uint64_t arg)
 	if(inode == nullptr)
 		return -EBADF;
 
-	if(!inode->ops->ioctl)
+	if(!inode->fops->ioctl)
 		return -ENOTTY;
 
-	return inode->ops->ioctl(&context->open_files[fd], op, arg);
+	return inode->fops->ioctl(&context->open_files[fd], op, arg);
 }
 
 int stat(const char* path, stat_t* output)
@@ -404,7 +518,8 @@ int stat(const char* path, stat_t* output)
 
 	auto* node = query.result->node;
 	
-	output->mode= node->mode;
+	output->mode = node->mode;
+	output->nlinks = node->nlinks;
 	output->size = node->size;
 
 	return 0;
@@ -413,7 +528,8 @@ int stat(const char* path, stat_t* output)
 int fstat(int fd, stat_t* output)
 {
 	auto* node = context->open_files[fd].inode;
-	output->mode= node->mode;
+	output->mode = node->mode;
+	output->nlinks = node->nlinks;
 	output->size = node->size;
 	return 0;
 }
@@ -427,7 +543,10 @@ ssize_t getdents(int fd, byte* buffer, size_t length)
 	if(!S_ISDIR(inode->mode))
 		return -ENOTDIR;
 
-	return inode->ops->getdents(&context->open_files[fd], buffer, length);	
+	if(!inode->iops->getdents)
+		return -EINVAL;
+
+	return inode->iops->getdents(&context->open_files[fd], buffer, length);	
 }	
 
 int dup(int fd)

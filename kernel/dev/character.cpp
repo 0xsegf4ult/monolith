@@ -4,13 +4,13 @@
 #include <mm/slab.hpp>
 
 static char_device_t* devices = nullptr;
-static vfs::fs_ops default_char_fops = {};
+static vfs::fs_file_ops default_char_fops = {};
 
 char_device_t* chardev_alloc(dev_t dev)
 {
 	auto* device = (char_device_t*)kmalloc(sizeof(char_device_t));
 	device->dev = dev;
-	device->ops = &default_char_fops;
+	device->fops = &default_char_fops;
 	device->data = nullptr;
 	device->next = devices;
 	devices = device;

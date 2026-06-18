@@ -3,7 +3,7 @@
 cmake --build build -j$(nproc)
 
 cd buildroot
-tar -cvf boot/initramfs.tar bin
+tar -cvf boot/initramfs.tar bin etc home root
 cd ..
 
 objcopy --only-keep-debug buildroot/boot/vmmonolith buildroot/boot/vmmonolith.sym

@@ -15,5 +15,6 @@ enum SYS_ERROR : int
 	ENOTTY,
 	ENOEXEC,
 	ENOMEM,
-	EACCES
+	EACCES,
+	ENXIO
 };
