@@ -26,6 +26,9 @@ struct pcie_device
 
 	uint64_t read_bar() const;
 	size_t get_bar_size();
+
+	uint32_t read_bar32() const;
+	size_t get_bar32_size();
 };
 
 namespace pcie

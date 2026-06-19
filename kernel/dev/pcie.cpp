@@ -1,6 +1,7 @@
 #include <dev/pcie.hpp>
 #include <dev/pci_class.hpp>
 #include <dev/nvme/nvme.hpp>
+#include <dev/net/e1000/e1000.hpp>
 
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
@@ -87,7 +88,7 @@ bool pcie_device::has_multiple_functions() const
 
 uint64_t pcie_device::read_bar() const
 {
-	return read_config64(0x10) & 0xFFFFFFFFFFFFF000;
+	return read_config64(0x10) & 0xFFFFFFFFFFFFFFF0;
 }
 
 size_t pcie_device::get_bar_size()
@@ -107,6 +108,22 @@ size_t pcie_device::get_bar_size()
 	return len + 1;
 }
 
+uint32_t pcie_device::read_bar32() const
+{
+	return read_config32(0x10) & 0xFFFFFFF0;
+}
+
+size_t pcie_device::get_bar32_size()
+{
+	auto old_value = read_bar32();
+	write_config32(0x10, 0xFFFFFFFF);
+
+	auto val = read_bar32();
+	uint32_t len = ~val;
+	write_config32(0x10, old_value);
+	return len + 1;
+}
+
 namespace pcie
 {
 
@@ -114,6 +131,11 @@ void device_dispatch_driver(pcie_device& dev)
 {
 	if(dev.class_code() == 1 && dev.subclass_code() == 8)
 		nvme_init_controller(dev);
+	if(dev.class_code() == 2 && dev.subclass_code() == 0)
+	{
+		if(dev.vendor_id() == 0x8086 && dev.device_id() == 0x10d3)
+			e1000_init(dev);
+	}	
 }
 
 void scan_bus(uint8_t bus);

@@ -172,9 +172,7 @@ void nvme_init_controller(pcie_device& dev)
 	log::debug("nvme0: MSI-X using BIR {}, table at {:#x} size {:#x}", msix_reg1 & 0b111, (msix_reg1 & ~(0b111)), msix_mctr & 0b11111111111); 
 
 	auto base = device->pcie.read_bar();
-	//auto bar_size = device->pcie.get_bar_size();
-	//FIXME: bar size detection broken
-	size_t bar_size = 0x4000;
+	auto bar_size = device->pcie.get_bar_size();
 	log::debug("nvme0: BAR {:#x} size {:#x}", base, bar_size);
 
 	device->base_address = base + mm::direct_mapping_offset;
