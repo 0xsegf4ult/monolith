@@ -1,11 +1,15 @@
 #pragma once
 
 #include <fs/ops.hpp>
+#include <fs/vnode.hpp>
+#include <fs/ventry.hpp>
 #include <lib/types.hpp>
 #include <dev/device.hpp>
 #include <sys/mutex.hpp>
 #include <sys/cred.hpp>
 #include <sys/stat.hpp>
+#include <stdatomic.h>
+#include <sys/reflock.hpp>
 
 namespace vfs
 {
@@ -18,42 +22,11 @@ struct vfilesystem_t
 	void* data;	
 };
 
-struct ventry_t;
-struct vnode_t;
-
 struct mount_t
 {
 	vfilesystem_t* fs;	
 	ventry_t* mountpoint;
 	mount_t* next;
-};
-
-struct ventry_t
-{
-	char name[64];
-	vnode_t* node;
-	ventry_t* parent;
-	ventry_t* children;
-	ventry_t* sibling_prev;
-	ventry_t* sibling_next;
-
-	mount_t* mount;
-	mutex_t lock;
-};
-
-struct vnode_t
-{
-	mode_t mode;
-	size_t size;
-	uid_t uid;
-	gid_t gid;
-	dev_t dev;
-	uint32_t nlinks;
-
-	void* data;
-	fs_inode_ops* iops;
-	fs_file_ops* fops;
-	mutex_t lock;
 };
 
 struct file_descriptor_t
@@ -63,7 +36,7 @@ struct file_descriptor_t
 	vnode_t* inode;
 	ventry_t* path;
 	int fs_id;
-	uint32_t refcount;
+	atomic_uint refcount;
 };
 
 struct context_t
@@ -75,8 +48,6 @@ struct context_t
 
 void init();
 ventry_t* get_root_dentry();
-vnode_t* create_node(mode_t mode);
-ventry_t* create_dentry(const char* name, vnode_t* node);
 int mount(const char* path, vfilesystem_t* fs);
 
 int create(const char* path, mode_t mode);

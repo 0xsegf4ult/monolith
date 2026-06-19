@@ -132,7 +132,10 @@ void thread_zombify(thread_t* thr)
 		if(thr->open_files[i] >= 0)
 			vfs::close(i);
 	}
-	
+
+	ventry_put(thr->cwd);
+	thr->cwd = nullptr;
+
 	thr->vm_space->destroy();
 	kfree(thr->vm_space);
 }

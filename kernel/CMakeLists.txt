@@ -29,6 +29,8 @@ target_sources(vmmonolith PRIVATE
 	fs/ramfs/ramfs.cpp
 	fs/generic.cpp
 	fs/vfs.cpp
+	fs/ventry.cpp
+	fs/vnode.cpp
 	init/initramfs.cpp
 	init/init.cpp
 	lib/elf.cpp

@@ -117,7 +117,10 @@ int common_spawn(const char** argv, int at_fd)
 
 	auto* thr = create_thread(argv[0], argv, true);
 	thr->parent = parent;
+	
 	thr->cwd = parent->cwd;
+	ventry_ref(thr->cwd);
+	
 	thr->cred = parent->cred;
 	thr->tty = parent->tty;
 
@@ -253,6 +256,8 @@ int sys_chdir(const char* path)
 	       return -ENOTDIR;	
 
 	auto* thr = smp_current_cpu()->get_current_thread();
+	ventry_ref(query.result);
+	ventry_put(thr->cwd);
 	thr->cwd = query.result;
 
 	return 0;

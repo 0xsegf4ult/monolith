@@ -2,6 +2,8 @@
 #include <arch/x86_64/smp.hpp>
 
 #include <fs/vfs.hpp>
+#include <fs/vnode.hpp>
+#include <fs/ventry.hpp>
 #include <fs/ramfs/ramfs.hpp>
 
 #include <mm/layout.hpp>
@@ -26,11 +28,11 @@ void init()
 
 	auto* ramfs = ramfs_create();
 
-	auto* rnode = create_node(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+	auto* rnode = vnode_new(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
 	rnode->iops = &ramfs->iops;
 	rnode->fops = &ramfs->fops;
 
-	context->root_node = create_dentry("/", rnode);
+	context->root_node = ventry_new("/", rnode);
 	context->mounts = (mount_t*)kmalloc(sizeof(mount_t));
 	context->root_node->mount = context->mounts;
 	context->mounts->mountpoint = context->root_node;
@@ -44,42 +46,6 @@ void init()
 ventry_t* get_root_dentry()
 {
 	return context->root_node;
-}
-
-vnode_t* create_node(mode_t mode)
-{
-	vnode_t* node = (vnode_t*)kmalloc(sizeof(vnode_t));
-	node->mode = mode;
-	node->size = 0;
-	node->uid = 0;
-	node->gid = 0;
-	node->dev = dev_t{0};
-	node->nlinks = 0;
-	node->data = nullptr;
-	node->iops = nullptr;
-	node->fops = nullptr;
-	mutex_init(node->lock);
-	return node;
-}
-
-ventry_t* create_dentry(const char* name, vnode_t* node)
-{
-	ventry_t* dentry = (ventry_t*)kmalloc(sizeof(ventry_t));
-	strncpy(dentry->name, name, 64);
-	auto namel = string_length(dentry->name);
-	if(dentry->name[namel - 1] == '/' && namel > 1)
-		dentry->name[namel - 1] = '\0';
-	dentry->name[63] = '\0';
-	node->nlinks++;
-
-	dentry->node = node;
-	dentry->parent = nullptr;
-	dentry->children = nullptr;
-	dentry->sibling_prev = nullptr;
-	dentry->sibling_next = nullptr;
-	dentry->mount = nullptr;
-	mutex_init(dentry->lock);
-	return dentry;
 }
 
 int mount(const char* path, vfilesystem_t* fs)
@@ -187,21 +153,21 @@ int unlink(const char* path)
 		return -ENOENT;
 
 	auto* dentry = query.result;
-	mutex_lock(dentry->lock);
 
 	if(S_ISDIR(dentry->node->mode))
 	{
-		mutex_unlock(dentry->lock);
 		return -EISDIR;
 	}
 
 	if(dentry->node->nlinks <= 1)
 	{
 		dentry->node->nlinks = 0;
+		vnode_put(dentry->node);
 	}
 	else
 		dentry->node->nlinks--;
 
+	spinlock_acquire(dentry->ref.lock);
 	dentry->node = nullptr;
 
 	if(dentry->parent && dentry->parent->children == dentry)
@@ -214,8 +180,8 @@ int unlink(const char* path)
 		dentry->sibling_prev->sibling_next = dentry->sibling_next;
 	}
 
-	mutex_unlock(dentry->lock);
-	kfree(dentry);
+	spinlock_release(dentry->ref.lock);
+	ventry_put(dentry);
 
 	return 0;
 }
@@ -245,10 +211,10 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 		if(!current)
 			break;
 
-		mutex_lock(current->lock);
+		ventry_ref(current);
 		if(!S_ISDIR(current->node->mode))
 		{
-			mutex_unlock(current->lock);
+			ventry_put(current);
 			break;
 		}
 
@@ -266,7 +232,7 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 
 		if(is_last && (flags & LOOKUP_PARENT))
 		{
-			mutex_unlock(current->lock);
+			ventry_put(current);
 			break;
 		}
 
@@ -300,23 +266,22 @@ lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
 			if(current->mount)
 			{
 				auto mount_traverse = current->mount->fs->root;
-				mutex_unlock(current->lock);
+				ventry_put(current);
 				current = mount_traverse;
-				mutex_lock(current->lock);
+				ventry_ref(current);
 			}
 
 			if(!current->node->iops->lookup)
 			{
-				mutex_unlock(current->lock);
-				current = nullptr;
-				break;
+				ventry_put(current);
+				return {nullptr, basename};
 			}
 
 			next = current->node->iops->lookup(current, component);
 		}
 
 		i += clen;
-		mutex_unlock(current->lock);
+		ventry_put(current);
 		current = next;
 	}
 
@@ -352,17 +317,26 @@ int open(const char* path, int flags)
 			return -ENOENT;
 	}
 
+	ventry_ref(query.result);
 	auto* node = query.result->node;
 	if(!node)
+	{
+		ventry_put(query.result);
 		return -EBADF;
+	}
 
 	int fs_id = 0;
 	if(node->fops->open)
 		fs_id = node->fops->open(node, flags);
 	
 	if(fs_id < 0)
+	{
+		ventry_put(query.result);
 		return fs_id;
+	}
 
+	vnode_ref(node);
+	
 	int fd = -1;
 	for(int i = 0; i < 64; i++)
 	{
@@ -379,7 +353,6 @@ int open(const char* path, int flags)
 		}
 	}
 
-
 	return fd;
 }
 
@@ -392,16 +365,25 @@ int openat(ventry_t* dir, const char* path, int flags)
 	if(!query.result)
 		return -ENOENT;
 
+	ventry_ref(query.result);
 	auto* node = query.result->node;
 	if(!node)
+	{
+		ventry_put(query.result);
 		return -EBADF;
+	}
 
 	int fs_id = 0;
 	if(node->fops->open)
 		fs_id = node->fops->open(node, flags);
 
 	if(fs_id < 0)
+	{
+		ventry_put(query.result);
 		return fs_id;
+	}
+
+	vnode_ref(node);
 
 	int s_fd = -1;
 	for(int i = 0; i < 64; i++)
@@ -474,9 +456,12 @@ int close(int fd)
 	if(cres < 0)
 		return cres;
 
+	vnode_put(node);
 	context->open_files[fd].read_pos = 0;
 	context->open_files[fd].write_pos = 0;
 	context->open_files[fd].inode = nullptr;
+
+	ventry_put(context->open_files[fd].path);
 	context->open_files[fd].path = nullptr;
 	context->open_files[fd].fs_id = -1;
 	return 0;

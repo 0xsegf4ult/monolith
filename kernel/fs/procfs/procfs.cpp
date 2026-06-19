@@ -27,11 +27,11 @@ vfilesystem_t* procfs_create()
 	fs->data = nullptr;
 	g_procfs = fs;
 
-	auto* node = create_node(S_IFDIR | 0755);
+	auto* node = vnode_new(S_IFDIR | 0755);
 	node->iops = &fs->iops;
         node->fops = &fs->fops;
 
-        auto* dentry = create_dentry("proc", node);
+        auto* dentry = ventry_new("proc", node);
 	fs->root = dentry;
 
 	return fs;
@@ -71,13 +71,14 @@ void procfs_remove(const char* path)
 		return;
 
 	auto* dentry = query.result;
-	mutex_lock(dentry->lock);
+	spinlock_acquire(dentry->ref.lock);
 	if(S_ISDIR(dentry->node->mode))
 	{
 		
 	}
 
 	kfree(dentry->node);
+	dentry->node = nullptr;
 
 	if(dentry->parent && dentry->parent->children == dentry)
 	{
@@ -88,8 +89,8 @@ void procfs_remove(const char* path)
 	{
 		dentry->sibling_prev->sibling_next = dentry->sibling_next;
 	}
-	mutex_unlock(dentry->lock);
-	kfree(dentry);
+	spinlock_release(dentry->ref.lock);
+	ventry_put(dentry);
 
 	return;
 }
