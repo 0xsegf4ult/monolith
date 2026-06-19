@@ -64,7 +64,8 @@ void pmm_initialize(mm::memory_map& memmap)
 
 physaddr_t pmm_allocate()
 {
-	spinlock_acquire(lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(lock, rflags);
 
 	for(size_t i = 0; i < pmm_bitmap_length; i++)
 	{
@@ -77,11 +78,11 @@ physaddr_t pmm_allocate()
 		physmem_available -= 4096;
 		physmem_used += 4096;
 
-		spinlock_release(lock);
+		spinlock_release_irqsave(lock, rflags);
 		return (i * 64ull + index) * 4096ull;
 	}
 
-	spinlock_release(lock);
+	spinlock_release_irqsave(lock, rflags);
 	panic("out of physical memory");
 	return ~(0ull);
 }
@@ -91,11 +92,12 @@ void pmm_free(physaddr_t addr)
 	auto bmp_offset = (addr / 4096) / 64;
 	auto bit_offset = (addr / 4096) % 64;
 
-	spinlock_acquire(lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(lock, rflags);
 	pmm_bitmap[bmp_offset] |= (1ull << bit_offset);
 	physmem_used--;;
 	physmem_available++;
-	spinlock_release(lock);
+	spinlock_release_irqsave(lock, rflags);
 }
 
 

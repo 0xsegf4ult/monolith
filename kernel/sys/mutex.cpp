@@ -15,7 +15,8 @@ void mutex_init(mutex_t& mutex)
 
 void mutex_lock(mutex_t& mutex)
 {
-	spinlock_acquire(mutex.spinlock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(mutex.spinlock, rflags);
 
 	if(mutex.locked)
 	{
@@ -23,19 +24,20 @@ void mutex_lock(mutex_t& mutex)
 		thr->next = mutex.waitqueue;
 		mutex.waitqueue = thr;
 
-		spinlock_release(mutex.spinlock);
+		spinlock_release_irqsave(mutex.spinlock, rflags);
 		sched_block(thread_status::sleeping);
 	}
 	else
 	{
 		mutex.locked = true;
-		spinlock_release(mutex.spinlock);
+		spinlock_release_irqsave(mutex.spinlock, rflags);
 	}
 }
 
 void mutex_unlock(mutex_t& mutex)
 {
-	spinlock_acquire(mutex.spinlock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(mutex.spinlock, rflags);
 
 	if(mutex.waitqueue)
 	{
@@ -47,5 +49,5 @@ void mutex_unlock(mutex_t& mutex)
 	}
 
 	mutex.locked = false;
-	spinlock_release(mutex.spinlock);
+	spinlock_release_irqsave(mutex.spinlock, rflags);
 }

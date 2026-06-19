@@ -35,7 +35,8 @@ void slab_init()
 
 byte* slab_alloc(slab_cache& cache)
 {
-	spinlock_acquire(cache.lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(cache.lock, rflags);
 	slab* prev = nullptr;
 	slab* target_slab = cache.slabs;
 	while(target_slab != nullptr)
@@ -52,7 +53,7 @@ byte* slab_alloc(slab_cache& cache)
 			target_slab->free = *reinterpret_cast<uint32_t*>(mem);
 			target_slab->in_use++;
 
-			spinlock_release(cache.lock);
+			spinlock_release_irqsave(cache.lock, rflags);
 			return mem;
 		}
 
@@ -77,7 +78,7 @@ byte* slab_alloc(slab_cache& cache)
 	for(uint32_t i = 1; i < cache.obj_per_slab; i++)
 		*reinterpret_cast<uint32_t*>(new_slab->memory + (i * cache.block_size)) = i + 1;
 
-	spinlock_release(cache.lock);
+	spinlock_release_irqsave(cache.lock, rflags);
 	return new_slab->memory;
 }
 
@@ -91,14 +92,16 @@ void slab_free(virtaddr_t addr)
 		panic("slab: free on metadata pointer");
 
 	slab_cache& cache = *(o_slab->cache);
-	spinlock_acquire(cache.lock);
+	
+	uint64_t rflags;
+	spinlock_acquire_irqsave(cache.lock, rflags);
 
 	*reinterpret_cast<uint32_t*>(addr) = o_slab->free;
 
 	auto obj_index = (addr - reinterpret_cast<virtaddr_t>(o_slab->memory)) / cache.block_size;
 	o_slab->in_use--;
 	o_slab->free = obj_index;
-	spinlock_release(cache.lock);
+	spinlock_release_irqsave(cache.lock, rflags);
 }
 
 void slab_debug(size_t size)

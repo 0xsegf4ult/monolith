@@ -11,22 +11,25 @@ void klog_init()
 
 void klog_internal(const char* buffer)
 {
-	spinlock_acquire(klog_lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(klog_lock, rflags);
 	early_serial_write(buffer);
-	spinlock_release(klog_lock);
+	spinlock_release_irqsave(klog_lock, rflags);
 }
 
 void klog_internal(const char* buffer, size_t length)
 {
-	spinlock_acquire(klog_lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(klog_lock, rflags);
 	for(size_t i = 0; i < length; i++)
 		early_serial_putchar(buffer[i]);
-	spinlock_release(klog_lock);
+	spinlock_release_irqsave(klog_lock, rflags);
 }
 
 void klog_internal_newline()
 {
-	spinlock_acquire(klog_lock);
+	uint64_t rflags;
+	spinlock_acquire_irqsave(klog_lock, rflags);
 	early_serial_putchar('\n');
-	spinlock_release(klog_lock);
+	spinlock_release_irqsave(klog_lock, rflags);
 }
