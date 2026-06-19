@@ -112,6 +112,8 @@ void parse_mcfg(const mcfg* table)
 	pcie::set_base(ecam->base_address);
 }
 
+static acpi_tables g_tables;
+
 acpi_tables parse_tables(const acpi::rsdp_v1* rsdp)
 {
 	acpi_tables tables;
@@ -145,7 +147,13 @@ acpi_tables parse_tables(const acpi::rsdp_v1* rsdp)
 	parse_madt(tables.madt);
 	parse_mcfg(tables.mcfg);
 
+	g_tables = tables;
 	return tables;
+}
+
+acpi_tables& get_tables()
+{
+	return g_tables;
 }
 
 }

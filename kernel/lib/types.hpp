@@ -9,6 +9,7 @@ using off_t = int64_t;
 enum class byte : unsigned char {};
 using physaddr_t = uint64_t;
 using virtaddr_t = uint64_t;
+using time_t = int64_t;
 
 constexpr uint32_t u32_max = 4294967295;
 

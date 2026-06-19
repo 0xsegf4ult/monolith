@@ -207,5 +207,6 @@ struct acpi_tables
 
 const sdt_header* find_table(const sdt_header* root_table, const char* id);
 acpi_tables parse_tables(const rsdp_v1* rsdp);
+acpi_tables& get_tables();
 
 }

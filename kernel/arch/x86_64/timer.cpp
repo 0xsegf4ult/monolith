@@ -6,6 +6,7 @@
 #include <lib/types.hpp>
 
 #include <sys/scheduler.hpp>
+#include <sys/time.hpp>
 
 namespace timer
 {
@@ -40,6 +41,8 @@ void set_gsi(uint8_t p_gsi)
 void irq_handler()
 {
 	timer::ticks++;
+	if(timer::ticks % 1000 == 0)
+		time_uptime_increment();
 }
 
 void init(uint16_t count)

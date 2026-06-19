@@ -9,6 +9,7 @@
 #include <dev/pcie.hpp>
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
+#include <dev/rtc.hpp>
 
 #include <fs/procfs/procfs.hpp>
 #include <fs/vfs.hpp>
@@ -28,6 +29,7 @@
 #include <sys/executable.hpp>
 #include <sys/thread.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/time.hpp>
 
 #include <sys/spinlock.hpp>
 
@@ -188,6 +190,11 @@ extern "C" void init()
 
 void kernel_main()
 {
+	rtc_init();
+	auto time = rtc_read();
+	time_set_boottime(time);
+	log::info("rtc: updated system time to {}", time);
+
 	vfs::mkdir("proc", 0755);
 	auto* procfs = procfs_create();
 	vfs::mount("/proc", procfs);
