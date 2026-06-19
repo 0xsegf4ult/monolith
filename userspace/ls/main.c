@@ -1,5 +1,7 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static char buffer[1024];
@@ -65,7 +67,7 @@ int main(int argc, char* argv[])
 
 				char pbuf[64];
 				sprintf(pbuf, "%s/%s", optind < argc ? argv[optind] : ".", (const char*)d + sizeof(dirent_info));
-				stat_t f_stat;
+				struct stat f_stat;
 				int st_r = stat(pbuf, &f_stat);
 
 				mode_t mode = f_stat.mode;

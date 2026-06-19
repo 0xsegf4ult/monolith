@@ -179,7 +179,7 @@ void sys_exit(int status)
 	sched_block(thread_status::terminated);	
 }
 
-int sys_wait()
+pid_t sys_wait(int* status)
 {
 	auto* thr = smp_current_cpu()->get_current_thread();
 	if(!thr->children)
@@ -189,11 +189,21 @@ int sys_wait()
 		sched_block(thread_status::sleeping);
 
 	auto* child = thr->children;
-	auto status = child->return_status;
+	auto pid = child->pid;
+	auto c_status = child->return_status;
+
 	thr->children = nullptr;
 	destroy_thread(child);
+	
+	if(status)
+	{
+		if(reinterpret_cast<virtaddr_t>(status) > 0x7fffffffffff)
+			return -EFAULT;
 
-	return status;
+		*status = c_status;
+	}
+
+	return pid;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
@@ -365,7 +375,7 @@ void syscall_handler(cpu_context_t* ctx)
 		sys_exit((int)ctx->rdi);
 		break;
 	case WAIT:
-		ctx->rax = static_cast<uint64_t>(sys_wait());
+		ctx->rax = static_cast<uint64_t>(sys_wait((int*)ctx->rdi));
 		break;
 	case IOCTL:
 		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rdi, ctx->rsi, ctx->rdx));

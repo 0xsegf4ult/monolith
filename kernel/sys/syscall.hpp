@@ -4,8 +4,8 @@
 
 enum mmap_flags
 {
-	MAP_PRIVATE = 1,
-	MAP_ANONYMOUS = 2,
+	MAP_PRIVATE = 0x2,
+	MAP_ANONYMOUS = 0x8,
 };
 
 enum mmap_prot_flags

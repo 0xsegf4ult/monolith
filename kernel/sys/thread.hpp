@@ -24,7 +24,7 @@ struct tty_device;
 struct thread_t
 {
 	char name[32];
-	uint32_t pid;
+	pid_t pid;
 	thread_status status;
 	virtaddr_t rsp0;
 	virtaddr_t rsp;

@@ -1,5 +1,7 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static char buffer[0x1000];
@@ -21,7 +23,7 @@ int main(int argc, const char** argv)
 			return -1;
 		}
 
-		stat_t stat_info;
+		struct stat stat_info;
 		int st_r = fstat(fd, &stat_info);
 		if(st_r < 0)
 		{

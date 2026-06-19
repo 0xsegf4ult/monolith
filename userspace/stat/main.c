@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 int main(int argc, char* argv[])
@@ -10,7 +11,7 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	stat_t f_stat;
+	struct stat f_stat;
 	int st_r = stat(argv[1], &f_stat);
 	if(st_r < 0)
 	{

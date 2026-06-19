@@ -1,4 +1,5 @@
 #include <termios.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #define __TIO 90

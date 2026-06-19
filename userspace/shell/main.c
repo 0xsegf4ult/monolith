@@ -1,6 +1,9 @@
+#include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -11,28 +14,6 @@ static int bindir;
 
 void execute()
 {
-/*	size_t sp_offset = 0;
-	const char* cur = buffer;
-	while(cur && sp_offset < b_count)
-	{
-		if(*cur == ' ')
-			break;
-
-		sp_offset++;
-		cur++;
-	}
-
-	buffer[sp_offset] = '\0';
-
-	const char* argv[3];
-	argv[0] = buffer;
-	if(sp_offset + 1 <= b_count)
-		argv[1] = buffer + sp_offset + 1;
-	else
-		argv[1] = nullptr;
-
-	argv[2] = nullptr;
-*/
 	const char* argv[8];
 	int argc = 0;
 	char* token = strtok(buffer, " \n");
@@ -53,7 +34,7 @@ void execute()
 
 	if(buffer[0] == '/' || buffer[0] == '.')
 	{
-		stat_t ex_stat;
+		struct stat ex_stat;
 		int st_r = stat(buffer, &ex_stat);
 		if(st_r < 0)
 		{
@@ -75,7 +56,7 @@ void execute()
 			{
 				printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
 			}
-			wait();
+			wait(NULL);
 			return;
 		}
 	}
@@ -98,7 +79,7 @@ void execute()
 		auto ex_fd = openat(bindir, buffer, 0);
 		if(ex_fd)
 		{
-			stat_t ex_stat;
+			struct stat ex_stat;
 			int st_r = fstat(ex_fd, &ex_stat);
 			close(ex_fd);
 			if(st_r >= 0 && S_ISREG(ex_stat.mode))
@@ -109,7 +90,7 @@ void execute()
 				{
 					printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
 				}
-				wait();
+				wait(NULL);
 				return;
 			}
 		}
