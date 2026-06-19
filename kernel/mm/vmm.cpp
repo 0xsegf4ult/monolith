@@ -72,14 +72,14 @@ void vmfree(virtaddr_t addr)
 	kernel_address_space->free(addr);
 }
 
-void vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
+int vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 {
-	kernel_address_space->map(phys, virt, flags);
+	return kernel_address_space->map(phys, virt, flags);
 }
 
-void vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
+int vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
-	kernel_address_space->map_range(phys, virt, length, flags);
+	return kernel_address_space->map_range(phys, virt, length, flags);
 }
 
 void clone_kernel_vm(address_space* dest)
