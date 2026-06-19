@@ -7,7 +7,10 @@ struct efifb_framebuffer
 	virtaddr_t address;
 	size_t width;
 	size_t height;
+	size_t pitch;
 	uint32_t bpp;
+	uint32_t wc;
+	uint32_t hc;
 
 	uint32_t cursor_x;
 	uint32_t cursor_y;

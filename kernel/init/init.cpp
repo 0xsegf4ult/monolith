@@ -158,6 +158,7 @@ extern "C" void init()
 				framebuffer.address = (virtaddr_t)fb->address - mm::direct_mapping_offset;
 				framebuffer.width = fb->width;
 				framebuffer.height = fb->height;
+				framebuffer.pitch = fb->pitch;
 				framebuffer.bpp = fb->bpp;
 			}
 		}
