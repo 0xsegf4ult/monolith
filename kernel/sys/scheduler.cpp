@@ -14,9 +14,17 @@
 #include <lib/types.hpp>
 #include <init/init.hpp>
 
-static thread_t** idle_threads = nullptr;
-static thread_t* ready_list_head = nullptr;
-static thread_t* ready_list_tail = nullptr;
+struct sched_percpu_t
+{
+	thread_t* idle;
+	thread_t* ready_list_head;
+	thread_t* ready_list_tail;
+	size_t queue_entry_count;
+	spinlock_t lock;
+};
+
+static sched_percpu_t* sched_pcpu_data = nullptr;
+static size_t num_cpus = 0;
 
 void idle_thread_bsp_entry(void* arg)
 {
@@ -40,43 +48,94 @@ void idle_thread_ap_entry(void* arg)
 	}
 }
 
+sched_percpu_t* sched_find_most_loaded_queue()
+{
+	sched_percpu_t* maxq = nullptr;
+	size_t maxc = 0;
+
+	sched_percpu_t* start = sched_pcpu_data;
+	for(int i = 0; i < num_cpus; i++)
+	{
+		if(!start || !start->ready_list_head)
+			break;
+		
+		if(start->queue_entry_count > maxc)
+		{
+			maxc = start->queue_entry_count;
+			maxq = start;
+		}
+
+		start++;
+	}
+
+	return maxq;
+}
+
 void schedule()
 {
 	auto curcpu = smp_current_cpu()->id;
-	if(curcpu != 0)
-	{
-		return;
-	}
-
+	auto& sdata = sched_pcpu_data[curcpu];
 	auto* current_thread = smp_current_cpu()->get_current_thread();
-	if(!ready_list_head && current_thread->status == thread_status::running)
+	if(!sdata.ready_list_head && current_thread->status == thread_status::running && current_thread != sdata.idle)
 		return;
 
 	disable_interrupts();
-
-	auto* idle_thread = idle_threads[curcpu];
+	spinlock_acquire(sdata.lock);
 
 	if(current_thread->status == thread_status::running)
 	{
 		current_thread->status = thread_status::ready;
-		if(current_thread != idle_thread)
+		if(current_thread != sdata.idle)
 		{
-			ready_list_tail->next = current_thread;
-			ready_list_tail = current_thread;
+			sdata.ready_list_tail->next = current_thread;
+			sdata.ready_list_tail = current_thread;
+			sdata.queue_entry_count++;
 		}
 	}
 
 	thread_t* last = current_thread;	
 
-	thread_t* thr = ready_list_head;
+	thread_t* thr = sdata.ready_list_head;
 	if(!thr)
-		thr = idle_thread;
-	else
 	{
-		ready_list_head = thr->next;
+		spinlock_release(sdata.lock);
+		auto* steal_sdata = sched_find_most_loaded_queue();
+		if(steal_sdata)
+		{
+			spinlock_acquire(steal_sdata->lock);
+//			log::debug("sched_cpu{}: stealing task from other CPU queue", curcpu);
+	
+			thr = steal_sdata->ready_list_head;
+			if(!thr)
+			{
+//				log::debug("sched_cpu{}: task already stolen", curcpu);
+				thr = sdata.idle;
+			}
+			else
+			{	
+//				log::debug("sched_cpu{}: got task {}", curcpu, thr->name);
+				steal_sdata->ready_list_head = thr->next;
+				thr->next = nullptr;
+				if(steal_sdata->ready_list_tail == thr)
+					steal_sdata->ready_list_tail = steal_sdata->ready_list_head;
+
+				steal_sdata->queue_entry_count--;
+			}
+
+			spinlock_release(steal_sdata->lock);
+		}
+		else
+			thr = sdata.idle;
+	}
+	else
+	{	
+		sdata.ready_list_head = thr->next;
 		thr->next = nullptr;
-		if(ready_list_tail == thr)
-			ready_list_tail = ready_list_head;
+		if(sdata.ready_list_tail == thr)
+			sdata.ready_list_tail = sdata.ready_list_head;
+	
+		sdata.queue_entry_count--;
+		spinlock_release(sdata.lock);
 	}
 
 	thr->status = thread_status::running; 
@@ -98,7 +157,16 @@ void sched_unblock(thread_t* thr)
 
 void sched_init(uint32_t cpu_count)
 {
-	idle_threads = (thread_t**)kmalloc(sizeof(thread_t*) * cpu_count);
+	sched_pcpu_data = (sched_percpu_t*)kmalloc(sizeof(sched_percpu_t) * cpu_count);
+	for(uint32_t i = 0; i < cpu_count; i++)
+	{
+		sched_pcpu_data[i].ready_list_head = nullptr;
+		sched_pcpu_data[i].ready_list_tail = nullptr;
+		sched_pcpu_data[i].queue_entry_count = 0;
+		spinlock_init(sched_pcpu_data[i].lock);
+	}
+
+	num_cpus = cpu_count;
 }
 
 void sched_start_bsp()
@@ -128,7 +196,7 @@ void sched_start_bsp()
 
 	idle_thread->status = thread_status::running;
 
-	idle_threads[0] = idle_thread;
+	sched_pcpu_data[0].idle = idle_thread;
 
 	thread_t boot_thr;
 	arch_context_switch(&boot_thr, idle_thread);
@@ -161,7 +229,7 @@ void sched_start_ap()
 
 	idle_thread->status = thread_status::running;
 
-	idle_threads[smp_current_cpu()->id] = idle_thread;
+	sched_pcpu_data[smp_current_cpu()->id].idle = idle_thread;
 
 	thread_t boot_thr;
 	arch_context_switch(&boot_thr, idle_thread);
@@ -169,28 +237,21 @@ void sched_start_ap()
 
 void sched_add_ready(thread_t* thr)
 {
-	if(!ready_list_head)
+	auto& sdata = sched_pcpu_data[smp_current_cpu()->id];
+	thr->next = nullptr;
+
+	uint64_t rflags;
+	spinlock_acquire_irqsave(sdata.lock, rflags);
+	if(!sdata.ready_list_head)
 	{
-		ready_list_head = thr;
-		ready_list_tail = thr;
+		sdata.ready_list_head = thr;
+		sdata.ready_list_tail = thr;
 	}
 	else
 	{
-		ready_list_tail->next = thr;
-		ready_list_tail = thr;
+		sdata.ready_list_tail->next = thr;
+		sdata.ready_list_tail = thr;
 	}
-}
-
-void sched_dump_state()
-{
-	auto* current_thread = smp_current_cpu()->get_current_thread();
-	log::debug("SCHEDULER STATE: ");
-	generic_log("current: {}", current_thread->name);
-	generic_log("ready_list");
-	auto* r_cur = ready_list_head;
-	while(r_cur)
-	{
-		generic_log(" -> {}", r_cur->name);
-		r_cur = r_cur->next;
-	}
+	sdata.queue_entry_count++;
+	spinlock_release_irqsave(sdata.lock, rflags);
 }
