@@ -55,7 +55,7 @@ void pmm_initialize(mm::memory_map& memmap)
 		const auto& region = memmap.regions[i];
 		if(region.type == mm::mem_region::RegionType::Usable)
 			pmm_mark_range_free(region.begin, region.end);
-		else
+		else if(region.type == mm::mem_region::RegionType::Kernel || region.type == mm::mem_region::RegionType::Allocated)
 			physmem_used += ((region.end - region.begin) / 0x1000);
 	}
 
@@ -75,8 +75,8 @@ physaddr_t pmm_allocate()
 
 		int index = __builtin_ctzll(cur_word);
 		pmm_bitmap[i] &= ~(1ull << index);
-		physmem_available -= 4096;
-		physmem_used += 4096;
+		physmem_available--;
+		physmem_used++;
 
 		spinlock_release_irqsave(lock, rflags);
 		return (i * 64ull + index) * 4096ull;
@@ -100,4 +100,12 @@ void pmm_free(physaddr_t addr)
 	spinlock_release_irqsave(lock, rflags);
 }
 
+size_t pmm_free_pages_count()
+{
+	return physmem_available;
+}
 
+size_t pmm_used_pages_count()
+{
+	return physmem_used;
+}

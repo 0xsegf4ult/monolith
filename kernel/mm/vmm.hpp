@@ -11,6 +11,7 @@ struct memory_map;
 }
 
 void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr);
+void vmm_late_init();
 
 virtaddr_t vmalloc(size_t length, uint64_t flags = 0, void* arg = 0);
 void vmfree(virtaddr_t addr);

@@ -9,6 +9,9 @@
 #include <arch/x86_64/mmu.hpp>
 #include <arch/x86_64/smp.hpp>
 
+#include <fs/vfs.hpp>
+#include <fs/procfs/procfs.hpp>
+
 #include <sys/thread.hpp>
 
 #include <lib/klog.hpp>
@@ -60,6 +63,22 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 	}
 
 	kernel_address_space->switch_to();
+}
+
+ssize_t vmstat_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	format_to(string_span{(char*)buffer, length}, "free_pages: {}\nused_pages: {}", pmm_free_pages_count(), pmm_used_pages_count());
+	return length;
+}
+
+static vfs::fs_file_ops vmstat_fops = 
+{
+	.read = vmstat_read
+};
+
+void vmm_late_init()
+{
+	procfs_create("vmstat", &vmstat_fops);
 }
 
 virtaddr_t vmalloc(size_t length, uint64_t flags, void* arg)

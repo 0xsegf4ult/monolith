@@ -61,6 +61,47 @@ void procfs_mkdir(const char* path)
 	generic_fs_mkdir(parent.result, basename, 0755);
 }
 
+void procfs_create(const char* path, vfs::fs_file_ops* fops)
+{
+	if(!g_procfs)
+		return;
+
+	auto parent = vfs::lookup_at(g_procfs->root, path, LOOKUP_PARENT);
+
+	auto plen = string_length(path);
+	const char* basename = path;
+	for(size_t i = 0; i < plen - 1; i++)
+	{
+		if(path[i] == '/')
+			basename = &path[i + 1];
+	}
+	if(!basename)
+		return;
+
+	auto query = lookup_at(parent.result, basename, 0);
+	if(query.result)
+		return;
+
+	auto* inode = vnode_new(S_IFREG | S_IRUSR | S_IRGRP | S_IROTH);
+        inode->iops = parent.result->node->iops;
+	inode->fops = fops;
+	
+        auto* dirent = ventry_new(path, inode);
+        dirent->parent = parent.result;
+
+        mutex_lock(parent.result->node->lock);
+
+        if(parent.result->children)
+	{
+		parent.result->children->sibling_prev = dirent;
+                dirent->sibling_next = parent.result->children;
+	}
+
+        parent.result->children = dirent;
+
+        mutex_unlock(parent.result->node->lock);
+}
+
 void procfs_remove(const char* path)
 {
 	if(!g_procfs)
