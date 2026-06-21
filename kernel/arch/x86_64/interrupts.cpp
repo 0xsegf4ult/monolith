@@ -186,22 +186,9 @@ cpu_context_t* handle_gpf(cpu_context_t* ctx)
 	return ctx;
 }
 
-extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
+extern "C" void interrupt_handler(cpu_context_t* ctx)
 {
-	if(pf_counter >= 2)
-	{
-		panic("error while handling page fault");
-	}
-
-	if(ctx->interrupt_id == InterruptID::PageFault)
-	{
-		return handle_pagefault(ctx);
-	}
-	else if(ctx->interrupt_id == InterruptID::GPFault)
-	{
-		return handle_gpf(ctx);
-	}
-	else if(ctx->interrupt_id == 0x80)
+	if(ctx->interrupt_id == 0x80)
 	{
 		syscall_handler(ctx);
 	}
@@ -218,8 +205,25 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 		}
 	}
 	else
-		panic("unhandled interrupt {}", ctx->interrupt_id);
+		log::warn("unhandled interrupt {}", ctx->interrupt_id);
 
 	lapic::eoi();
-	return ctx;
 }
+
+extern "C" void exception_handler(cpu_context_t* ctx)
+{
+	if(pf_counter >= 2)
+	{
+		panic("error while handling page fault");
+	}
+
+	if(ctx->interrupt_id == InterruptID::PageFault)
+	{
+		handle_pagefault(ctx);
+	}
+	else if(ctx->interrupt_id == InterruptID::GPFault)
+	{
+		handle_gpf(ctx);
+	}
+}
+

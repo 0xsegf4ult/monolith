@@ -38,21 +38,39 @@
         .align 16
         pushq $0
         pushq $\intr
-        jmp __common_interrupt
+        jmp __common_exception
 .endm
 
 .macro interrupt_err intr
         .align 16
         pushq $\intr
-        jmp __common_interrupt
+        jmp __common_exception
 .endm
 
 .macro isr_insert intr
         .section .text
-        interrupt_no_err \intr
+	.align 16
+	pushq $0
+	pushq $\intr
+	jmp __common_interrupt
 .endm
 
 .section .text
+
+.extern exception_handler
+__common_exception:
+	push_all_registers
+
+	cld
+
+	movq %rsp, %rdi
+	movq %rsp, %rbp
+	call exception_handler
+
+	pop_all_registers
+	addq $16, %rsp
+
+	iretq
 
 .extern interrupt_handler
 __common_interrupt:
@@ -60,8 +78,8 @@ __common_interrupt:
 
 	cld
 	movq %rsp, %rdi
+	movq %rsp, %rbp
 	call interrupt_handler
-	movq %rax, %rsp
 
 	pop_all_registers
 	addq $16, %rsp
