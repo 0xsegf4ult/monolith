@@ -92,4 +92,24 @@ extern char* optarg;
 extern int optind, opterr, optopt;
 int getopt(int argc, char* const argv[], const char* optstring);
 
+inline int execv(const char*, char* const[])
+{
+	return -1;
+}
+
+inline int execve(const char*, char* const[], char* const[])
+{
+	return -1;
+}
+
+inline int execvp(const char*, char* const[])
+{
+	return -1;
+}
+
+inline pid_t fork(void)
+{
+	return 0;
+}
+
 #endif

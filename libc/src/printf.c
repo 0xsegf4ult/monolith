@@ -131,3 +131,13 @@ int sprintf(char* buffer, const char* fmt, ...)
 
 	return i;
 }
+
+int fprintf(FILE* file, const char* fmt, ...)
+{
+	return 0;
+}
+
+int vfprintf(FILE* file, const char* fmt, va_list)
+{
+	return 0;
+}
