@@ -49,7 +49,7 @@ void address_space::destroy()
 		kfree(last);
 	}
 
-	pmm_free(reinterpret_cast<physaddr_t>(root_pml4) - mm::direct_mapping_offset);
+	mmu_destroy(root_pml4);
 
 	mutex_unlock(lock);
 }

@@ -124,3 +124,42 @@ void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free)
 	if(do_pmm_free)
 		pmm_free(phys);
 }
+
+void mmu_destroy(page_table* root)
+{
+	// higher half is cloned into all spaces
+	for(int i = 0; i < 256; i++)
+	{
+		page_table* pml_entry = &root[i];
+		if(!(pml_entry->get_raw() & PTE_PRESENT))
+			continue;
+		
+		page_table* pdpt = (page_table*)(pml_entry->get() + mm::direct_mapping_offset);
+
+		for(int j = 0; j < 512; j++)
+		{
+			page_table* pdpt_entry = &pdpt[j];
+			if(!(pdpt_entry->get_raw() & PTE_PRESENT))
+				continue;
+
+			page_table* pd = (page_table*)(pdpt_entry->get() + mm::direct_mapping_offset);
+			for(int k = 0; k < 512; k++)
+			{
+				page_table* pd_entry = &pd[k];
+				if(!(pd_entry->get_raw() & PTE_PRESENT))
+					continue;
+
+				pmm_free(pd_entry->get());
+				*pd_entry = 0;
+			}
+
+			pmm_free(pdpt_entry->get());
+			*pdpt_entry = 0;	
+		}
+
+		pmm_free(pml_entry->get());
+		*pml_entry = 0;
+	}
+
+	pmm_free((physaddr_t)(root) - mm::direct_mapping_offset);
+}
