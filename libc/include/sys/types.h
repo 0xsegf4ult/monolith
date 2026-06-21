@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+typedef uint32_t dev_t;
 typedef uint32_t mode_t;
 typedef int32_t id_t;
 typedef id_t uid_t;

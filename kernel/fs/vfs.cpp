@@ -503,9 +503,12 @@ int stat(const char* path, stat_t* output)
 
 	auto* node = query.result->node;
 	
-	output->mode = node->mode;
-	output->nlinks = node->nlinks;
-	output->size = node->size;
+	output->st_dev = node->dev;
+	output->st_mode = node->mode;
+	output->st_nlink = node->nlinks;
+	output->st_uid = node->uid;
+	output->st_gid = node->gid;
+	output->st_size = node->size;
 
 	return 0;
 }
@@ -513,9 +516,12 @@ int stat(const char* path, stat_t* output)
 int fstat(int fd, stat_t* output)
 {
 	auto* node = context->open_files[fd].inode;
-	output->mode = node->mode;
-	output->nlinks = node->nlinks;
-	output->size = node->size;
+	output->st_dev = node->dev;
+	output->st_mode = node->mode;
+	output->st_nlink = node->nlinks;
+	output->st_uid = node->uid;
+	output->st_gid = node->gid;
+	output->st_size = node->size;
 	return 0;
 }
 

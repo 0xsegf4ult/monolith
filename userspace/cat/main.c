@@ -31,7 +31,7 @@ int main(int argc, const char** argv)
 			return -1;
 		}
 
-		if(S_ISDIR(stat_info.mode))
+		if(S_ISDIR(stat_info.st_mode))
 		{
 			printf("cat: %s: Is a directory", argv[1]);
 			return -1;
@@ -45,7 +45,6 @@ int main(int argc, const char** argv)
 		goto cleanup;
 	}
 	write(0, buffer, 0x1000);
-
 cleanup:
 	close(fd);
 	return 0;

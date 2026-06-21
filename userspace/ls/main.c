@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
 				struct stat f_stat;
 				int st_r = stat(pbuf, &f_stat);
 
-				mode_t mode = f_stat.mode;
+				mode_t mode = f_stat.st_mode;
 
 				char type = '-';
 				if(S_ISDIR(mode))
@@ -92,12 +92,14 @@ int main(int argc, char* argv[])
 					mode & S_IROTH ? 'r' : '-',
 					mode & S_IWOTH ? 'w' : '-',
 					mode & S_IXOTH ? 'x' : '-',
-					f_stat.nlinks,
-					f_stat.size, (const char*)d + sizeof(dirent_info));
+					f_stat.st_nlink,
+					f_stat.st_size, (const char*)d + sizeof(dirent_info));
 			}
 			else
+			{
 				printf(first ? "%s" : " %s", (const char*)d + sizeof(dirent_info));
-		
+			}
+
 			first = 0;
 		}
 

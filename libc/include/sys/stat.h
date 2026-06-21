@@ -43,9 +43,12 @@ typedef enum
 
 struct stat 
 {
-	mode_t mode;
-	uint32_t nlinks;
-	size_t size;
+	dev_t st_dev;
+	mode_t st_mode;
+	uint32_t st_nlink;
+	uid_t st_uid;
+	gid_t st_gid;
+	size_t st_size;
 };
 
 inline int stat(const char* path, struct stat* buffer)

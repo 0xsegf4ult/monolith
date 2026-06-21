@@ -1,5 +1,7 @@
 #include <fs/generic.hpp>
 #include <fs/vfs.hpp>
+#include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/smp.hpp>
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 #include <dev/block.hpp>
@@ -10,6 +12,8 @@
 #include <lib/types.hpp>
 
 #include <sys/err.hpp>
+#include <sys/thread.hpp>
+#include <sys/cred.hpp>
 
 using namespace vfs;
 
@@ -44,6 +48,13 @@ int generic_fs_create(ventry_t* parent, const char* path, mode_t mode)
 	auto* inode = vnode_new(S_IFREG | mode);
         inode->iops = parent->node->iops;
 	inode->fops = parent->node->fops;
+	
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr)
+	{
+		inode->uid = thr->cred.euid;
+		inode->gid = thr->cred.egid;
+	}
 
         auto* dirent = ventry_new(path, inode);
         dirent->parent = parent;
@@ -69,6 +80,13 @@ int generic_fs_mkdir(ventry_t* parent, const char* path, mode_t mode)
         inode->iops = parent->node->iops;
 	inode->fops = parent->node->fops;
 	inode->nlinks++;
+	
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr)
+	{
+		inode->uid = thr->cred.euid;
+		inode->gid = thr->cred.egid;
+	}
 
         auto* dirent = ventry_new(path, inode);
         dirent->parent = parent;
@@ -105,6 +123,13 @@ int generic_fs_mknod(ventry_t* parent, const char* path, mode_t mode, dev_t dev)
 	}
 
         inode->dev = dev;
+	
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr)
+	{
+		inode->uid = thr->cred.euid;
+		inode->gid = thr->cred.egid;
+	}
 
         auto* dirent = ventry_new(path, inode);
         dirent->parent = parent;

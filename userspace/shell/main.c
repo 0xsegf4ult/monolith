@@ -42,13 +42,13 @@ void execute()
 			return;
 		}
 
-		if(S_ISDIR(ex_stat.mode))
+		if(S_ISDIR(ex_stat.st_mode))
 		{
 			printf("\nsh: %s: Is a directory\n", buffer);
 			return;
 		}
 
-		if(S_ISREG(ex_stat.mode))
+		if(S_ISREG(ex_stat.st_mode))
 		{
 			printf("\n");
 			int s_res = spawn(argv);
@@ -82,7 +82,7 @@ void execute()
 			struct stat ex_stat;
 			int st_r = fstat(ex_fd, &ex_stat);
 			close(ex_fd);
-			if(st_r >= 0 && S_ISREG(ex_stat.mode))
+			if(st_r >= 0 && S_ISREG(ex_stat.st_mode))
 			{
 				printf("\n");
 				int s_res = spawnat(bindir, argv);

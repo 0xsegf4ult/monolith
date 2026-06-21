@@ -19,7 +19,7 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	mode_t mode = f_stat.mode;
+	mode_t mode = f_stat.st_mode;
 	char type = '-';
 	const char* typestr = "regular file";
 	if(S_ISDIR(mode))
@@ -48,9 +48,9 @@ int main(int argc, char* argv[])
 	       "Links: %d\n"
 	       "Access: (0%o/%c%c%c%c%c%c%c%c%c%c) Uid: (%d) Gid: (%d)\n",
 		argv[1],
-		f_stat.size,
+		f_stat.st_size,
 		typestr,
-		f_stat.nlinks,
+		f_stat.st_nlink,
 		mode & 0777,
 	       	type,
 		mode & S_IRUSR ? 'r' : '-',
@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
 		mode & S_IROTH ? 'r' : '-',
 		mode & S_IWOTH ? 'w' : '-',
 		mode & S_IXOTH ? 'x' : '-',
-		0, 0);
+		f_stat.st_uid, f_stat.st_gid);
 
 	return 0;
 }

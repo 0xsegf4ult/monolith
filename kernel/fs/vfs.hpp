@@ -69,11 +69,14 @@ struct lookup_result
 lookup_result lookup_at(ventry_t* parent, const char* path, int flags);
 lookup_result lookup(const char* path, int flags);
 
-struct stat_t
+struct stat_t 
 {
-	mode_t mode;
-	uint32_t nlinks;
-	size_t size;
+	dev_t st_dev;
+	mode_t st_mode;
+	uint32_t st_nlink;
+	uid_t st_uid;
+	gid_t st_gid;
+	size_t st_size;
 };
 
 struct dirent_info
@@ -84,7 +87,22 @@ struct dirent_info
 
 enum OPEN_FLAGS
 {
-	O_CREAT = 1
+	O_NONBLOCK = 0x0001,
+	O_NDELAY = O_NONBLOCK,
+	O_CLOEXEC = 0x0002,
+	O_RDONLY = 0x0004,
+	O_WRONLY = 0x0008,
+	O_RDWR = O_RDONLY | O_WRONLY,
+	O_APPEND = 0x0010,
+	O_CREAT = 0x0020,
+	O_DSYNC = 0x0040,
+	O_EXCL = 0x0080,
+	O_NOCTTY = 0x0100,
+	O_RSYNC = 0x0200,
+	O_SYNC = 0x0400,
+	O_TRUNC = 0x0800,
+	O_CLOFORK = 0x1000,
+	O_ACCMODE = O_RDONLY | O_WRONLY | O_RDWR
 };
 
 int open(const char* path, int flags = 0);

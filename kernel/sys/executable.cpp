@@ -29,13 +29,13 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 
 	vfs::stat_t ex_stat;
 	vfs::fstat(exec_fd, &ex_stat);
-	if(!S_ISREG(ex_stat.mode))
+	if(!S_ISREG(ex_stat.st_mode))
 	{
 		vfs::close(exec_fd);
 		return -EACCES;
 	}
 
-	if(ex_stat.size < sizeof(Elf64_Ehdr))
+	if(ex_stat.st_size < sizeof(Elf64_Ehdr))
 	{
 		vfs::close(exec_fd);
 		return -ENOEXEC;

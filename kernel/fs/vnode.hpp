@@ -20,6 +20,7 @@ struct vnode_t
 	uid_t uid;
 	gid_t gid;
 	dev_t dev;
+
 	uint32_t nlinks;
 	atomic_uint ref;
 
