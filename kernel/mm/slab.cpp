@@ -1,5 +1,6 @@
 #include <mm/slab.hpp>
 #include <mm/pmm.hpp>
+#include <mm/vmm.hpp>
 #include <mm/layout.hpp>
 
 #include <lib/kstd.hpp>
@@ -141,8 +142,12 @@ void* kmalloc(size_t size)
 			return slab_alloc(km_caches[i]);
 	}
 
-	panic("kmalloc: allocation too large");
-	return nullptr;
+	// FIXME: no way to kfree, add some sort of tracking
+	auto virt = vmalloc(size, vm_write | vm_present);
+	if(!virt)
+		return nullptr;
+
+	return (void*)virt;
 }
 
 void kfree(void* addr)

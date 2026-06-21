@@ -24,11 +24,11 @@ struct pcie_device
 	uint8_t sub_bus() const;
 	bool has_multiple_functions() const;
 
-	uint64_t read_bar() const;
-	size_t get_bar_size();
+	uint64_t read_bar(uint32_t bir) const;
+	size_t get_bar_size(uint32_t bir);
 
-	uint32_t read_bar32() const;
-	size_t get_bar32_size();
+	uint32_t read_bar32(uint32_t bir) const;
+	size_t get_bar32_size(uint32_t bir);
 };
 
 namespace pcie

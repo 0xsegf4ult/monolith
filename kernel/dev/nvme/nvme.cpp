@@ -62,7 +62,6 @@ struct nvme_device
 	template <typename T>
 	void write_register(uint32_t offset, T value)
 	{
-		log::debug("nvme_write offset {:#x}", offset);
 		*reinterpret_cast<T*>(base_address + offset) = value;
 	}
 };
@@ -171,12 +170,12 @@ void nvme_init_controller(pcie_device& dev)
 	
 	log::debug("nvme0: MSI-X using BIR {}, table at {:#x} size {:#x}", msix_reg1 & 0b111, (msix_reg1 & ~(0b111)), msix_mctr & 0b11111111111); 
 
-	auto base = device->pcie.read_bar();
-	auto bar_size = device->pcie.get_bar_size();
+	auto base = device->pcie.read_bar(0);
+	auto bar_size = device->pcie.get_bar_size(0);
 	log::debug("nvme0: BAR {:#x} size {:#x}", base, bar_size);
 
-	device->base_address = base + mm::direct_mapping_offset;
-	vm_map_range(base, device->base_address, bar_size, vm_write | vm_mmio);
+	device->base_address = vmalloc(bar_size, vm_write | vm_mmio, &base);
+	log::debug("nvme0: mapped BAR to {:#x}", device->base_address);
 
 	auto ctrl_cap = device->read_register<nvme_capability>(NVME_REGISTER_CAPABILITY);
 	

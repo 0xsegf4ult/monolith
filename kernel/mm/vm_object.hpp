@@ -10,7 +10,8 @@ enum vm_flags : uint64_t
 	vm_exec = 4,
 	vm_user = 8,
 	vm_mmio = 16,
-	vm_swapped = 32
+	vm_uc = 32,
+	vm_swapped = 64,
 };
 
 enum pf_flags : uint64_t

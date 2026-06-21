@@ -30,7 +30,7 @@ extern "C"
 void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 {	
 	kernel_address_space = (address_space*)kmalloc(sizeof(address_space));
-	kernel_address_space->init(0xffff800000001000);
+	kernel_address_space->init(0xffffc00000000000);
 
 	auto text_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_text_start));
 	auto text_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_text_end) - reinterpret_cast<virtaddr_t>(&_text_start));
@@ -40,11 +40,11 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 	auto databss_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_bss_end) - reinterpret_cast<virtaddr_t>(&_data_start));
 
 	log::info("mm: mapping kernel .text [{:#x} - {:#x}] R-X", text_start, text_start + text_length);
-	kernel_address_space->map_range(text_start - mm::kernel_mapping_offset + kload_addr, text_start, text_length, vm_exec);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, text_start - mm::kernel_mapping_offset + kload_addr, text_start, text_length, vm_flags_to_x86(vm_exec | vm_present));
 	log::info("mm: mapping kernel .rodata [{:#x} - {:#x}] R--", rodata_start, rodata_start + rodata_length);
-	kernel_address_space->map_range(rodata_start - mm::kernel_mapping_offset + kload_addr, rodata_start, rodata_length);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, rodata_start - mm::kernel_mapping_offset + kload_addr, rodata_start, rodata_length, vm_flags_to_x86(vm_present));
 	log::info("mm: mapping kernel .data .bss [{:#x} - {:#x}] RW-", databss_start, databss_start + databss_length);
-	kernel_address_space->map_range(databss_start - mm::kernel_mapping_offset + kload_addr, databss_start, databss_length, vm_write);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, databss_start - mm::kernel_mapping_offset + kload_addr, databss_start, databss_length, vm_flags_to_x86(vm_write | vm_present));
 
 	log::info("mm: HHDM mapping physical memory RW-");
 	for(size_t i = 0; i < memmap.num_regions; i++)
@@ -56,15 +56,15 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 
 		auto begin = mm::page_align_down(region.begin);
 		auto length = mm::page_align(region.end) - begin;
-		kernel_address_space->map_range(begin, begin + mm::direct_mapping_offset, length, vm_write);
+		mmu_map_range(get_kernel_vmspace()->root_pml4, begin, begin + mm::direct_mapping_offset, length, vm_flags_to_x86(vm_write | vm_present));
 	}
 
 	kernel_address_space->switch_to();
 }
 
-virtaddr_t vmalloc(size_t length, uint64_t flags)
+virtaddr_t vmalloc(size_t length, uint64_t flags, void* arg)
 {
-	return kernel_address_space->alloc(length, flags | vm_present);
+	return kernel_address_space->alloc(length, flags | vm_present, arg);
 }
 
 void vmfree(virtaddr_t addr)

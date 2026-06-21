@@ -2,6 +2,7 @@
 #include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/pic.hpp>
 #include <arch/x86_64/serial.hpp>
+#include <arch/x86_64/mmu.hpp>
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/timer.hpp>
 
@@ -207,7 +208,7 @@ void kernel_main()
 	pcie::enumerate();
 	
 	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
-	vm_map_range(reinterpret_cast<physaddr_t>(initramfs_address) - mm::direct_mapping_offset, reinterpret_cast<virtaddr_t>(initramfs_address), initramfs_size);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, (physaddr_t)initramfs_address - mm::direct_mapping_offset, (virtaddr_t)initramfs_address, initramfs_size, vm_flags_to_x86(vm_present));
 	initramfs_unpack(initramfs_address, initramfs_size);
 
 	const char* argv[2] = {"/bin/init", nullptr};

@@ -68,6 +68,11 @@ void remove_irq_handler(uint8_t irq)
 
 static int pf_counter = 0;
 static char trace_buf[64];
+	struct stack_frame
+	{
+		stack_frame* rbp;
+		uint64_t rip;
+	};
 
 cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 {
@@ -127,11 +132,6 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 	format_to(string_span{&trace_buf[0], 64}, "RIP: {:#x} mem: {:#x}", ctx->rip, cr2);
 	early_serial_write(trace_buf);
 
-	struct stack_frame
-	{
-		stack_frame* rbp;
-		uint64_t rip;
-	};
 
 	early_serial_write("Stack trace:\n");
 
@@ -150,9 +150,40 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 	return ctx;
 }
 
-void handle_gpf(cpu_context_t* ctx)
+cpu_context_t* handle_gpf(cpu_context_t* ctx)
 {
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr && thr->pid > 0)
+	{
+	early_serial_write("Stack trace:\n");
+
+	stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rbp);
+	for(uint32_t frame = 0; stk && frame < 32; frame++)
+	{
+		format_to(string_span{&trace_buf[0], 64}, "{:#x}\n", stk->rip);
+		early_serial_write(trace_buf);
+		if(stk->rip == 0x0)
+			break;
+
+		stk = stk->rbp;
+	}
+		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
+		if(thr->tty)
+		{
+			const char* msg = "Segmentation fault\n";
+			tty_write(thr->tty, (byte*)msg, string_length(msg));
+		}
+
+		if(thr->parent && thr->parent->status == thread_status::sleeping)
+			sched_unblock(thr->parent);
+
+		thread_zombify(thr);
+		sched_block(thread_status::terminated);
+		return ctx;
+	}
+
 	panic("general protection fault at RIP {:#x} {:b}", ctx->rip, ctx->error_code);
+	return ctx;
 }
 
 extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
@@ -168,7 +199,7 @@ extern "C" cpu_context_t* interrupt_handler(cpu_context_t* ctx)
 	}
 	else if(ctx->interrupt_id == InterruptID::GPFault)
 	{
-		handle_gpf(ctx);
+		return handle_gpf(ctx);
 	}
 	else if(ctx->interrupt_id == 0x80)
 	{

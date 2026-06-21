@@ -12,7 +12,7 @@ struct memory_map;
 
 void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr);
 
-virtaddr_t vmalloc(size_t length, uint64_t flags = 0);
+virtaddr_t vmalloc(size_t length, uint64_t flags = 0, void* arg = 0);
 void vmfree(virtaddr_t addr);
 int vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
 int vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0);

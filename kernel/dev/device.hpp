@@ -5,6 +5,7 @@
 struct dev_t
 {
 public:
+	constexpr dev_t() : _raw{0} {}
 	constexpr dev_t(uint32_t raw) : _raw{raw} {}
 	constexpr dev_t(uint32_t major, uint16_t minor) : _raw{major << 20 | (minor & 0xFFF)} {}
 

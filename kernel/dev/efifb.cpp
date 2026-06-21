@@ -2,8 +2,11 @@
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 
+#include <arch/x86_64/mmu.hpp>
+
 #include <fs/vfs.hpp>
 
+#include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 
@@ -29,7 +32,7 @@ void efifb_init(efifb_framebuffer framebuffer)
 	fb.bpp = (fb.bpp + 7) / 8;
 
 	//FIXME: map as WC
-	vm_map_range(fb.address, fb.address + mm::direct_mapping_offset, fb.height * fb.pitch, vm_write);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, fb.address, fb.address + mm::direct_mapping_offset, fb.height * fb.pitch, vm_flags_to_x86(vm_write | vm_present));
 	fb.address += mm::direct_mapping_offset;
 		
 	fb.cursor_x = 0;

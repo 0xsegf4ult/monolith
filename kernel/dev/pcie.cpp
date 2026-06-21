@@ -3,6 +3,8 @@
 #include <dev/nvme/nvme.hpp>
 #include <dev/net/e1000/e1000.hpp>
 
+#include <arch/x86_64/mmu.hpp>
+#include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 #include <lib/types.hpp>
@@ -16,7 +18,7 @@ static virtaddr_t base_address = 0;
 void set_base(physaddr_t base)
 {
 	base_address = base + mm::direct_mapping_offset;
-	vm_map_range(base, base_address, 256 * 8 * 8 * 4096, vm_write | vm_mmio);
+	mmu_map_range(get_kernel_vmspace()->root_pml4, base, base_address, 256 * 8 * 8 * 4096, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
 }
 
 }
@@ -86,41 +88,39 @@ bool pcie_device::has_multiple_functions() const
 	return sub_bus();
 }
 
-uint64_t pcie_device::read_bar() const
+uint64_t pcie_device::read_bar(uint32_t bir) const
 {
-	return read_config64(0x10) & 0xFFFFFFFFFFFFFFF0;
+	return read_config64(0x10 + (bir * 4)) & 0xFFFFFFFFFFFFFFF0;
 }
 
-size_t pcie_device::get_bar_size()
+size_t pcie_device::get_bar_size(uint32_t bir)
 {
-	auto old_value = read_bar();
+	auto old_value = read_bar(bir);
 
-	write_config64(0x10, 0xFFFFFFFFFFFFFFFF);
+	write_config64(0x10 + (bir * 4), 0xFFFFFFFFFFFFFFFF);
 
-	auto val = read_bar();
-
-	log::debug("readback lines {:#x}", val);
+	auto val = read_bar(bir);
 
 	size_t len = ~val;
 
-	write_config64(0x10, old_value); 
+	write_config64(0x10 + (bir * 4), old_value); 
 
 	return len + 1;
 }
 
-uint32_t pcie_device::read_bar32() const
+uint32_t pcie_device::read_bar32(uint32_t bir) const
 {
-	return read_config32(0x10) & 0xFFFFFFF0;
+	return read_config32(0x10 + (bir * 4)) & 0xFFFFFFF0;
 }
 
-size_t pcie_device::get_bar32_size()
+size_t pcie_device::get_bar32_size(uint32_t bir)
 {
-	auto old_value = read_bar32();
-	write_config32(0x10, 0xFFFFFFFF);
+	auto old_value = read_bar32(bir);
+	write_config32(0x10 + (bir * 4), 0xFFFFFFFF);
 
-	auto val = read_bar32();
+	auto val = read_bar32(bir);
 	uint32_t len = ~val;
-	write_config32(0x10, old_value);
+	write_config32(0x10 + (bir * 4), old_value);
 	return len + 1;
 }
 
@@ -131,7 +131,7 @@ void device_dispatch_driver(pcie_device& dev)
 {
 	if(dev.class_code() == 1 && dev.subclass_code() == 8)
 		nvme_init_controller(dev);
-	if(dev.class_code() == 2 && dev.subclass_code() == 0)
+	else if(dev.class_code() == 2 && dev.subclass_code() == 0)
 	{
 		if(dev.vendor_id() == 0x8086 && dev.device_id() == 0x10d3)
 			e1000_init(dev);

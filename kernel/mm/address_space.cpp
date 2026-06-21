@@ -61,6 +61,8 @@ void address_space::switch_to()
 
 virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 {
+	length = mm::page_align(length);
+
 	mutex_lock(lock);
 	
 	//log::debug("vmalloc {:#x} bytes", length);
@@ -70,7 +72,9 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 	virtaddr_t alloc_base = 0;
 	
 	if(!objects)
+	{
 		alloc_base = base_addr;
+	}
 
 	while(cur)
 	{
@@ -81,10 +85,14 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 			break;
 		}
 
+		if(cur->next == nullptr)
+		{
+			alloc_base = cur->base + cur->length;
+		}
+
 		prev = cur;
 		cur = cur->next;	
 	}
-
 
 	if(!alloc_base)
 	{
@@ -109,14 +117,22 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 		prev->next = range;		
 	}
 
+	physaddr_t phys = vm_allocate;
+	if(flags & vm_mmio)
+	{
+		if(!arg)
+			return 0;
+		phys = *(physaddr_t*)arg;
+	}
+
 	while(length)
 	{
-		physaddr_t phys = vm_allocate;
-		if(flags & vm_present)
+		if(!(flags & vm_mmio) && (flags & vm_present))
 			phys = pmm_allocate();
-	
+
 		mmu_map(root_pml4, phys, alloc_base, vm_flags_to_x86(flags));
-	       	alloc_base += 0x1000;	
+		phys += 0x1000;
+		alloc_base += 0x1000;	
 
 		if(length < 0x1000)
 			length = 0;
@@ -130,6 +146,8 @@ virtaddr_t address_space::alloc(size_t length, uint64_t flags, void* arg)
 
 virtaddr_t address_space::alloc_placed(virtaddr_t base, size_t length, uint64_t flags, void* arg)
 {
+	length = mm::page_align(length);
+	
 	//log::debug("vmalloc_placed {:#x}", base);
 	if(base < 0x1000)
 		return 0;
@@ -206,6 +224,7 @@ physaddr_t address_space::get_mapping(virtaddr_t virt, uint64_t* flags)
 
 void address_space::free(virtaddr_t addr)
 {
+	//log::debug("vm_free: {:#x}", addr);
 	mutex_lock(lock);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;
@@ -260,7 +279,8 @@ int address_space::map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
 
 int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
 {
-	//log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
+	length = mm::page_align(length);
+//	log::debug("vm_map_range {:#x} - {:#x}", virt, virt + length);
 	
 	flags |= vm_present;
 	if(reserve_range(virt, length, flags) == 0)
@@ -276,6 +296,7 @@ int address_space::map_range(physaddr_t phys, virtaddr_t virt, size_t length, ui
 
 int address_space::reserve_range(virtaddr_t base, size_t length, uint64_t flags)
 {
+	length = mm::page_align(length);
 	mutex_lock(lock);
 	vm_object* prev = nullptr;
 	vm_object* cur = objects;

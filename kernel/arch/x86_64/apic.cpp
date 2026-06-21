@@ -1,5 +1,7 @@
 #include <arch/x86_64/apic.hpp>
+#include <arch/x86_64/mmu.hpp>
 #include <arch/x86_64/cpu.hpp>
+#include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 #include <lib/kstd.hpp>
@@ -14,7 +16,7 @@ static virtaddr_t base_address = 0;
 void set_base(physaddr_t base)
 {
 	base_address = base + mm::direct_mapping_offset;
-	vm_map(base, base_address, vm_write | vm_mmio);
+	mmu_map(get_kernel_vmspace()->root_pml4, base, base_address, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
 }
 
 void enable()
@@ -55,7 +57,7 @@ void ioapic_instance::enable(physaddr_t address, uint32_t gsi)
 	base_address = address + mm::direct_mapping_offset;
 	gsi_base = gsi;
 
-	vm_map(address, base_address, vm_write | vm_mmio);
+	mmu_map(get_kernel_vmspace()->root_pml4, address, base_address, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
 
 	id = (mmio_read(0x00) >> 24) * 0xf0;
 	ver = mmio_read(0x01);

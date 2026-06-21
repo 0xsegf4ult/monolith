@@ -93,6 +93,8 @@ constexpr PTEBits vm_flags_to_x86(uint64_t flags)
 		result |= PTE_USER;
 	if(flags & vm_mmio)
 		result |= PTE_CACHE_DISABLE;
+	if(flags & vm_uc)
+		result |= PTE_CACHE_DISABLE;
 
 	return PTEBits{result};
 }

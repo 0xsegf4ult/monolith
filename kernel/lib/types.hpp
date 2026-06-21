@@ -122,7 +122,7 @@ struct string_span
 {
 public:
         using char_type = char;
-        using size_type = ptrdiff_t;
+        using size_type = size_t;
         using reference = char_type&;
         using const_reference = const char_type&;
         using pointer = char_type*;
