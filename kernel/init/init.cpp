@@ -9,8 +9,10 @@
 #include <dev/efifb.hpp>
 #include <dev/pcie.hpp>
 #include <dev/ps2.hpp>
+#include <dev/pseudo.hpp>
 #include <dev/tty.hpp>
 #include <dev/rtc.hpp>
+
 
 #include <fs/procfs/procfs.hpp>
 #include <fs/vfs.hpp>
@@ -192,6 +194,8 @@ extern "C" void init()
 
 void kernel_main()
 {
+	pseudo_init();
+
 	rtc_init();
 	auto time = rtc_read();
 	time_set_boottime(time);
