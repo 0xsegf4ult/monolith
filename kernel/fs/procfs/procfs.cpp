@@ -3,7 +3,9 @@
 #include <fs/vfs.hpp>
 #include <mm/slab.hpp>
 
+#include <lib/kstd.hpp>
 #include <lib/types.hpp>
+#include <sys/thread.hpp>
 
 using namespace vfs;
 
@@ -61,7 +63,7 @@ void procfs_mkdir(const char* path)
 	generic_fs_mkdir(parent.result, basename, 0755);
 }
 
-void procfs_create(const char* path, vfs::fs_file_ops* fops)
+void procfs_create(const char* path, vfs::fs_file_ops* fops, void* priv_data)
 {
 	if(!g_procfs)
 		return;
@@ -85,8 +87,9 @@ void procfs_create(const char* path, vfs::fs_file_ops* fops)
 	auto* inode = vnode_new(S_IFREG | S_IRUSR | S_IRGRP | S_IROTH);
         inode->iops = parent.result->node->iops;
 	inode->fops = fops;
-	
-        auto* dirent = ventry_new(path, inode);
+	inode->data = priv_data;
+
+        auto* dirent = ventry_new(basename, inode);
         dirent->parent = parent.result;
 
         mutex_lock(parent.result->node->lock);
@@ -118,12 +121,18 @@ void procfs_remove(const char* path)
 		
 	}
 
+	if(dentry->parent && dentry->parent->node)
+	{
+		dentry->parent->node->nlinks--;
+	}
+
 	kfree(dentry->node);
 	dentry->node = nullptr;
 
 	if(dentry->parent && dentry->parent->children == dentry)
 	{
-		dentry->sibling_next->sibling_prev = nullptr;
+		if(dentry->sibling_next)
+			dentry->sibling_next->sibling_prev = nullptr;
 		dentry->parent->children = dentry->sibling_next;
 	}
 	else if(dentry->sibling_prev)
@@ -134,4 +143,60 @@ void procfs_remove(const char* path)
 	ventry_put(dentry);
 
 	return;
+}
+
+const char* get_status_name(thread_status status)
+{
+	switch(status)
+	{
+	case thread_status::ready:
+		return "I (idle)";
+	case thread_status::running:
+		return "R (running)";
+	case thread_status::sleeping:
+		return "S (sleeping)";
+	case thread_status::terminated:
+		return "Z (zombie)";
+	default:
+		return "?";
+	}
+}
+
+ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	thread_t* target = (thread_t*)file->inode->data;
+	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nUid: {}\nGid: {}\n",
+		target->name,
+		get_status_name(target->status),
+		target->pid,
+		target->cred.uid,
+		target->cred.gid
+	);		
+	return length;
+}
+
+static vfs::fs_file_ops proc_status_fops =
+{
+	.read = read_proc_status
+};
+
+void procfs_register_thread(thread_t* thr)
+{
+	char str_buf[64];
+	format_to(string_span{&str_buf[0], 64}, "{}", thr->pid);
+
+	procfs_mkdir(str_buf);
+	
+	format_to(string_span{&str_buf[0], 64}, "{}/status", thr->pid);
+
+	procfs_create(str_buf, &proc_status_fops, (void*)thr);
+}
+
+void procfs_unregister_thread(thread_t* thr)
+{
+	char str_buf[64];
+	format_to(string_span{&str_buf[0], 64}, "{}/status", thr->pid);
+	procfs_remove(str_buf);
+	format_to(string_span{&str_buf[0], 64}, "{}", thr->pid);
+	procfs_remove(str_buf);
 }

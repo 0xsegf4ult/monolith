@@ -77,9 +77,7 @@ thread_t* create_thread(const char* name, const char** argv, bool is_user)
 	thread->tty = nullptr;
 	thread->return_status = 0;
 
-	char str_buf[16];
-	format_to(string_span{&str_buf[0], 16}, "{}", thread->pid);
-	procfs_mkdir(str_buf);
+	procfs_register_thread(thread);
 
 	for(int i = 0; i < 32; i++)
 		thread->open_files[i] = -1;
@@ -142,9 +140,7 @@ void thread_zombify(thread_t* thr)
 
 void destroy_thread(thread_t* thr)
 {
-	char str_buf[16];
-	format_to(string_span{&str_buf[0], 16}, "{}", thr->pid);
-	procfs_remove(str_buf);
+	procfs_unregister_thread(thr);
 	vmfree(thr->rsp0_top - kernel_stack_size + 56);
 	kfree(thr);
 }

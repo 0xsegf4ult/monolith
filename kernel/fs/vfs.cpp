@@ -172,7 +172,8 @@ int unlink(const char* path)
 
 	if(dentry->parent && dentry->parent->children == dentry)
 	{
-		dentry->sibling_next->sibling_prev = nullptr;
+		if(dentry->sibling_next)
+			dentry->sibling_next->sibling_prev = nullptr;
 		dentry->parent->children = dentry->sibling_next;
 	}
 	else if(dentry->sibling_prev)
