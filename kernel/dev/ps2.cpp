@@ -100,6 +100,132 @@ constexpr char scancode_row_4[] =
 	'/'
 };
 
+constexpr char regular_scancodes[] =
+{
+	0,
+	0x1b, // ESC
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'0',
+	'-',
+	'=',
+	0x7f, // DEL
+	'\t',
+	'q',
+	'w',
+	'e',
+	'r',
+	't',
+	'y',
+	'u',
+	'i',
+	'o',
+	'p',
+	'[',
+	']',
+	'\n',
+	0,
+	'a',
+	's',
+	'd',
+	'f',
+	'g',
+	'h',
+	'j',
+	'k',
+	'l',
+	';',
+	'\'',
+	'`',
+	0,
+	'\\',
+	'z',
+	'x',
+	'c',
+	'v',
+	'b',
+	'n',
+	'm',
+	',',
+	'.',
+	'/',
+	0,
+	0,
+	0,
+	' '
+};
+
+constexpr char shifted_scancodes[] = 
+{
+	0,
+	0x1b,
+	'!',
+	'@',
+	'#',
+	'$',
+	'%',
+	'^',
+	'&',
+	'*',
+	'(',
+	')',
+	'_',
+	'+',
+	0x7f,
+	0,
+	'Q',
+	'W',
+	'E',
+	'R',
+	'T',
+	'Y',
+	'U',
+	'I',
+	'O',
+	'P',
+	'{',
+	'}',
+	'\n',
+	0,
+	'A',
+	'S',
+	'D',
+	'F',
+	'G',
+	'H',
+	'J',
+	'K',
+	'L',
+	':',
+	'"',
+	'~',
+	0,
+	'|',
+	'Z',
+	'X',
+	'C',
+	'V',
+	'B',
+	'N',
+	'M',
+	'<',
+	'>',
+	'?',
+	0,
+	0,
+	0,
+	' '
+};
+
+static uint32_t keyboard0_mod = 0; 
+
 void interrupt_handler()
 {
 	auto scancode = io::inb(0x60);
@@ -107,9 +233,41 @@ void interrupt_handler()
 	bool release_flag = scancode & 0x80;
 	scancode = scancode & 0x7f;
 
+	if(scancode == 0x2a || scancode == 0x36)
+	{
+		if(release_flag)
+			keyboard0_mod &= ~(KBD_MOD_SHIFT);
+		else
+			keyboard0_mod |= KBD_MOD_SHIFT;
+	}
+
+	if(scancode == 0x1d)
+	{
+		if(release_flag)
+			keyboard0_mod &= ~(KBD_MOD_CTRL);
+		else
+			keyboard0_mod |= KBD_MOD_CTRL;
+	}
+
+	bool shift = keyboard0_mod & KBD_MOD_SHIFT;
+	bool ctrl = keyboard0_mod & KBD_MOD_CTRL;
+	bool alt = keyboard0_mod & KBD_MOD_ALT;
+
 	if(cur_tty && !release_flag)
 	{
-		if(scancode >= 0x02 && scancode <= 0x0e)
+
+		const char* reg_tbl = shift ? &shifted_scancodes[0] : &regular_scancodes[0];
+		if(scancode == 0x2e && ctrl)
+		{
+			tty_consume(cur_tty, 0x03);
+			return;
+		}	
+
+		if(scancode <= 0x39 && reg_tbl[scancode])
+			tty_consume(cur_tty, reg_tbl[scancode]);
+
+
+		/*
 			tty_consume(cur_tty, scancode_row_1[scancode - 0x02]);
 		else if(scancode >= 0x10 && scancode <= 0x1c)
 			tty_consume(cur_tty, scancode_row_2[scancode - 0x10]);
@@ -118,7 +276,7 @@ void interrupt_handler()
 		else if(scancode >= 0x2b && scancode <= 0x35)
 			tty_consume(cur_tty, scancode_row_4[scancode - 0x2b]);
 		else if(scancode == 0x39)
-			tty_consume(cur_tty, ' ');
+			tty_consume(cur_tty, ' ');*/
 	}
 }
 

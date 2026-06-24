@@ -69,6 +69,8 @@ void efifb_check_scroll()
 
 void efifb_putchar(char c)
 {
+	bool no_advance = false;
+
 	if(c == '\r')
 	{
 		fb.cursor_x = 0;
@@ -82,10 +84,13 @@ void efifb_putchar(char c)
 		efifb_check_scroll();
 		return;
 	}
-	else if(c == '\b')
+	else if(c == 0x7f)
 	{
 		if(fb.cursor_x >= 1)
+		{
 			fb.cursor_x--;
+			no_advance = true;
+		}
 
 		c = ' ';
 	}
@@ -107,7 +112,8 @@ void efifb_putchar(char c)
 		ptr = (uint32_t*)((virtaddr_t)(ptr) + fb.pitch);
 	}
 
-	fb.cursor_x++;
+	if(!no_advance)
+		fb.cursor_x++;
 	efifb_check_scroll();
 }
 

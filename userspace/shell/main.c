@@ -122,7 +122,7 @@ int main()
 			if(data >= 32 && data <= 126 && b_count < 4095)
 				buffer[b_count++] = data;
 
-			if(data == '\b' && b_count)
+			if(data == 0x7f && b_count)
 			{
 				buffer[b_count] = '\0';
 				b_count--;
