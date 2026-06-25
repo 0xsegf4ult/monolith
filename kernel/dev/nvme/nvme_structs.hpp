@@ -81,7 +81,26 @@ union __attribute__((packed)) nvme_status
 
 enum NVME_ADMIN_OPCODE
 {
-        NVME_ADMIN_OP_IDENTIFY = 0x6
+	NVME_ADMIN_OP_DELETE_SQ   = 0x0,
+	NVME_ADMIN_OP_CREATE_SQ   = 0x1,
+	NVME_ADMIN_OP_GET_LOG	  = 0x2,
+	NVME_ADMIN_OP_DELETE_CQ   = 0x4,
+	NVME_ADMIN_OP_CREATE_CQ	  = 0x5,
+        NVME_ADMIN_OP_IDENTIFY    = 0x6,
+	NVME_ADMIN_OP_GET_FEATURE = 0x9,
+	NVME_ADMIN_OP_SET_FEATURE = 0xA
+};
+
+enum NVME_OPCODE
+{
+	NVME_OP_FLUSH	    = 0x00,
+	NVME_OP_WRITE	    = 0x01,
+	NVME_OP_READ	    = 0x02,
+	NVME_OP_WRITE_UC    = 0x04,
+	NVME_OP_COMPARE	    = 0x05,
+	NVME_OP_WRITE_ZERO  = 0x08,
+	NVME_OP_CANCEL	    = 0x18,
+	NVME_OP_COPY	    = 0x19
 };
 
 struct __attribute__((packed)) nvme_cmd_header
@@ -106,7 +125,6 @@ struct __attribute__((packed)) nvme_cmd
 
         union
         {
-
                 struct __attribute__((packed))
                 {
                         uint32_t cmd_dword_10;
@@ -116,6 +134,29 @@ struct __attribute__((packed)) nvme_cmd
                         uint32_t cmd_dword_14;
                         uint32_t cmd_dword_15;
                 } dwords;
+
+		struct __attribute__((packed))
+		{
+			uint16_t qid;
+			uint16_t qsize;
+			bool phys_contig : 1;
+			uint8_t qprio : 2;
+			uint32_t _reserved_0 : 13;
+			uint16_t cqid;
+
+			uint16_t nvmsetid;
+			uint16_t _reserved_1;
+		} create_io_sq;
+
+		struct __attribute__((packed))
+		{
+			uint16_t qid;
+			uint16_t qsize;
+			bool phys_contig : 1;
+			bool interrupt_enable : 1;
+			uint32_t _reserved_0 : 14;
+			uint16_t iv;
+		} create_io_cq;
 
                 struct __attribute__((packed))
                 {
@@ -129,6 +170,18 @@ struct __attribute__((packed)) nvme_cmd
                         uint8_t uuid_index : 7;
                         uint32_t _reserved_3 : 25;
                 } identify;
+
+		struct __attribute__((packed))
+		{
+			uint64_t lba;
+			uint16_t nlb;
+			uint16_t _reserved_0 : 4;
+			uint8_t dtype : 4;
+			uint8_t _reserved_1 : 2;
+			uint8_t prinfo : 4;
+			uint8_t fua : 1;
+			uint8_t lr : 1;
+		} rw;
         };
 };
 
@@ -291,7 +344,7 @@ union __attribute__((packed)) nvme_identify_namespace
 		uint16_t nvmsetid;
 		uint16_t endgid;
 		uint64_t nguid[2];
-		uint16_t eui64;
+		uint64_t eui64;
 		nvme_lbaf lbaf[16];
 		uint64_t lbstm;
 		uint8_t vs[3704];

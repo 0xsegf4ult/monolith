@@ -2,6 +2,17 @@
 
 #include <lib/types.hpp>
 
+enum msix_init_flags : uint32_t
+{
+	MSIX_QUIRK_FORCE_BIR0 = 0x1
+};
+
+struct msix_descriptor_t
+{
+	uint32_t* table;
+	uint16_t table_size;
+};
+
 struct pcie_device
 {
 	uint8_t bus;
@@ -24,11 +35,15 @@ struct pcie_device
 	uint8_t sub_bus() const;
 	bool has_multiple_functions() const;
 
+	uint8_t get_bar_width(uint32_t bir);
+
 	uint64_t read_bar(uint32_t bir) const;
 	size_t get_bar_size(uint32_t bir);
 
 	uint32_t read_bar32(uint32_t bir) const;
 	size_t get_bar32_size(uint32_t bir);
+
+	bool enable_msix(msix_descriptor_t& out_descriptor, uint32_t flags = 0);
 };
 
 namespace pcie

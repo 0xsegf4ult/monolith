@@ -4,7 +4,7 @@
 #include <arch/x86_64/smp.hpp>
 #include <dev/device.hpp>
 #include <dev/character.hpp>
-#include <dev/block.hpp>
+#include <dev/block/block.hpp>
 
 #include <mm/slab.hpp>
 

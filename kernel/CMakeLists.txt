@@ -17,7 +17,9 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/smp.cpp
 	arch/x86_64/smpboot.S
 	arch/x86_64/timer.cpp
-	dev/block.cpp
+	dev/block/block.cpp
+	dev/block/disk.cpp
+	dev/block/partition.cpp
 	dev/character.cpp
 	dev/efifb.cpp
 	dev/efifb_font.cpp

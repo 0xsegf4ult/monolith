@@ -6,8 +6,10 @@
 #include <dev/pcie.hpp>
 #include <dev/device.hpp>
 #include <dev/character.hpp>
-#include <dev/block.hpp>
+#include <dev/block/block.hpp>
+#include <dev/block/disk.hpp>
 
+#include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 
 #include <mm/address_space.hpp>
@@ -17,6 +19,8 @@
 
 #include <lib/kstd.hpp>
 #include <lib/klog.hpp>
+
+#include <sys/err.hpp>
 
 static size_t nvme_device_id = 0;
 
@@ -48,8 +52,11 @@ struct nvme_device
 	virtaddr_t base_address;
 	nvme_queue submission_queue;
 	nvme_queue completion_queue;
+	nvme_queue io_sq;
+	nvme_queue io_cq;
 	nvme_identify_controller* identify;
 
+	uint16_t id;
 	size_t max_transfer;	
 	size_t doorbell_stride;
 
@@ -64,6 +71,26 @@ struct nvme_device
 	{
 		*reinterpret_cast<T*>(base_address + offset) = value;
 	}
+
+	void admin_submit_await(nvme_cmd& cmd)
+	{
+		auto* submission = (nvme_cmd*)submission_queue.allocate();
+		auto* completion = (nvme_completion*)completion_queue.allocate();
+		memcpy(submission, &cmd, sizeof(nvme_cmd));
+	
+		write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE, submission_queue.tail);
+
+		while(true)
+		{
+			if(completion->phase_tag == 1)
+				break;
+
+			asm volatile("pause");
+		}
+		log::debug("nvme{}: cmd completed with status {}", id, uint16_t(completion->status));
+
+		write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + 1 * (4 << doorbell_stride), completion_queue.tail);
+	}
 };
 
 struct nvme_namespace
@@ -71,6 +98,13 @@ struct nvme_namespace
 	size_t nsid;
 	nvme_device* parent;
 	nvme_identify_namespace* identify;
+	disk_t* disk;
+
+	virtaddr_t dma_page;
+	physaddr_t dma_page_phys;
+
+	size_t block_size;
+	size_t blocks;
 };
 
 static bool intr_wait = false;
@@ -80,17 +114,92 @@ void nvme_irq_handler()
 	intr_wait = true;
 }
 
+ssize_t nvme_read(nvme_namespace* ns, uint64_t lba, size_t blocks, byte* buffer)
+{
+	size_t offset = 0;
+	while(offset < blocks)
+	{
+		uint16_t count = blocks - offset;
+	       	if(count > (0x1000 / ns->block_size))
+			count = (0x1000 / ns->block_size);
+
+		nvme_cmd cmd{};
+		cmd.header.opcode = NVME_OP_READ;
+		cmd.nsid = ns->nsid;
+		cmd.prp1 = ns->dma_page_phys;
+		cmd.rw.lba = lba + offset;
+		cmd.rw.nlb = count - 1;
+		auto* submission = (nvme_cmd*)ns->parent->io_sq.allocate();
+		auto* completion = (nvme_completion*)ns->parent->io_cq.allocate();
+		memcpy(submission, &cmd, sizeof(nvme_cmd));
+		ns->parent->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + (2 * (4 << ns->parent->doorbell_stride)), ns->parent->io_sq.tail);
+
+		while(true)
+		{
+			if(completion->phase_tag == 1)
+				break;
+
+			asm volatile("pause");
+		}
+
+		memcpy(buffer + (offset * ns->block_size), (void*)ns->dma_page, count * ns->block_size);
+		
+		ns->parent->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + (3 * (4 << ns->parent->doorbell_stride)), ns->parent->io_cq.tail);
+		offset += count;
+	}	
+
+	return blocks;
+}
+
+ssize_t nvme_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	auto* disk = (disk_t*)(blockdev_get(file->inode->dev)->data);
+	auto* ns = (nvme_namespace*)(disk->data);
+	if(!ns)
+		return -ENOENT;
+
+	auto lba = file->read_pos / ns->block_size;
+       	auto blocks = length / ns->block_size;	
+
+	return nvme_read(ns, lba, blocks, buffer) * ns->block_size;
+}
+
+ssize_t nvme_write(vfs::file_descriptor_t* file, const byte* buffer, size_t length)
+{
+	return 0;
+}
+
+int nvme_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
+{
+	return -EINVAL;
+}
+
+static vfs::fs_file_ops nvme_ns_fops =
+{
+	.read = nvme_read,
+	.write = nvme_write,
+	.ioctl = nvme_ioctl
+};
+
+ssize_t nvme_read_blocks(block_device_t* dev, byte* buffer, size_t blocks, size_t b_offset)
+{
+	auto* disk = (disk_t*)dev->data;
+	return nvme_read((nvme_namespace*)disk->data, b_offset, blocks, buffer);
+}
+
+static blockdev_ops nvme_ns_bops =
+{
+	.pread_blocks = nvme_read_blocks
+};
+
 void nvme_register_namespace(nvme_device* device, uint32_t ns)
 {
-	auto* blkdev = blockdev_alloc(dev_t{4, uint16_t(ns)});
-	
 	auto* nvme_ns = (nvme_namespace*)kmalloc(sizeof(nvme_namespace));
 	nvme_ns->nsid = ns;
 	nvme_ns->parent = device;
 	
-	blkdev->data = nvme_ns;
-
-	auto dev_node = vfs::mknod("/dev/nvme0n1", S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{4, uint16_t(ns)});
+	char devname[32];
+	format_to(string_span{&devname[0], 32}, "nvme{}n{}", device->id, ns);
 
 	nvme_ns->identify = (nvme_identify_namespace*)vmalloc(0x1000, vm_write);
 
@@ -101,90 +210,62 @@ void nvme_register_namespace(nvme_device* device, uint32_t ns)
 	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)nvme_ns->identify);
 	cmd.prp2 = 0;
 	
-	auto* submission = (nvme_cmd*)device->submission_queue.allocate();
-	auto* completion = (nvme_completion*)device->completion_queue.allocate();
-	memcpy(submission, &cmd, sizeof(nvme_cmd));
-
-	log::debug("nvme0n1: send identify command");
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE, device->submission_queue.tail);
-
-	while(true)
-	{
-		if(completion->phase_tag == 1)
-			break;
-
-		asm volatile("pause");
-	}
-	log::debug("nvme0n1: cmd completed with status {}", uint16_t(completion->status));
-
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + 1 * (4 << device->doorbell_stride), device->completion_queue.tail);
-
-	log::debug("nvme0n1: {:#x} blocks blk_size {:#x}", nvme_ns->identify->nsze, 1 << nvme_ns->identify->lbaf[nvme_ns->identify->flbas & 0xF].lba_data_size);
+	log::debug("{}: send identify command", devname);
+	device->admin_submit_await(cmd);
 
 	uint64_t flba = nvme_ns->identify->flbas & 0xF;
 	uint64_t lba_shift = nvme_ns->identify->lbaf[flba].lba_data_size;
 	uint64_t max_lba = (device->max_transfer) / (1 << lba_shift);
+	
+	log::debug("{}: {:#x} blocks blk_size {:#x} -> {} MiB", devname, nvme_ns->identify->nsze, 1 << lba_shift, nvme_ns->identify->nsze * (1 << lba_shift) / (1 << 20));
+
+	nvme_ns->dma_page = vmalloc(0x1000, vm_write);
+	nvme_ns->dma_page_phys = get_kernel_vmspace()->get_mapping(nvme_ns->dma_page);
+
+	nvme_ns->disk = disk_create(dev_t{4, uint16_t((ns - 1) * 128)}, devname, nvme_ns, &nvme_ns_fops, &nvme_ns_bops);
+	nvme_ns->block_size = (1 << lba_shift);
+	nvme_ns->blocks = nvme_ns->identify->nsze;
+	nvme_ns->disk->block_count = nvme_ns->blocks;
+       	nvme_ns->disk->block_size = nvme_ns->block_size;
+	disk_scan(nvme_ns->disk);	
 }
+
+static uint16_t controller_count = 0;
 
 void nvme_init_controller(pcie_device& dev)
 {
-	intr_wait = false;
-	auto* chdev = chardev_alloc(dev_t{4, 0});
+	auto id = controller_count++;
+
+	auto* chdev = chardev_alloc(dev_t{4, id});
 
 	auto* device = (nvme_device*)kmalloc(sizeof(nvme_device));
 	device->pcie = dev;
+	device->id = id;
 	chdev->data = device;
 
-	//FIXME: format
-	auto dev_node = vfs::mknod("/dev/nvme0", S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{4, 0});
+	char name_buf[32];
+	format_to(string_span{&name_buf[0], 32}, "/dev/nvme{}", id);
+	auto dev_node = vfs::mknod(name_buf, S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{4, id});
 
 	auto pcie_reg1 = device->pcie.read_config32(0x4);
 	pcie_reg1 |= ((0x400 | 0x4 | 0x2) & ~(0x1)); // INTERRUPT_DISABLE |  BUS_MASTER | MEMORY_SPACE | ~IO_SPACE
 	device->pcie.write_config32(0x4, pcie_reg1);
 
-	uint8_t pcap_ptr = device->pcie.read_config32(0x34) & 0xFC;
-	uint8_t msix_ptr = 0;
-
-	while(pcap_ptr)
+	msix_descriptor_t msix;
+	auto msix_status = device->pcie.enable_msix(msix);
+	if(!msix_status)
 	{
-		auto capability = device->pcie.read_config32(pcap_ptr);
-
-		if((capability & 0xFF) == 0x11)
-		{
-			msix_ptr = pcap_ptr;
-			break;
-		}
-
-		pcap_ptr = (capability >> 8) & 0xFC; 
-	}
-
-	if(!msix_ptr)
-	{
-		log::error("nvme0: pcie device has no MSI-X capability");
+		log::error("nvme{}: PCIe device has no MSI-X capability", id);
 		return;
 	}
 
-	auto msix_reg0 = device->pcie.read_config32(msix_ptr);
-	uint16_t msix_mctr = msix_reg0 >> 16;
-	auto msix_reg1 = device->pcie.read_config32(msix_ptr + 4);
-	
-	log::debug("nvme0: MSI-X using BIR {}, table at {:#x} size {:#x}", msix_reg1 & 0b111, (msix_reg1 & ~(0b111)), msix_mctr & 0b11111111111); 
-
 	auto base = device->pcie.read_bar(0);
 	auto bar_size = device->pcie.get_bar_size(0);
-	log::debug("nvme0: BAR {:#x} size {:#x}", base, bar_size);
 
 	device->base_address = vmalloc(bar_size, vm_write | vm_mmio, &base);
-	log::debug("nvme0: mapped BAR to {:#x}", device->base_address);
 
 	auto ctrl_cap = device->read_register<nvme_capability>(NVME_REGISTER_CAPABILITY);
 	
-	log::debug("nvme0: max entries: {}", ctrl_cap.max_queue_entries + 1);
-	log::debug("nvme0: needs contiguous queue: {}", bool(ctrl_cap.contiguous_queue_required));
-	log::debug("nvme0: timeout: {}", ctrl_cap.timeout);
-	log::debug("nvme0: doorbell stride: {}", uint8_t(ctrl_cap.doorbell_stride));
-	log::debug("nvme0: memory page size: {} - {}", uint8_t(ctrl_cap.memory_pagesize_min), uint8_t(ctrl_cap.memory_pagesize_max));
-
 	auto stride = ctrl_cap.doorbell_stride;
 	device->doorbell_stride = stride;
 
@@ -192,7 +273,7 @@ void nvme_init_controller(pcie_device& dev)
 	if(config.enabled)
 	{
 		config.enabled = 0;
-		log::debug("nvme0: resetting controller");
+		log::debug("nvme{}: resetting controller", id);
 		device->write_register<nvme_config>(NVME_REGISTER_CONTROLLER_CONFIG, config);
 	}
 		
@@ -222,19 +303,15 @@ void nvme_init_controller(pcie_device& dev)
 	auto irq = allocate_irq();
        	install_irq_handler(irq, nvme_irq_handler);	
 
-	log::debug("nvme0: allocated irq {}", irq);
+	log::debug("nvme{}: allocated irq {}", id, irq);
 
-	msix_reg0 &= ~(1 << 30); // clear FUNCTION_MASK
-	msix_reg0 |= (1 << 31); // set ENABLE
-	device->pcie.write_config32(msix_ptr, msix_reg0);
-	
-	auto msi_table_offset = msix_reg1 & ~(0b111);
-	device->write_register<uint32_t>(msi_table_offset, msi_address & (~0x3));
- 	device->write_register<uint32_t>(msi_table_offset + 4, msi_address >> 32);
-	device->write_register<uint32_t>(msi_table_offset + 8, irq & 0xFF);
-	device->write_register<uint32_t>(msi_table_offset + 12, 0);	
+	auto* msix_table = msix.table;
+	*(msix_table++) = (msi_address & ~0x3);
+	*(msix_table++) = (msi_address >> 32);
+        *(msix_table++) = (irq & 0xFF);
+	*(msix_table++) = 0;	
 
-	log::debug("nvme0: enabled MSI-X interrupts");
+	log::debug("nvme{}: enabled MSI-X interrupts", id);
 
 	config.enabled = 1;
 	config.io_commandset_selected = 0; // NVM_COMMAND_SET
@@ -254,14 +331,14 @@ void nvme_init_controller(pcie_device& dev)
 
 		if(status.fatal_status)
 		{
-			log::error("nvme0: controller failed to start");
+			log::error("nvme{}: controller failed to start", id);
 			return;
 		}
 
 		asm volatile("pause");
 	}
 
-	log::debug("nvme0: controller started!");
+	log::debug("nvme{}: controller started!", id);
 	
 	device->identify = (nvme_identify_controller*)vmalloc(0x1000, vm_write);
 
@@ -272,37 +349,10 @@ void nvme_init_controller(pcie_device& dev)
 	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)device->identify);
 	cmd.prp2 = 0;
 
-	nvme_cmd* submission = (nvme_cmd*)device->submission_queue.allocate();
-	nvme_completion* completion = (nvme_completion*)device->completion_queue.allocate();
-	memcpy(submission, &cmd, sizeof(nvme_cmd));
-
-	log::debug("nvme0: send identify cmd");
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE, device->submission_queue.tail);
-
-	while(!intr_wait)
-	{
-		asm volatile("pause");
-	}
-	intr_wait = false;
-
-	while(true)
-	{
-		if(completion->phase_tag == 1)
-			break;
-
-		asm volatile("pause");
-	}
-
-	log::debug("nvme0: cmd completed with status {}", uint16_t(completion->status));
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + 1 * (4 << stride), device->completion_queue.tail);
+	log::debug("nvme{}: send identify cmd", id);
+	device->admin_submit_await(cmd);
 
 	size_t shift = 12 + ctrl_cap.memory_pagesize_min; 
-	log::debug("nvme0: max data transfer size: {}", 1 << (device->identify->max_data_transfer_size + shift));
-	log::debug("nvme0: {} namespaces", device->identify->num_namespaces);
-	log::debug("nvme0: submission queue entry size: {}", 1 << device->identify->submit_queue_entry_size);
-	log::debug("nvme0: completion queue entry size: {}", 1 << device->identify->completion_queue_entry_size);
-	log::debug("nvme0: max outstanding commands: {}", device->identify->maxcmd + 1);
-
 	if(device->identify->max_data_transfer_size)
 		device->max_transfer = 1 << (device->identify->max_data_transfer_size + shift);
 	else
@@ -310,27 +360,53 @@ void nvme_init_controller(pcie_device& dev)
 
 	auto num_namespaces = device->identify->num_namespaces;
 
+	device->io_cq.address = (void*)vmalloc(0x1000, vm_write);
+	device->io_cq.phys_address = get_kernel_vmspace()->get_mapping((virtaddr_t)device->io_cq.address);
+	device->io_cq.size = 64;
+	device->io_cq.tail = 0;
+	device->io_cq.entry_size = 16;
+
+	nvme_cmd cq_cmd{};
+	cq_cmd.header.opcode = NVME_ADMIN_OP_CREATE_CQ;
+	cq_cmd.prp1 = device->io_cq.phys_address;
+	cq_cmd.create_io_cq.qid = 1;
+	cq_cmd.create_io_cq.qsize = 63;
+	cq_cmd.create_io_cq.iv = 0;
+	cq_cmd.create_io_cq.phys_contig = true;
+	cq_cmd.create_io_cq.interrupt_enable = true;
+	
+	log::debug("nvme{}: cmd_create_cq", id);
+	device->admin_submit_await(cq_cmd);
+
+	device->io_sq.address = (void*)vmalloc(0x1000, vm_write);
+	device->io_sq.phys_address = get_kernel_vmspace()->get_mapping((virtaddr_t)device->io_sq.address);
+	device->io_sq.size = 64;
+	device->io_sq.tail = 0;
+	device->io_sq.entry_size = 64;
+
+	nvme_cmd sq_cmd{};
+	sq_cmd.header.opcode = NVME_ADMIN_OP_CREATE_SQ;
+	sq_cmd.prp1 = device->io_sq.phys_address;
+	sq_cmd.create_io_sq.qid = 1;
+	sq_cmd.create_io_sq.qsize = 63;
+	sq_cmd.create_io_sq.cqid = 1;
+	sq_cmd.create_io_sq.phys_contig = true;
+	sq_cmd.create_io_sq.qprio = 0;
+	sq_cmd.create_io_sq.nvmsetid = 0;
+	
+	log::debug("nvme{}: cmd_create_sq", id);
+	device->admin_submit_await(sq_cmd);
+
 	auto nsid_alloc = vmalloc(0x1000, vm_write);
 
+	cmd.header.opcode = NVME_ADMIN_OP_IDENTIFY; 
+	cmd.nsid = 0;
 	cmd.identify.cns = 2;
 	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)nsid_alloc);
-	submission = (nvme_cmd*)device->submission_queue.allocate();
-	completion = (nvme_completion*)device->completion_queue.allocate();
-	memcpy(submission, &cmd, sizeof(nvme_cmd));
-
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE, device->submission_queue.tail);
-	log::debug("nvme0: identify namespaces");
-
-	while(true)
-	{
-		if(completion->phase_tag == 1)
-			break;
-
-		asm volatile("pause");
-	}
-	log::debug("nvme0: cmd completed with status {}", uint16_t(completion->status));
-
-	device->write_register<uint32_t>(NVME_REGISTER_QUEUE_TAIL_DOORBELL_BASE + 1 * (4 << stride), device->completion_queue.tail);
+	cmd.prp2 = 0;
+	
+	log::debug("nvme{}: identify namespaces", id);
+	device->admin_submit_await(cmd);
 
 	auto* nsids = reinterpret_cast<uint32_t*>(nsid_alloc);
 	for(uint32_t i = 0; i < num_namespaces; i++)

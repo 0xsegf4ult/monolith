@@ -88,6 +88,16 @@ bool pcie_device::has_multiple_functions() const
 	return sub_bus();
 }
 
+uint8_t pcie_device::get_bar_width(uint32_t bir)
+{
+	auto bs = read_config32(0x10 + (bir * 4)) >> 1;
+
+	if(bs == 0x2)
+		return 64;
+
+	return 32;
+}
+
 uint64_t pcie_device::read_bar(uint32_t bir) const
 {
 	return read_config64(0x10 + (bir * 4)) & 0xFFFFFFFFFFFFFFF0;
@@ -122,6 +132,53 @@ size_t pcie_device::get_bar32_size(uint32_t bir)
 	uint32_t len = ~val;
 	write_config32(0x10 + (bir * 4), old_value);
 	return len + 1;
+}
+
+bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor, uint32_t flags)
+{
+	uint8_t pcap_ptr = read_config32(0x34) & 0xFC;
+	uint8_t msix_ptr = 0;
+
+	while(pcap_ptr)
+	{
+		auto cap = read_config32(pcap_ptr);
+
+		if((cap & 0xFF) == 0x11)
+		{
+			msix_ptr = pcap_ptr;
+			break;
+		}
+
+		pcap_ptr = (cap >> 8) & 0xFC;
+	}
+
+	if(!msix_ptr)
+		return false;
+
+	auto msix_reg0 = read_config32(msix_ptr);
+	uint16_t msix_mctr = msix_reg0 >> 16;
+	auto msix_reg1 = read_config32(msix_ptr + 4);
+
+	auto bir = msix_reg1 & 0b111;
+	auto table_offset = (msix_reg1 & ~(0b111));
+	auto table_size = msix_mctr & 0b11111111111;
+	out_descriptor.table_size = table_size;
+	log::debug("pcie {:02x}:{:02x}.{} MSI-X using BIR {}, table at {:#x} size {:#x}", bus, device, function, bir, table_offset, table_size);
+
+	auto bar_width = get_bar_width(bir);
+	physaddr_t tbl_base = bar_width == 64 ? read_bar(bir) : physaddr_t(read_bar32(bir));
+	size_t tbl_barsize = bar_width == 64 ? get_bar_size(bir) : get_bar32_size(bir);
+
+	out_descriptor.table = (uint32_t*)(vmalloc(tbl_barsize, vm_write | vm_mmio, &tbl_base) + table_offset);
+
+	if(!out_descriptor.table)
+		return false;
+
+	msix_reg0 &= ~(1 << 30); // clear FUNCTION_MASK
+	msix_reg0 |= (1 << 31); // set ENABLE
+	write_config32(msix_ptr, msix_reg0);
+
+	return true;
 }
 
 namespace pcie
