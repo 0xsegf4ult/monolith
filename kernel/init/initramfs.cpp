@@ -53,6 +53,9 @@ void initramfs_unpack(byte* data, size_t length)
 		if(namel == 0)
 			break;
 
+		if(record->name[namel - 1] == '/')
+			record->name[namel - 1] = '\0';
+
 		auto mode = oct2uint(record->mode, 7);		
 		auto size = oct2uint(record->size, 11);
 		if(record->type == '5')

@@ -4,6 +4,7 @@
 #include <fs/vfs.hpp>
 #include <fs/vnode.hpp>
 #include <fs/ventry.hpp>
+#include <fs/lookup.hpp>
 #include <fs/ramfs/ramfs.hpp>
 
 #include <mm/layout.hpp>
@@ -24,23 +25,36 @@ static context_t* context = nullptr;
 
 void init()
 {
-	context = (context_t*)(pmm_allocate() + mm::direct_mapping_offset);
+	context = (context_t*)kmalloc(sizeof(context_t));
+	dcache_init();
 
-	auto* ramfs = ramfs_create();
+	ramfs_init();
+	auto* ramfs = lookup_fs("ramfs");
+	if(!ramfs)
+		panic("failed to init VFS root");
 
 	auto* rnode = vnode_new(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-	rnode->iops = &ramfs->iops;
-	rnode->fops = &ramfs->fops;
+	rnode->iops = ramfs->iops;
+	rnode->fops = ramfs->fops;
 
 	context->root_node = ventry_new("/", rnode);
 	context->mounts = (mount_t*)kmalloc(sizeof(mount_t));
 	context->root_node->mount = context->mounts;
 	context->mounts->mountpoint = context->root_node;
 	context->mounts->fs = ramfs;
+	context->mounts->sb = (superblock_t*)kmalloc(sizeof(superblock_t));
+	context->mounts->sb->fs = context->mounts->fs;
+	context->mounts->sb->data = (void*)context->root_node;
+	context->mounts->sb->bdev = nullptr;
+
 	context->mounts->next = nullptr;
-	ramfs->root = context->root_node;
 
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
+}
+
+context_t* get()
+{
+	return context;
 }
 
 ventry_t* get_root_dentry()
@@ -48,31 +62,12 @@ ventry_t* get_root_dentry()
 	return context->root_node;
 }
 
-int mount(const char* path, vfilesystem_t* fs)
-{
-	auto query = lookup(path, 0);
-	if(!query.result)
-		return -ENOENT;
-
-	auto* mp = (mount_t*)kmalloc(sizeof(mount_t));
-	mp->mountpoint = query.result;
-	mp->fs = fs;
-	mp->next = nullptr;
-
-	auto* mhead = context->mounts;
-	while(mhead && mhead->next)
-		mhead = mhead->next;
-	mhead->next = mp;
-
-	query.result->mount = mp;
-	return 0;
-}
-
 int create(const char* path, mode_t mode)
 {
-	auto parent = lookup(path, LOOKUP_PARENT);
-	if(!parent.result)
-		return -ENOENT;
+	ventry_t* parent = nullptr;
+	auto status = lookup(path, &parent, LOOKUP_PARENT);
+	if(status < 0)
+		return status;
 
 	auto plen = string_length(path);
 	const char* basename = path;
@@ -84,21 +79,23 @@ int create(const char* path, mode_t mode)
 	if(!basename)
 		return -EINVAL;
 
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
+	ventry_t* result = nullptr;
+	status = lookup_at(parent, basename, &result, 0);
+	if(status >= 0)
 		return -EEXIST;
 
-	if(!parent.result->node->iops->create)
+	if(!parent->node->iops->create)
 		return -ENOENT;
 
-	return parent.result->node->iops->create(parent.result, basename, mode);	
+	return parent->node->iops->create(parent, basename, mode);	
 }
 
 int mkdir(const char* path, mode_t mode)
 {
-	auto parent = lookup(path, LOOKUP_PARENT);
-	if(!parent.result)
-		return -ENOENT;
+	ventry_t* parent = nullptr;
+	auto status = lookup(path, &parent, LOOKUP_PARENT);
+	if(status < 0)
+		return status;
 
 	auto plen = string_length(path);
 	const char* basename = path;
@@ -110,21 +107,23 @@ int mkdir(const char* path, mode_t mode)
 	if(!basename)
 		return -EINVAL;
 
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
+	ventry_t* result = nullptr;
+	status = lookup_at(parent, basename, &result, 0);
+	if(status >= 0)
 		return -EEXIST;
 
-	if(!parent.result->node->iops->mkdir)
+	if(!parent->node->iops->mkdir)
 		return -ENOENT;
 
-	return parent.result->node->iops->mkdir(parent.result, basename, mode & 0777);
+	return parent->node->iops->mkdir(parent, basename, mode & 0777);
 }
 
 int mknod(const char* path, mode_t mode, dev_t device)
 {
-	auto parent = lookup(path, LOOKUP_PARENT);
-	if(!parent.result)
-		return -ENOENT;
+	ventry_t* parent = nullptr;
+	auto status = lookup(path, &parent, LOOKUP_PARENT);
+	if(status < 0)
+		return status;
 
 	auto plen = string_length(path);
 	const char* basename = path;
@@ -136,23 +135,23 @@ int mknod(const char* path, mode_t mode, dev_t device)
 	if(!basename)
 		return -EINVAL;
 
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
+	ventry_t* result = nullptr;
+	status = lookup_at(parent, basename, &result, 0);
+	if(status >= 0)
 		return -EEXIST;
 
-	if(!parent.result->node->iops->mknod)
+	if(!parent->node->iops->mknod)
 		return -ENOENT;
 
-	return parent.result->node->iops->mknod(parent.result, basename, mode, device);
+	return parent->node->iops->mknod(parent, basename, mode, device);
 }
 
 int unlink(const char* path)
 {
-	auto query = lookup(path, 0);
-	if(!query.result)
-		return -ENOENT;
-
-	auto* dentry = query.result;
+	ventry_t* dentry = nullptr;
+	auto status = lookup(path, &dentry, 0);
+	if(status < 0)
+		return status;
 
 	if(S_ISDIR(dentry->node->mode))
 	{
@@ -187,142 +186,32 @@ int unlink(const char* path)
 	return 0;
 }
 
-lookup_result lookup_at(ventry_t* parent, const char* path, int flags)
-{
-	auto len = string_length(path);
-
-	char* cbuffer = (char*)kmalloc(len + 1);
-	strncpy(cbuffer, path, len + 1);
-	
-	for(int i = 0; i < len; i++)
-	{
-		if(cbuffer[i] == '/')
-			cbuffer[i] = '\0';
-	}
-
-	ventry_t* current = parent;
-	ventry_t* c_parent = nullptr;
-	const char* basename = nullptr;
-
-	for(int i = 0; i < len; i++)
-	{
-		if(cbuffer[i] == '\0')
-			continue;
-
-		if(!current)
-			break;
-
-		ventry_ref(current);
-		if(!S_ISDIR(current->node->mode))
-		{
-			ventry_put(current);
-			break;
-		}
-
-		basename = &path[i];
-
-		char* component = &cbuffer[i];
-		size_t clen = string_length(component);
-		bool is_last = (i + clen) == len;
-		if(!is_last)
-		{
-			int j;
-			for(j = i + clen; j < len && component[j] == '\0'; ++j) {}
-			is_last = (j == len);
-		}
-
-		if(is_last && (flags & LOOKUP_PARENT))
-		{
-			ventry_put(current);
-			break;
-		}
-
-		ventry_t* next;
-		
-		if(clen == 1 && component[0] == '.')
-			next = current;
-		else if(clen == 2 && component[0] == '.' && component[1] == '.')
-		{
-			if(i + clen >= len)
-				c_parent = current;
-				
-			next = current->parent;
-
-			if(!current->parent)
-			{
-				mount_t* mp = context->mounts;
-				while(mp)
-				{
-					if(mp->fs->root == current)
-					{
-						next = (mp->mountpoint == context->root_node) ? context->root_node : mp->mountpoint->parent;
-						break;
-					}	
-					mp = mp->next;
-				}
-			}
-		}
-		else
-		{
-			if(current->mount)
-			{
-				auto mount_traverse = current->mount->fs->root;
-				ventry_put(current);
-				current = mount_traverse;
-				ventry_ref(current);
-			}
-
-			if(!current->node->iops->lookup)
-			{
-				ventry_put(current);
-				return {nullptr, basename};
-			}
-
-			next = current->node->iops->lookup(current, component);
-		}
-
-		i += clen;
-		ventry_put(current);
-		current = next;
-	}
-
-	kfree(cbuffer);
-	if(current && current->mount)
-		current = current->mount->fs->root;
-
-	return {current, basename};
-}
-
-lookup_result lookup(const char* path, int flags)
-{
-	if(path[0] == '/')
-		return lookup_at(get_root_dentry(), path,  flags);
-	else
-		return lookup_at(smp_current_cpu()->get_current_thread()->cwd, path, flags);
-}
-
 int open(const char* path, int flags)
 {
-	auto query = lookup(path, 0);
-	if(!query.result)
+	ventry_t* query = nullptr;
+	auto status = lookup(path, &query, 0);
+	if(status < 0)
 	{
+		if(status != -ENOENT)
+			return status;
+
 		if(flags & O_CREAT)
 		{
 			auto c_res = create(path, 0666);
 			if(c_res < 0)
 				return c_res;
 		
-			query = lookup(path, 0);
+			status = lookup(path, &query, 0);
 		}
 		else
 			return -ENOENT;
 	}
 
-	ventry_ref(query.result);
-	auto* node = query.result->node;
+	ventry_ref(query);
+	auto* node = query->node;
 	if(!node)
 	{
-		ventry_put(query.result);
+		ventry_put(query);
 		return -EBADF;
 	}
 
@@ -332,7 +221,7 @@ int open(const char* path, int flags)
 	
 	if(fs_id < 0)
 	{
-		ventry_put(query.result);
+		ventry_put(query);
 		return fs_id;
 	}
 
@@ -347,7 +236,7 @@ int open(const char* path, int flags)
 			context->open_files[i].read_pos = 0;
 			context->open_files[i].write_pos = 0;
 			context->open_files[i].inode = node;
-			context->open_files[i].path = query.result;
+			context->open_files[i].path = query;
 			context->open_files[i].fs_id = fs_id;
 			context->open_files[i].refcount = 1;
 			break;
@@ -362,15 +251,16 @@ int openat(ventry_t* dir, const char* path, int flags)
 	if(flags)
 		return -EINVAL;
 
-	auto query = lookup_at(dir, path, 0);
-	if(!query.result)
-		return -ENOENT;
+	ventry_t* query;
+	auto status = lookup_at(dir, path, &query, 0);
+	if(status < 0)
+		return status;
 
-	ventry_ref(query.result);
-	auto* node = query.result->node;
+	ventry_ref(query);
+	auto* node = query->node;
 	if(!node)
 	{
-		ventry_put(query.result);
+		ventry_put(query);
 		return -EBADF;
 	}
 
@@ -380,7 +270,7 @@ int openat(ventry_t* dir, const char* path, int flags)
 
 	if(fs_id < 0)
 	{
-		ventry_put(query.result);
+		ventry_put(query);
 		return fs_id;
 	}
 
@@ -395,7 +285,7 @@ int openat(ventry_t* dir, const char* path, int flags)
 			context->open_files[i].read_pos = 0;
 			context->open_files[i].write_pos = 0;
 			context->open_files[i].inode = node;
-			context->open_files[i].path = query.result;
+			context->open_files[i].path = query;
 			context->open_files[i].fs_id = fs_id;
 			context->open_files[i].refcount = 1;
 			break;
@@ -496,13 +386,12 @@ int ioctl(int fd, uint64_t op, uint64_t arg)
 
 int stat(const char* path, stat_t* output)
 {
-	auto query = lookup(path, 0);
-	if(!query.result)
-	{
-		return -ENOENT;
-	}
+	ventry_t* query = nullptr;
+	auto status = lookup(path, &query, 0);
+	if(status < 0)
+		return status;
 
-	auto* node = query.result->node;
+	auto* node = query->node;
 	
 	output->st_dev = node->dev;
 	output->st_mode = node->mode;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <fs/ops.hpp>
+#include <fs/filesystem.hpp>
+#include <fs/super.hpp>
 #include <fs/vnode.hpp>
 #include <fs/ventry.hpp>
 #include <lib/types.hpp>
@@ -13,21 +15,6 @@
 
 namespace vfs
 {
-
-struct vfilesystem_t
-{
-	fs_inode_ops iops;
-	fs_file_ops fops;
-	ventry_t* root;
-	void* data;	
-};
-
-struct mount_t
-{
-	vfilesystem_t* fs;	
-	ventry_t* mountpoint;
-	mount_t* next;
-};
 
 struct file_descriptor_t
 {
@@ -47,27 +34,14 @@ struct context_t
 };
 
 void init();
+
+context_t* get();
 ventry_t* get_root_dentry();
-int mount(const char* path, vfilesystem_t* fs);
 
 int create(const char* path, mode_t mode);
 int mkdir(const char* path, mode_t mode);
 int mknod(const char* path, mode_t mode, dev_t device);
 int unlink(const char* path);
-
-enum LOOKUP_FLAGS
-{
-	LOOKUP_PARENT = 1
-};
-
-struct lookup_result
-{
-	ventry_t* result;
-	const char* basename;
-};
-
-lookup_result lookup_at(ventry_t* parent, const char* path, int flags);
-lookup_result lookup(const char* path, int flags);
 
 struct stat_t 
 {

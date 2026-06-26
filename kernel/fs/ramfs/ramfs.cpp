@@ -30,7 +30,14 @@ struct ramfs_data
 ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 {
 	mutex_lock(file->inode->lock);
-	ramfs_page* spage = reinterpret_cast<ramfs_data*>(file->inode->data)->head;
+	ramfs_data* data = reinterpret_cast<ramfs_data*>(file->inode->data);
+	if(!data)
+	{
+		mutex_unlock(file->inode->lock);
+		return 0;
+	}
+	
+	ramfs_page* spage = data->head;
 	if(file->read_pos)
 	{
 		auto rp = file->read_pos;
@@ -136,20 +143,59 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 	return orig_l - length;
 }
 
-vfilesystem_t* ramfs_create()
+static fs_inode_ops ramfs_iops =
+{
+	.lookup = generic_fs_lookup,
+	.create = generic_fs_create,
+	.mkdir = generic_fs_mkdir,
+	.mknod = generic_fs_mknod,
+	.getdents = generic_fs_getdents
+};
+
+static fs_file_ops ramfs_fops =
+{
+	.open = generic_fs_open,
+	.close = generic_fs_close,
+	.read = ramfs_read,
+	.write = ramfs_write
+};
+
+int ramfs_super_init(block_device_t* bdev, superblock_t** out_sb)
+{
+        auto* sb = (superblock_t*)kmalloc(sizeof(superblock_t));
+
+        auto* node = vnode_new(S_IFDIR | 0755);
+        node->iops = &ramfs_iops;
+        node->fops = &ramfs_fops;
+	
+        auto* dentry = ventry_new("ramfs", node);
+        sb->data = (void*)dentry;
+
+        sb->bdev = nullptr;
+	*out_sb = sb;
+        return 0;
+}
+
+int ramfs_super_root(superblock_t* sb, ventry_t** out_root)
+{
+	*out_root = (ventry_t*)sb->data;
+	return 0;
+}
+
+static fs_super_ops ramfs_sb_ops
+{
+	.init = ramfs_super_init,
+	.root = ramfs_super_root
+};
+
+void ramfs_init()
 {
 	auto* fs = (vfilesystem_t*)kmalloc(sizeof(vfilesystem_t));
-	fs->iops.lookup = generic_fs_lookup;
-	fs->iops.create = generic_fs_create;
-	fs->iops.mkdir = generic_fs_mkdir;
-	fs->iops.mknod = generic_fs_mknod;
-	fs->iops.getdents = generic_fs_getdents;
-	fs->fops.open = generic_fs_open;
-	fs->fops.close = generic_fs_close;
-	fs->fops.read = ramfs_read;
-	fs->fops.write = ramfs_write;
-	fs->data = nullptr;
+	fs->flags = FS_FLAG_NODEV;
+	fs->iops = &ramfs_iops;
+	fs->fops = &ramfs_fops;
+	fs->sb_ops = &ramfs_sb_ops;
 
-	return fs;
+	register_fs(fs, "ramfs");
 }
 

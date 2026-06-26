@@ -4,13 +4,15 @@
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 #include <lib/kstd.hpp>
+#include <lib/klog.hpp>
 #include <mm/slab.hpp>
 
 ssize_t part_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	auto* bdev = blockdev_get(file->inode->dev);
 	auto* part = (partition_t*)bdev->data;
-	return bdev->bops->pread_blocks(bdev, buffer, length * part->parent->block_size, part->start_lba + file->read_pos * part->parent->block_size) * part->parent->block_size;
+	auto* disk_bdev = blockdev_get(part->parent->dev);
+	return disk_bdev->bops->pread_blocks(disk_bdev, buffer, length * part->parent->block_size, part->start_lba + file->read_pos * part->parent->block_size) * part->parent->block_size;
 }
 
 static vfs::fs_file_ops fops = 
@@ -21,7 +23,9 @@ static vfs::fs_file_ops fops =
 ssize_t part_pread_blocks(block_device_t* dev, byte* buffer, size_t blocks, size_t offset)
 {
 	auto* part = (partition_t*)dev->data;
-	return dev->bops->pread_blocks(dev, buffer, blocks, part->start_lba + offset);
+	auto* disk_bdev = blockdev_get(part->parent->dev);
+	log::debug("part_pread_blocks from disk {} blockdev {:#x}", part->parent->name, disk_bdev);
+	return disk_bdev->bops->pread_blocks(disk_bdev, buffer, blocks, part->start_lba + offset);
 }
 
 static blockdev_ops bops =

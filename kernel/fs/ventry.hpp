@@ -17,7 +17,8 @@ struct ventry_t
 	ventry_t* children;
 	ventry_t* sibling_prev;
 	ventry_t* sibling_next;
-
+	ventry_t* next;
+		
 	mount_t* mount;
 	reflock_t ref;
 };
@@ -26,5 +27,10 @@ ventry_t* ventry_new(const char* name, vnode_t* node);
 void ventry_free(ventry_t* ventry);
 void ventry_ref(ventry_t* ventry);
 void ventry_put(ventry_t* ventry);
+
+void dcache_init();
+ventry_t* dcache_get(ventry_t* parent, const char* name);
+void dcache_insert(ventry_t* entry);
+void dcache_remove(ventry_t* entry);
 
 }

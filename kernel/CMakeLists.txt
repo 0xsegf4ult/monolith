@@ -32,6 +32,9 @@ target_sources(vmmonolith PRIVATE
 	fs/procfs/procfs.cpp
 	fs/ramfs/ramfs.cpp
 	fs/generic.cpp
+	fs/filesystem.cpp
+	fs/lookup.cpp
+	fs/super.cpp
 	fs/vfs.cpp
 	fs/ventry.cpp
 	fs/vnode.cpp

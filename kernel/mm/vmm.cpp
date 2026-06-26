@@ -114,12 +114,15 @@ address_space* get_kernel_vmspace()
 
 bool vm_page_fault(virtaddr_t addr, uint64_t flags)
 {
-	log::debug("vm_page_fault {:x}", addr);
-
 	if(flags & pf_present)
 		return false;
 
-	address_space* as = smp_current_cpu()->get_current_thread()->vm_space;
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(!thr)
+		return false;
+
+	address_space* as = thr->vm_space;
+	
 	uint64_t status = 0;
 	physaddr_t phys = as->get_mapping(addr, &status);
 	log::debug("mapped to phys {:x} flags {:b} fault {:b}", phys, status, flags);

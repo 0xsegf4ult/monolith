@@ -6,6 +6,7 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/smp.hpp>
+#include <fs/lookup.hpp>
 #include <fs/vfs.hpp>
 #include <sys/err.hpp>
 #include <sys/executable.hpp>
@@ -258,17 +259,18 @@ int sys_chdir(const char* path)
 	if(!path)
 		return -EINVAL;
 
-	auto query = vfs::lookup(path, 0); 
-	if(!query.result)
-		return -ENOENT;
+	vfs::ventry_t* query = nullptr;
+	auto status = vfs::lookup(path, &query, 0); 
+	if(status < 0)
+		return status;
 
-	if(!S_ISDIR(query.result->node->mode))
+	if(!S_ISDIR(query->node->mode))
 	       return -ENOTDIR;	
 
 	auto* thr = smp_current_cpu()->get_current_thread();
-	ventry_ref(query.result);
+	ventry_ref(query);
 	ventry_put(thr->cwd);
-	thr->cwd = query.result;
+	thr->cwd = query;
 
 	return 0;
 }
@@ -333,6 +335,23 @@ void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t off
 int sys_munmap(void* addr, size_t length)
 {
 	return -1;
+}
+
+int sys_mount(const char* source, const char* target, const char* fsname)
+{
+	if(!target || !fsname)
+		return -EINVAL;
+	
+	if(reinterpret_cast<virtaddr_t>(source) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(reinterpret_cast<virtaddr_t>(target) > 0x7fffffffffff)
+		return -EFAULT;
+	
+	if(reinterpret_cast<virtaddr_t>(fsname) > 0x7fffffffffff)
+		return -EFAULT;
+
+	return vfs::mount(source, target, fsname);
 }
 
 void sys_dbgwrite(const char* message)
@@ -403,6 +422,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case MUNMAP:
 		ctx->rax = static_cast<uint64_t>(sys_munmap((void*)ctx->rdi, (size_t)ctx->rsi));
+		break;
+	case MOUNT:
+		ctx->rax = static_cast<uint64_t>(sys_mount((const char*)ctx->rdi, (const char*)ctx->rsi, (const char*)ctx->rdx));
 		break;
 	case DEBUG_PRINT:
 		sys_dbgwrite((const char*)ctx->rdi);

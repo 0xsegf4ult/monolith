@@ -68,11 +68,12 @@ void remove_irq_handler(uint8_t irq)
 
 static int pf_counter = 0;
 static char trace_buf[64];
-	struct stack_frame
-	{
-		stack_frame* rbp;
-		uint64_t rip;
-	};
+
+struct stack_frame
+{
+	stack_frame* rbp;
+	uint64_t rip;
+};
 
 cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 {
@@ -89,6 +90,7 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 		if(ctx->error_code & PF_FETCH)
 			pflags |= pf_fetch;
 
+		log::debug("handle pf RIP {:x} addr {:x}", ctx->rip, cr2);
 		if(vm_page_fault(cr2, pflags))
 			return ctx;
 	}

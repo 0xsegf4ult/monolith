@@ -36,6 +36,7 @@ enum class syscall_id : uint64_t
 	GETCWD,
 	MMAP,
 	MUNMAP,
+	MOUNT,
 	DEBUG_PRINT
 };
 

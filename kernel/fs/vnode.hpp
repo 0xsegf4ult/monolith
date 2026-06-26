@@ -12,6 +12,7 @@ namespace vfs
 
 struct fs_inode_ops;
 struct fs_file_ops;
+struct superblock_t;
 
 struct vnode_t
 {
@@ -25,6 +26,7 @@ struct vnode_t
 	atomic_uint ref;
 
 	void* data;
+	superblock_t* sb;
 	fs_inode_ops* iops;
 	fs_file_ops* fops;
 	mutex_t lock;

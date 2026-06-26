@@ -15,6 +15,7 @@
 
 
 #include <fs/procfs/procfs.hpp>
+#include <fs/super.hpp>
 #include <fs/vfs.hpp>
 
 #include <init/initramfs.hpp>
@@ -202,10 +203,8 @@ void kernel_main()
 	log::info("rtc: updated system time to {}", time);
 
 	vfs::mkdir("proc", 0755);
-	auto* procfs = procfs_create();
-	vfs::mount("/proc", procfs);
-
-	vfs::mkdir("sys", 0755);
+	procfs_init();
+	vfs::mount(nullptr, "/proc", "procfs");
 
 	vmm_late_init();
 
@@ -214,7 +213,7 @@ void kernel_main()
 	pcie::enumerate();
 
 	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
-	mmu_map_range(get_kernel_vmspace()->root_pml4, (physaddr_t)initramfs_address - mm::direct_mapping_offset, (virtaddr_t)initramfs_address, initramfs_size, vm_flags_to_x86(vm_present));
+	mmu_map_range(get_kernel_vmspace()->root_pml4, (physaddr_t)initramfs_address - mm::direct_mapping_offset, (virtaddr_t)initramfs_address, initramfs_size, vm_flags_to_x86(vm_present | vm_write));
 	initramfs_unpack(initramfs_address, initramfs_size);
 
 	const char* argv[2] = {"/bin/init", nullptr};

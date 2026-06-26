@@ -1,5 +1,7 @@
 #include <fs/generic.hpp>
+#include <fs/ventry.hpp>
 #include <fs/vfs.hpp>
+
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/smp.hpp>
 #include <dev/device.hpp>
@@ -71,6 +73,8 @@ int generic_fs_create(ventry_t* parent, const char* path, mode_t mode)
 
         mutex_unlock(parent->node->lock);
 
+	dcache_insert(dirent);
+
         return 0;
 }
 
@@ -104,6 +108,8 @@ int generic_fs_mkdir(ventry_t* parent, const char* path, mode_t mode)
         parent->children = dirent;
 
         mutex_unlock(parent->node->lock);
+
+	dcache_insert(dirent);
 
         return 0;
 }
@@ -144,6 +150,8 @@ int generic_fs_mknod(ventry_t* parent, const char* path, mode_t mode, dev_t dev)
 
         parent->children = dirent;
         mutex_unlock(parent->node->lock);
+
+	dcache_insert(dirent);
 
         return 0;
 }

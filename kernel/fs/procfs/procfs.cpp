@@ -1,42 +1,77 @@
 #include <fs/procfs/procfs.hpp>
 #include <fs/generic.hpp>
+#include <fs/lookup.hpp>
 #include <fs/vfs.hpp>
+#include <fs/super.hpp>
 #include <mm/slab.hpp>
 
 #include <lib/kstd.hpp>
 #include <lib/types.hpp>
 #include <sys/thread.hpp>
+#include <sys/err.hpp>
 
 using namespace vfs;
 
-static vfilesystem_t* g_procfs = nullptr;
+static fs_inode_ops procfs_iops =
+{
+	.lookup = generic_fs_lookup,
+	.create = nullptr,
+	.mkdir = nullptr,
+	.mknod = nullptr,
+	.getdents = generic_fs_getdents
+};
 
-vfilesystem_t* procfs_create()
+static fs_file_ops procfs_fops =
+{
+	.open = generic_fs_open,
+	.close = generic_fs_close,
+	.read = nullptr,
+	.write = nullptr
+};
+
+static superblock_t* g_procfs = nullptr;
+
+int procfs_super_init(block_device_t* bdev, superblock_t** out_sb)
 {
 	if(g_procfs)
-		return nullptr;
+		return -EBUSY;
 
-	auto* fs = (vfilesystem_t*)kmalloc(sizeof(vfilesystem_t));
-	fs->iops.lookup = generic_fs_lookup;
-	fs->iops.create = nullptr;
-	fs->iops.mkdir = nullptr;
-	fs->iops.mknod = nullptr;
-	fs->iops.getdents = generic_fs_getdents;
-	fs->fops.open = generic_fs_open;
-	fs->fops.close = generic_fs_close;
-	fs->fops.read = nullptr;
-	fs->fops.write = nullptr;
-	fs->data = nullptr;
-	g_procfs = fs;
+	auto* sb = (superblock_t*)kmalloc(sizeof(superblock_t));
 
 	auto* node = vnode_new(S_IFDIR | 0755);
-	node->iops = &fs->iops;
-        node->fops = &fs->fops;
+	node->iops = &procfs_iops;
+        node->fops = &procfs_fops;
 
         auto* dentry = ventry_new("proc", node);
-	fs->root = dentry;
+	sb->data = (void*)dentry;
 
-	return fs;
+	sb->bdev = nullptr;
+	g_procfs = sb;
+	*out_sb = sb;
+	return 0;
+}
+
+int procfs_super_root(superblock_t* sb, ventry_t** out_root)
+{
+	*out_root = (ventry_t*)sb->data;
+	return 0;
+}
+
+static fs_super_ops procfs_sb_ops
+{
+	.init = procfs_super_init,
+	.root = procfs_super_root
+};
+
+void procfs_init()
+{
+	auto* fs = (vfilesystem_t*)kmalloc(sizeof(vfilesystem_t));
+	fs->flags = FS_FLAG_NODEV;
+	fs->iops = &procfs_iops;
+	fs->fops = &procfs_fops;
+	fs->sb_ops = &procfs_sb_ops;
+
+	register_fs(fs, "procfs");
 }
 
 void procfs_mkdir(const char* path)
@@ -44,7 +79,10 @@ void procfs_mkdir(const char* path)
 	if(!g_procfs)
 		return;
 
-	auto parent = vfs::lookup_at(g_procfs->root, path, LOOKUP_PARENT);
+	ventry_t* parent = nullptr;
+	auto status = vfs::lookup_at((ventry_t*)g_procfs->data, path, &parent, LOOKUP_PARENT);
+	if(status < 0)
+		return;
 
 	auto plen = string_length(path);
 	const char* basename = path;
@@ -56,11 +94,12 @@ void procfs_mkdir(const char* path)
 	if(!basename)
 		return;
 
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
+	ventry_t* result = nullptr;
+	status = lookup_at(parent, basename, &result, 0);
+	if(status >= 0)
 		return;
 
-	generic_fs_mkdir(parent.result, basename, 0755);
+	generic_fs_mkdir(parent, basename, 0755);
 }
 
 void procfs_create(const char* path, vfs::fs_file_ops* fops, void* priv_data)
@@ -68,7 +107,10 @@ void procfs_create(const char* path, vfs::fs_file_ops* fops, void* priv_data)
 	if(!g_procfs)
 		return;
 
-	auto parent = vfs::lookup_at(g_procfs->root, path, LOOKUP_PARENT);
+	ventry_t* parent = nullptr;
+	auto status = vfs::lookup_at((ventry_t*)g_procfs->data, path, &parent, LOOKUP_PARENT);
+	if(status < 0)
+		return;
 
 	auto plen = string_length(path);
 	const char* basename = path;
@@ -80,29 +122,30 @@ void procfs_create(const char* path, vfs::fs_file_ops* fops, void* priv_data)
 	if(!basename)
 		return;
 
-	auto query = lookup_at(parent.result, basename, 0);
-	if(query.result)
+	ventry_t* result = nullptr;
+	status = lookup_at(parent, basename, &result, 0);
+	if(status >= 0)
 		return;
 
 	auto* inode = vnode_new(S_IFREG | S_IRUSR | S_IRGRP | S_IROTH);
-        inode->iops = parent.result->node->iops;
+        inode->iops = parent->node->iops;
 	inode->fops = fops;
 	inode->data = priv_data;
 
         auto* dirent = ventry_new(basename, inode);
-        dirent->parent = parent.result;
+        dirent->parent = parent;
 
-        mutex_lock(parent.result->node->lock);
+        mutex_lock(parent->node->lock);
 
-        if(parent.result->children)
+        if(parent->children)
 	{
-		parent.result->children->sibling_prev = dirent;
-                dirent->sibling_next = parent.result->children;
+		parent->children->sibling_prev = dirent;
+                dirent->sibling_next = parent->children;
 	}
 
-        parent.result->children = dirent;
+        parent->children = dirent;
 
-        mutex_unlock(parent.result->node->lock);
+        mutex_unlock(parent->node->lock);
 }
 
 void procfs_remove(const char* path)
@@ -110,11 +153,11 @@ void procfs_remove(const char* path)
 	if(!g_procfs)
 		return;
 
-	auto query = vfs::lookup_at(g_procfs->root, path, 0);
-	if(!query.result)
+	ventry_t* dentry = nullptr;
+	auto status = vfs::lookup_at((ventry_t*)g_procfs->data, path, &dentry, 0);
+	if(status < 0)
 		return;
 
-	auto* dentry = query.result;
 	spinlock_acquire(dentry->ref.lock);
 	if(S_ISDIR(dentry->node->mode))
 	{
