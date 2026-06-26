@@ -1,8 +1,8 @@
 add_executable(vmmonolith)
 
 target_compile_options(vmmonolith PRIVATE -target x86_64-none-elf -ffreestanding -fno-rtti -fno-exceptions -mcmodel=kernel -mno-red-zone -mgeneral-regs-only -nostdlib -nostdlib++ -nodefaultlibs -fPIC)
-target_link_options(vmmonolith PRIVATE -T ${CMAKE_CURRENT_LIST_DIR}/init/linker.ld -fuse-ld=lld -nostdlib -nostdlib++ -nodefaultlibs)
-target_include_directories(vmmonolith PRIVATE ${CMAKE_SOURCE_DIR}/buildroot/usr/include ${CMAKE_CURRENT_LIST_DIR})
+target_link_options(vmmonolith PRIVATE -T ${CMAKE_CURRENT_LIST_DIR}/arch/x86_64/linker.ld -fuse-ld=lld -nostdlib -nostdlib++ -nodefaultlibs)
+target_include_directories(vmmonolith PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
 target_sources(vmmonolith PRIVATE
 	arch/x86_64/acpi.cpp
 	arch/x86_64/apic.cpp
@@ -38,12 +38,6 @@ target_sources(vmmonolith PRIVATE
 	fs/vfs.cpp
 	fs/ventry.cpp
 	fs/vnode.cpp
-	init/initramfs.cpp
-	init/init.cpp
-	lib/elf.cpp
-	lib/klog.cpp
-	lib/kstd.cpp
-	lib/stackchk.cpp
 	mm/address_space.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
@@ -54,5 +48,11 @@ target_sources(vmmonolith PRIVATE
 	sys/thread.cpp
 	sys/time.cpp
 	sys/scheduler.cpp
-	sys/syscall.cpp)
+	sys/syscall.cpp
+	elf.cpp
+	init.cpp
+	initramfs.cpp
+	klog.cpp
+	kstd.cpp
+	stackchk.cpp)
 set_target_properties(vmmonolith PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/boot")

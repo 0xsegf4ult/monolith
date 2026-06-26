@@ -2,11 +2,10 @@
 #include <mm/pmm.hpp>
 #include <mm/vmm.hpp>
 #include <mm/layout.hpp>
-
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
-#include <lib/klog.hpp>
 #include <sys/spinlock.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
+#include <klog.hpp>
 
 namespace mm
 {

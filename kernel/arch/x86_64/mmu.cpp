@@ -4,8 +4,8 @@
 #include <mm/pmm.hpp>
 #include <mm/vm_object.hpp>
 
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 
 page_table* get_pte(page_table* table, uint64_t entry)
 {

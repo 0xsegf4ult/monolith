@@ -2,8 +2,8 @@
 #include <arch/x86_64/smp.hpp>
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
-#include <lib/types.hpp>
-#include <lib/klog.hpp>
+#include <types.hpp>
+#include <klog.hpp>
 #include <sys/thread.hpp>
 
 void cpu_t::set_pagetable(page_table* pt_address)

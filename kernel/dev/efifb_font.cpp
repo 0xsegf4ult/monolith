@@ -1,4 +1,4 @@
-#include <lib/types.hpp>
+#include <types.hpp>
 
 extern "C" const uint8_t font_data[] = {
 	/* 0 0x00 '^@' */

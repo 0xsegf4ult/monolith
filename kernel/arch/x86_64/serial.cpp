@@ -1,6 +1,6 @@
 #include <arch/x86_64/serial.hpp>
 #include <arch/x86_64/io.hpp>
-#include <lib/types.hpp>
+#include <types.hpp>
 
 using namespace serial;
 

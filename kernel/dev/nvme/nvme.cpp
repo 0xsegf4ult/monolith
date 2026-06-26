@@ -17,8 +17,8 @@
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
 
 #include <sys/err.hpp>
 

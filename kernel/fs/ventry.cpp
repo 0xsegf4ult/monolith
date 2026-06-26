@@ -1,9 +1,9 @@
 #include <fs/ventry.hpp>
 #include <fs/vnode.hpp>
 #include <fs/vfs.hpp>
-#include <lib/types.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
+#include <types.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
 #include <mm/slab.hpp>
 #include <sys/reflock.hpp>
 #include <sys/spinlock.hpp>

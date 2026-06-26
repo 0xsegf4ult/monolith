@@ -7,8 +7,8 @@
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
-#include <lib/types.hpp>
-#include <lib/klog.hpp>
+#include <types.hpp>
+#include <klog.hpp>
 
 namespace pcie
 {
@@ -134,7 +134,7 @@ size_t pcie_device::get_bar32_size(uint32_t bir)
 	return len + 1;
 }
 
-bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor, uint32_t flags)
+bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor)
 {
 	uint8_t pcap_ptr = read_config32(0x34) & 0xFC;
 	uint8_t msix_ptr = 0;

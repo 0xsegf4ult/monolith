@@ -1,5 +1,5 @@
 #include <sys/time.hpp>
-#include <lib/types.hpp>
+#include <types.hpp>
 #include <stdatomic.h>
 
 static time_t boot_time = 0;

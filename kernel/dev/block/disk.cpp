@@ -6,8 +6,8 @@
 #include <fs/vfs.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
 
 disk_t* disk_create(dev_t blk, const char* name, void* priv_data, vfs::fs_file_ops* fops, blockdev_ops* bops)
 {

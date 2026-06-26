@@ -10,10 +10,10 @@
 #include <mm/layout.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
-#include <lib/elf.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
+#include <elf.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
 
 int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 {

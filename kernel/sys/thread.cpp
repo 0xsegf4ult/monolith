@@ -4,9 +4,9 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/context.hpp>
 
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
 
 #include <fs/vfs.hpp>
 #include <fs/procfs/procfs.hpp>
@@ -27,8 +27,8 @@ void thread_entry_stub()
 {
 	enable_interrupts();
 	auto self = smp_current_cpu()->get_current_thread();
-/*
-	log::debug("started thread {}", self->name);
+
+/*	log::debug("started thread {}", self->name);
 	log::debug("entrypoint {:#x}", self->entry);
 	log::debug("rsp0 {:#x} rsp3 {:#x}", self->rsp0, self->rsp);
 */
@@ -73,7 +73,14 @@ thread_t* create_thread(const char* name, const char** argv, bool is_user)
 	thread->parent = nullptr;
 	thread->children = nullptr;
 	thread->sibling = nullptr;
+	thread->cred.uid = 0;
+	thread->cred.euid = 0;
+	thread->cred.suid = 0;
+	thread->cred.gid = 0;
+	thread->cred.egid = 0;
+	thread->cred.sgid = 0;
 	thread->cwd = vfs::get_root_dentry();
+	
 	thread->tty = nullptr;
 	thread->return_status = 0;
 

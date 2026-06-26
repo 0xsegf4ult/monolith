@@ -2,7 +2,7 @@
 #include <fs/super.hpp>
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
-#include <lib/kstd.hpp>
+#include <kstd.hpp>
 
 namespace vfs
 {

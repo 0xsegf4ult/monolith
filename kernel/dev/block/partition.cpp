@@ -3,8 +3,8 @@
 #include <dev/block/block.hpp>
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
 #include <mm/slab.hpp>
 
 ssize_t part_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)

@@ -1,7 +1,7 @@
 #include <sys/syscall.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
 
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/context.hpp>
@@ -16,7 +16,7 @@
 #include <sys/stat.hpp>
 #include <mm/address_space.hpp>
 
-#include <lib/klog.hpp>
+#include <klog.hpp>
 
 int sys_open(const char* path, int flags)
 {
@@ -354,6 +354,50 @@ int sys_mount(const char* source, const char* target, const char* fsname)
 	return vfs::mount(source, target, fsname);
 }
 
+int sys_getuid()
+{
+	return smp_current_cpu()->get_current_thread()->cred.uid;
+}
+
+int sys_setuid(uid_t uid)
+{
+	auto* creds = &smp_current_cpu()->get_current_thread()->cred;
+	if(creds->euid == 0)
+	{
+		creds->uid = uid;
+		creds->euid = uid;
+		creds->suid = uid;
+	}
+	else if(creds->uid == uid || creds->suid == uid)
+		creds->euid = uid;
+	else
+		return -EPERM;
+
+	return 0;
+}
+
+int sys_getgid()
+{
+	return smp_current_cpu()->get_current_thread()->cred.gid;
+}
+
+int sys_setgid(gid_t gid)
+{
+	auto* creds = &smp_current_cpu()->get_current_thread()->cred;
+	if(creds->euid == 0)
+	{
+		creds->gid = gid;
+		creds->egid = gid;
+		creds->sgid = gid;
+	}
+	else if(creds->gid == gid || creds->sgid == gid)
+		creds->egid = gid;
+	else
+		return -EPERM;
+
+	return 0;
+}
+
 void sys_dbgwrite(const char* message)
 {
 	if(!message)
@@ -425,6 +469,18 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case MOUNT:
 		ctx->rax = static_cast<uint64_t>(sys_mount((const char*)ctx->rdi, (const char*)ctx->rsi, (const char*)ctx->rdx));
+		break;
+	case GETUID:
+		ctx->rax = static_cast<uint64_t>(sys_getuid());
+		break;
+	case SETUID:
+		ctx->rax = static_cast<uint64_t>(sys_setuid((uid_t)ctx->rdi));
+		break;
+	case GETGID:
+		ctx->rax = static_cast<uint64_t>(sys_getgid());
+		break;
+	case SETGID:
+		ctx->rax = static_cast<uint64_t>(sys_setgid((gid_t)ctx->rdi));
 		break;
 	case DEBUG_PRINT:
 		sys_dbgwrite((const char*)ctx->rdi);

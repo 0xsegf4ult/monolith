@@ -1,9 +1,9 @@
 #include <mm/pmm.hpp>
 #include <mm/memory_map.hpp>
 #include <mm/layout.hpp>
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
 #include <sys/spinlock.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 
 static uint64_t* pmm_bitmap = nullptr;
 static size_t pmm_bitmap_length = 0;

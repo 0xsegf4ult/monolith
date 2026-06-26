@@ -3,7 +3,7 @@
 #include <arch/x86_64/io.hpp>
 #include <arch/x86_64/interrupts.hpp>
 
-#include <lib/types.hpp>
+#include <types.hpp>
 
 #include <sys/scheduler.hpp>
 #include <sys/time.hpp>

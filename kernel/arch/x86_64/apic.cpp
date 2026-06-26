@@ -4,9 +4,9 @@
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
 
 namespace lapic
 {

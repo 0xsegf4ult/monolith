@@ -4,7 +4,7 @@
 #include <sys/scheduler.hpp>
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/cpu.hpp>
-#include <lib/types.hpp>
+#include <types.hpp>
 
 void mutex_init(mutex_t& mutex)
 {

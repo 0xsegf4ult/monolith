@@ -8,9 +8,9 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/mmu.hpp>
 
-#include <lib/types.hpp>
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
+#include <types.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
 
 void address_space::init(virtaddr_t base)
 {

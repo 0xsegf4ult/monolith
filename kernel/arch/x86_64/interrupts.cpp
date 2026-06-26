@@ -7,9 +7,9 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/mmu.hpp>
 #include <mm/vmm.hpp>
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 #include <sys/thread.hpp>
 #include <sys/syscall.hpp>
 #include <sys/scheduler.hpp>

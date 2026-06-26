@@ -14,9 +14,9 @@
 
 #include <sys/thread.hpp>
 
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 
 static address_space* kernel_address_space = nullptr;
 

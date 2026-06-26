@@ -10,9 +10,9 @@
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 
-#include <lib/types.hpp>
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
+#include <types.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
 
 extern uint8_t font_data[];
 

@@ -4,10 +4,10 @@
 #include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 
-#include <lib/klog.hpp>
+#include <klog.hpp>
 
 #include <sys/err.hpp>
 

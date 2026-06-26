@@ -7,8 +7,8 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/smp.hpp>
 
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
 
 #include <mm/slab.hpp>
 

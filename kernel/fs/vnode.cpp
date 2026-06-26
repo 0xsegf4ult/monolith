@@ -1,6 +1,6 @@
 #include <fs/vnode.hpp>
 #include <fs/ops.hpp>
-#include <lib/types.hpp>
+#include <types.hpp>
 #include <mm/slab.hpp>
 #include <sys/mutex.hpp>
 

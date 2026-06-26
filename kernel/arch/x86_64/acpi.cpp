@@ -4,9 +4,9 @@
 #include <arch/x86_64/timer.hpp>
 #include <dev/pcie.hpp>
 #include <mm/layout.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
 
 namespace acpi
 {

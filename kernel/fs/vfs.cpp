@@ -11,9 +11,9 @@
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
-#include <lib/types.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
+#include <types.hpp>
 
 #include <sys/err.hpp>
 #include <sys/thread.hpp>

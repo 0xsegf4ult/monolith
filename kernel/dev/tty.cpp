@@ -10,8 +10,8 @@
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 
-#include <lib/klog.hpp>
-#include <lib/kstd.hpp>
+#include <klog.hpp>
+#include <kstd.hpp>
 
 #include <sys/thread.hpp>
 #include <sys/scheduler.hpp>

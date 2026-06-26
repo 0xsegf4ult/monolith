@@ -9,10 +9,10 @@
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
-#include <lib/kstd.hpp>
-#include <lib/klog.hpp>
-#include <lib/types.hpp>
-#include <init/init.hpp>
+#include <kstd.hpp>
+#include <klog.hpp>
+#include <types.hpp>
+#include <init.hpp>
 
 struct sched_percpu_t
 {
