@@ -1,26 +1,27 @@
+#include <dev/tty.hpp>
+#include <dev/console.hpp>
+#include <dev/character.hpp>
+#include <dev/device.hpp>
+
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/smp.hpp>
-
-#include <dev/tty.hpp>
-#include <dev/ps2.hpp>
-#include <dev/efifb.hpp>
-#include <dev/device.hpp>
-#include <dev/character.hpp>
 
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 
-#include <klog.hpp>
-#include <kstd.hpp>
-
-#include <sys/thread.hpp>
-#include <sys/scheduler.hpp>
-#include <sys/mutex.hpp>
-
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
+#include <sys/mutex.hpp>
+#include <sys/thread.hpp>
+#include <sys/scheduler.hpp>
+#include <sys/signal.hpp>
+
 #include <sys/err.hpp>
+
+#include <klog.hpp>
+#include <kstd.hpp>
+#include <panic.hpp>
 
 // only ECHO works
 constexpr termios_t default_termios = {
@@ -44,20 +45,6 @@ constexpr winsize_t default_winsize = {
 	.ws_ypixel = 0
 };
 
-struct tty_device
-{
-	constexpr static size_t buffer_size = 0x1000;
-	byte* read_buffer;
-	uint32_t read_buffer_head;
-	uint32_t read_buffer_tail;
-
-	thread_t* waitqueue;
-	mutex_t lock;
-
-	termios_t termios;
-	winsize_t winsize;
-};
-
 int tty_open(vfs::vnode_t* node, int flags)
 {
 	auto* thr = smp_current_cpu()->get_current_thread();
@@ -67,9 +54,11 @@ int tty_open(vfs::vnode_t* node, int flags)
 	if(!tty)
 		return -ENXIO;	
 
-	if(!thr->tty)
+	if(!thr->tty && thr->sid == thr->pid && tty->session_id == 0)
 	{
 		thr->tty = tty;
+		tty->session_id = thr->sid;
+		tty->fg_pgrp = thr->pgid;
 	}
 
 	return 0;
@@ -78,6 +67,14 @@ int tty_open(vfs::vnode_t* node, int flags)
 int tty_close(int fd)
 {
 	return 0;
+}
+
+void tty_add_input(tty_device* tty, const char* c, size_t len)
+{
+	uint64_t rflags;
+	spinlock_acquire_irqsave(tty->write_buffer_lock, rflags);
+
+	spinlock_release_irqsave(tty->write_buffer_lock, rflags);
 }
 
 void tty_consume(tty_device* tty, char c)
@@ -92,40 +89,67 @@ void tty_consume(tty_device* tty, char c)
 	*reinterpret_cast<char*>(tty->read_buffer + tty->read_buffer_tail) = c;
        	tty->read_buffer_tail = (tty->read_buffer_tail + 1) % tty_device::buffer_size;
 
-	/* send signal if ISIG 
 	if(tty->termios.c_lflag & ISIG)
-	*/
+	{
+		if(c == tty->termios.c_cc[VINTR])
+		{
+			mutex_unlock(tty->lock);
+			log::debug("sending SIGINT to pgrp {}", tty->fg_pgrp);
+			pgrp_send_signal(tty->fg_pgrp, SIGINT);
+			return;
+		}
+	}
 
 	if(tty->termios.c_iflag & ICRNL && c == '\r')
 		c = '\n';
 
 	if(tty->termios.c_lflag & ECHO)
-		efifb_write(&c, 1u);
-
-	while(tty->waitqueue)
 	{
-		auto* thr = tty->waitqueue;
-		tty->waitqueue = tty->waitqueue->next;
-		thr->next = nullptr;
-		
-		sched_unblock(thr);
+		tty->output(&c, 1u);
 	}
+
+	wait_queue_wake(tty->waitqueue);
 	mutex_unlock(tty->lock);
 }
 
 ssize_t tty_read(tty_device* tty, byte* buffer, size_t length)
 {
 	mutex_lock(tty->lock);
-	while(tty->read_buffer_head == tty->read_buffer_tail)
+	if(tty->read_buffer_head == tty->read_buffer_tail)
 	{
-		auto* thr = smp_current_cpu()->get_current_thread();
-	
-		thr->next = tty->waitqueue;
-		tty->waitqueue = thr;
-	
-		mutex_unlock(tty->lock);
-		sched_block(thread_status::sleeping);
-		mutex_lock(tty->lock);
+		thread_t* thr = smp_current_cpu()->get_current_thread();
+		int wret = 0;
+		while(1)
+		{
+			wait_queue_register(tty->waitqueue, thr->wait);
+			thread_status exp_state = THREAD_RUNNING;
+			if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_INTR_SLEEPING))	
+			{
+				if(exp_state != THREAD_INTR_SLEEPING)
+					panic("wq_register cmpxchg failed");
+			}
+
+			if(tty->read_buffer_head != tty->read_buffer_tail)
+				break;
+
+			if(signal_pending(thr))
+			{
+				wret = -EINTR;
+				break;
+			}
+
+			mutex_unlock(tty->lock);
+			sched_yield();
+			mutex_lock(tty->lock);
+		}
+		wait_queue_unregister(thr->wait);
+		thread_status exp_state = THREAD_INTR_SLEEPING;
+		atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_RUNNING);
+		if(wret < 0)
+		{
+			mutex_unlock(tty->lock);
+			return wret;
+		}
 	}
 
 	size_t read_count = 0;
@@ -160,9 +184,9 @@ ssize_t tty_write(tty_device* tty, const byte* buffer, size_t length)
 		if((tty->termios.c_oflag & ONLCR) && ((char)buffer[i] == '\n'))
 		{
 			char cr = '\r';
-			efifb_write(&cr, 1);
+			tty->output(&cr, 1);
 		}
-		efifb_write((const char*)buffer + i, 1);
+		tty->output((const char*)buffer + i, 1);
 	}
 
 	return length;
@@ -183,6 +207,24 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 
 	switch(op)
 	{
+	case TIOCSPGRP:
+	{
+		pid_t pgrp;
+		if(!arg || arg > 0x7fffffffffff)
+                        return -EFAULT;
+		
+		if(thr->sid != tty->session_id)
+			return -ENOTTY;
+
+		memcpy(&pgrp, (byte*)arg, sizeof(pid_t));
+		auto* leader = get_pgrp_leader(pgrp);
+		if(!leader || leader->sid != thr->sid)
+			return -EPERM;
+
+		tty->fg_pgrp = pgrp;
+
+		return 0;
+	}		
 	case TCGETS:
 	{
 		termios_t tmp_t;
@@ -190,7 +232,7 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 		tmp_t = tty->termios;
 		mutex_unlock(tty->lock);
 
-		if(arg > 0x7fffffffffff)
+		if(!arg || arg > 0x7fffffffffff)
 			return -EFAULT;
 
 		memcpy((byte*)arg, &tmp_t, sizeof(termios_t));
@@ -199,7 +241,7 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 	case TCSETS:
 	{
 		termios_t tmp_t;
-		if(arg > 0x7fffffffffff)
+		if(!arg || arg > 0x7fffffffffff)
 			return -EFAULT;
 
 		memcpy(&tmp_t, (byte*)arg, sizeof(termios_t));
@@ -237,21 +279,35 @@ static vfs::fs_file_ops tty_fops =
 	.ioctl = tty_ioctl
 };
 
-void tty_init()
+tty_device* tty_create(uint16_t index, tty_output_t output_fn)
 {
-	auto* tty = chardev_alloc(dev_t{3, 0});
+	auto* tty = chardev_alloc(dev_t{3, index});
 	tty->fops = &tty_fops;
 
 	auto* device = (tty_device*)kmalloc(sizeof(tty_device));
+
 	device->read_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));
 	device->read_buffer_head = 0;
 	device->read_buffer_tail = 0;
-	device->waitqueue = nullptr;
+
+	device->write_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));
+	device->write_buffer_head = 0;
+	device->write_buffer_tail = 0;
+
+	spinlock_init(device->write_buffer_lock);
+
+	wait_queue_init(device->waitqueue);
+	device->output = output_fn;
 	device->termios = default_termios;
 	device->winsize = default_winsize;
+	device->session_id = 0;
+	device->fg_pgrp = 0;
 	mutex_init(device->lock);
 	tty->data = device;
 
-	auto dev_node = vfs::mknod("/dev/tty0", S_IFCHR | S_IRUSR | S_IWUSR, dev_t{3, 0});
-	ps2::set_tty(device);
+	char devname[32];
+	format_to(string_span{&devname[0], 32}, "/dev/tty{}", index);
+	auto dev_node = vfs::mknod(devname, S_IFCHR | S_IRUSR | S_IWUSR, dev_t{3, index});
+
+	return device;
 }

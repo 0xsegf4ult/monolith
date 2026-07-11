@@ -4,6 +4,7 @@
 #include <klog.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 #include <limine.h>
 

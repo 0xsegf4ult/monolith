@@ -3,6 +3,7 @@
 #include <dev/device.hpp>
 #include <fs/ops.hpp>
 #include <types.hpp>
+#include <list.hpp>
 
 struct block_device_t;
 typedef ssize_t (*pread_blocks_t)(block_device_t*, byte*, size_t, size_t);
@@ -18,7 +19,7 @@ struct block_device_t
 	vfs::fs_file_ops* fops;
 	blockdev_ops* bops;
 	void* data;
-	block_device_t* next;
+	list_node_t list_node;
 };
 
 block_device_t* blockdev_get(dev_t dev);

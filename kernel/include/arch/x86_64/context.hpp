@@ -34,3 +34,11 @@ struct thread_t;
 
 extern "C" void arch_context_switch(thread_t* prev, thread_t* next);
 extern "C" void arch_switch_to_usermode(virtaddr_t rsp, virtaddr_t rip);
+
+enum trace_flags : uint32_t
+{
+	TRACE_PANIC = 1
+};
+
+void dump_registers(cpu_context_t* ctx, uint32_t flags);
+void stacktrace(uint64_t frame, uint32_t flags);

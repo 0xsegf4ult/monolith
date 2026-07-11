@@ -6,11 +6,11 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/timer.hpp>
 
+#include <dev/console.hpp>
 #include <dev/efifb.hpp>
 #include <dev/pcie.hpp>
 #include <dev/ps2.hpp>
 #include <dev/pseudo.hpp>
-#include <dev/tty.hpp>
 #include <dev/rtc.hpp>
 
 #include <fs/fat/fatfs.hpp>
@@ -22,6 +22,7 @@
 
 #include <klog.hpp>
 #include <kstd.hpp>
+#include <panic.hpp>
 
 #include <mm/address_space.hpp>
 #include <mm/layout.hpp>
@@ -99,10 +100,7 @@ static size_t initramfs_size{0};
 
 extern "C" void __assertion_fail_handler(const char* str)
 {
-        early_serial_write("\nassertion failed: ");
-        early_serial_write(str);
-        early_serial_putchar('\n');
-	asm volatile("cli; hlt");
+        panic("assertion failed: {}", str);
 }
 
 extern "C" void init()
@@ -188,6 +186,7 @@ extern "C" void init()
 
 	efifb_init(framebuffer);
 
+	threading_init();
 	smp_init();
 
 	panic("idle thread died");
@@ -195,6 +194,7 @@ extern "C" void init()
 
 void kernel_main()
 {
+	console_init();
 	pseudo_init();
 
 	rtc_init();
@@ -209,8 +209,6 @@ void kernel_main()
 
 	vmm_late_init();
 
-	tty_init();
-	
 	pcie::enumerate();
 
 	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);

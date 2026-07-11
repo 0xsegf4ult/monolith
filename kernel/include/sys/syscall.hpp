@@ -41,8 +41,13 @@ enum class syscall_id : uint64_t
 	SETUID,
 	GETGID,
 	SETGID,
-	DEBUG_PRINT
+	GETPID,
+	SETSID,
+	GETPGID,
+	SETPGID,
 };
+
+void sys_exit(int status);
 
 struct cpu_context_t;
 void syscall_handler(cpu_context_t* ctx);

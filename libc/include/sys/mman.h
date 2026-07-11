@@ -23,12 +23,12 @@ typedef enum
 
 #define MAP_FAILED ((void*) -1)
 
-inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
+static inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
         return (void*)_syscall(SYS_MMAP, (uint64_t)addr, (uint64_t)length, (uint64_t)prot, (uint64_t) flags, (uint64_t)fd, (uint64_t)offset);
 }
 
-inline int munmap(void* addr, size_t length)
+static inline int munmap(void* addr, size_t length)
 {
         return (int)_syscall(SYS_MUNMAP, (uint64_t)addr, (uint64_t)length, 0, 0, 0, 0);
 }

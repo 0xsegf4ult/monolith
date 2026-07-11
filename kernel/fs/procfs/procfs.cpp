@@ -5,6 +5,7 @@
 #include <fs/super.hpp>
 #include <mm/slab.hpp>
 
+#include <klog.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
 #include <sys/thread.hpp>
@@ -136,15 +137,7 @@ void procfs_create(const char* path, vfs::fs_file_ops* fops, void* priv_data)
         dirent->parent = parent;
 
         mutex_lock(parent->node->lock);
-
-        if(parent->children)
-	{
-		parent->children->sibling_prev = dirent;
-                dirent->sibling_next = parent->children;
-	}
-
-        parent->children = dirent;
-
+	list_add_tail(parent->children, dirent->sibling);
         mutex_unlock(parent->node->lock);
 }
 
@@ -172,46 +165,22 @@ void procfs_remove(const char* path)
 	kfree(dentry->node);
 	dentry->node = nullptr;
 
-	if(dentry->parent && dentry->parent->children == dentry)
-	{
-		if(dentry->sibling_next)
-			dentry->sibling_next->sibling_prev = nullptr;
-		dentry->parent->children = dentry->sibling_next;
-	}
-	else if(dentry->sibling_prev)
-	{
-		dentry->sibling_prev->sibling_next = dentry->sibling_next;
-	}
+	list_del(dentry->sibling);
 	spinlock_release(dentry->ref.lock);
 	ventry_put(dentry);
 
 	return;
 }
 
-const char* get_status_name(thread_status status)
-{
-	switch(status)
-	{
-	case thread_status::ready:
-		return "I (idle)";
-	case thread_status::running:
-		return "R (running)";
-	case thread_status::sleeping:
-		return "S (sleeping)";
-	case thread_status::terminated:
-		return "Z (zombie)";
-	default:
-		return "?";
-	}
-}
-
 ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	thread_t* target = (thread_t*)file->inode->data;
-	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nUid: {}\nGid: {}\n",
+	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\n",
 		target->name,
 		get_status_name(target->status),
 		target->pid,
+		target->pgid,
+		target->sid,
 		target->cred.uid,
 		target->cred.gid
 	);		

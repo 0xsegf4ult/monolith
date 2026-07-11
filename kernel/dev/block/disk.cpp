@@ -8,6 +8,7 @@
 #include <mm/vmm.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
+#include <list.hpp>
 
 disk_t* disk_create(dev_t blk, const char* name, void* priv_data, vfs::fs_file_ops* fops, blockdev_ops* bops)
 {
@@ -15,8 +16,7 @@ disk_t* disk_create(dev_t blk, const char* name, void* priv_data, vfs::fs_file_o
 	disk->dev = blk;
 	strncpy(disk->name, name, 32);
 	disk->data = priv_data;
-	disk->partition_list_tail = nullptr;
-	disk->partition_list_head = nullptr;
+	list_node_init(disk->partitions);
 	disk->partcount = 0;
 	disk->block_size = 512;
 	disk->block_count = 0;
@@ -77,16 +77,7 @@ void disk_parse_gpt(disk_t* disk, byte* buffer)
 		{
 			log::debug("disk: found partition LBA {:x} - {:x}", partarray->start_lba, partarray->end_lba);
 			auto* part = partition_create(disk, partarray->start_lba, partarray->end_lba - partarray->start_lba, disk->partcount + 1);
-			if(disk->partition_list_head)
-			{
-				disk->partition_list_tail->next = part;
-				disk->partition_list_tail = part;
-			}
-			else
-			{
-				disk->partition_list_head = part;
-				disk->partition_list_tail = part;
-			}
+			list_add_tail(disk->partitions, part->list_node);
 			disk->partcount++;
 		}
 

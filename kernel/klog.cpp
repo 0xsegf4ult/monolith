@@ -9,11 +9,16 @@ void klog_init()
 	spinlock_init(klog_lock);
 }
 
+void klog_internal_nolock(const char* buffer)
+{
+	early_serial_write(buffer);
+}
+
 void klog_internal(const char* buffer)
 {
 	uint64_t rflags;
 	spinlock_acquire_irqsave(klog_lock, rflags);
-	early_serial_write(buffer);
+	klog_internal_nolock(buffer);
 	spinlock_release_irqsave(klog_lock, rflags);
 }
 

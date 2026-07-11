@@ -17,5 +17,7 @@ char* strtok(char* s1, const char* s2);
 
 const char* strerrorname_np(int errnum);
 const char* strerrordesc_np(int errnum);
+const char* sigabbrev_np(int sig);
+const char* sigdescr_np(int sig);
 
 #endif

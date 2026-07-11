@@ -113,8 +113,9 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
 
                         if(!current->parent)
                         {
-                                mount_t* mp = vfs::get()->mounts;
-                                while(mp)
+				mount_t* mp;
+                                list_head_t& mplist = vfs::get()->mounts;
+				list_for_each_entry(mp, mplist, list_node)
                                 {
                                         ventry_t* mount_root = nullptr;
                                         auto tstat = mp->fs->sb_ops->root(mp->sb, &mount_root);
@@ -123,7 +124,6 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                                                 next = (mp->mountpoint == vfs::get()->root_node) ? vfs::get()->root_node : mp->mountpoint->parent;
                                                 break;
                                         }
-                                        mp = mp->next;
                                 }
                         }
                 }

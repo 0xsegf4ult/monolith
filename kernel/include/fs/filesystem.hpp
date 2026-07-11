@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list.hpp>
 #include <types.hpp>
 
 namespace vfs
@@ -23,7 +24,7 @@ struct vfilesystem_t
         fs_file_ops* fops;
         fs_super_ops* sb_ops;
 
-        vfilesystem_t* next;
+	list_node_t list_node;
 };
 
 void register_fs(vfilesystem_t* fs, const char* name);

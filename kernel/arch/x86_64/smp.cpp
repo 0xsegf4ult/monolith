@@ -9,6 +9,7 @@
 #include <types.hpp>
 #include <klog.hpp>
 #include <kstd.hpp> 
+#include <panic.hpp>
 
 #include <mm/layout.hpp>
 #include <mm/vmm.hpp>
@@ -125,8 +126,8 @@ void smp_init()
 
 	for(int i = 1; i < cpu_count; i++)
 	{
-		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_INIT_IPI);
-		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_STARTUP_IPI | (trampoline_start >> 12));
+		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_INIT_IPI | APIC_ICR_INIT_DEASSERT);
+		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_STARTUP_IPI | APIC_ICR_INIT_DEASSERT | (trampoline_start >> 12));
 	}
 
 	while(running_cpu_count < cpu_count)
@@ -160,4 +161,17 @@ cpu_t* smp_current_cpu()
 	uint64_t value;
 	asm volatile("mov %%gs:0, %[val]" : [val] "=r"(value));
 	return smp_get_cpu(value);
+}
+
+void smp_stop_cpus()
+{
+	auto self = smp_current_cpu()->lapic_id;
+	for(int i = 0; i < cpu_count; i++)
+	{
+		auto lid = smp_get_cpu(i)->lapic_id;
+		if(lid == self)
+			continue;
+		
+		lapic::send_ipi(lid, APIC_NMI_IPI | APIC_ICR_INIT_DEASSERT);
+	}
 }

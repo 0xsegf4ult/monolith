@@ -1,5 +1,7 @@
 #pragma once
 
+#include <list.hpp>
+
 struct block_device_t;
 
 namespace vfs
@@ -21,7 +23,7 @@ struct mount_t
         vfilesystem_t* fs;
         superblock_t* sb;
         ventry_t* mountpoint;
-        mount_t* next;
+	list_node_t list_node;
 };
 
 typedef int (*sb_init_t)(block_device_t*, superblock_t**); 

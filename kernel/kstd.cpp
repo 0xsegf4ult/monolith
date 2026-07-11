@@ -2,18 +2,6 @@
 #include <kfmt.hpp>
 #include <types.hpp>
 
-#include <arch/x86_64/serial.hpp>
-#include <arch/x86_64/cpu.hpp>
-
-void panic_inner(const char* string)
-{
-        early_serial_write("\033[31mkernel panic:\033[0m ");
-        early_serial_write(string);
-        early_serial_putchar('\n');
-        
-	asm volatile("cli; hlt");
-}
-
 char* strncpy(char* dst, const char* src, size_t n)
 {
 	size_t i = 0;

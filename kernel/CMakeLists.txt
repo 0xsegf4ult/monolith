@@ -9,6 +9,7 @@ target_sources(vmmonolith PRIVATE
 	arch/x86_64/arch.S
 	arch/x86_64/cpu.cpp
 	arch/x86_64/context.S
+	arch/x86_64/context.cpp
 	arch/x86_64/gdt.cpp
 	arch/x86_64/interrupts.cpp
 	arch/x86_64/isr_stubs.S
@@ -21,6 +22,7 @@ target_sources(vmmonolith PRIVATE
 	dev/block/disk.cpp
 	dev/block/partition.cpp
 	dev/character.cpp
+	dev/console.cpp
 	dev/efifb.cpp
 	dev/efifb_font.cpp
 	dev/nvme/nvme.cpp
@@ -48,11 +50,14 @@ target_sources(vmmonolith PRIVATE
 	sys/thread.cpp
 	sys/time.cpp
 	sys/scheduler.cpp
+	sys/signal.cpp
 	sys/syscall.cpp
+	sys/waitqueue.cpp
 	elf.cpp
 	init.cpp
 	initramfs.cpp
 	klog.cpp
 	kstd.cpp
+	panic.cpp
 	stackchk.cpp)
 set_target_properties(vmmonolith PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/boot")

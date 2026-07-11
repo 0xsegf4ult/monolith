@@ -5,6 +5,7 @@
 #include <types.hpp>
 
 void klog_init();
+void klog_internal_nolock(const char* buffer);
 void klog_internal(const char* buffer);
 void klog_internal(const char* buffer, size_t length);
 void klog_internal_newline();
@@ -12,10 +13,18 @@ void klog_internal_newline();
 template <typename... Args>
 void generic_log(const char* fmt_string, Args&&... args)
 {
-	static char buffer[512];
-	format_to(string_span{&buffer[0], 512}, fmt_string, args...);
+	char buffer[512];
+	format_to(string_span{&buffer[0], 476}, fmt_string, args...);
 
 	klog_internal(buffer);
+}
+
+template <typename... Args>
+void generic_log_nolock(const char* fmt_string, Args&&... args)
+{
+	char buffer[512];
+	format_to(string_span{&buffer[0], 476}, fmt_string, args...);
+	klog_internal_nolock(buffer);
 }
 
 namespace log

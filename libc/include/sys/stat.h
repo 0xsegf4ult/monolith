@@ -51,17 +51,17 @@ struct stat
 	size_t st_size;
 };
 
-inline int stat(const char* path, struct stat* buffer)
+static inline int stat(const char* path, struct stat* buffer)
 {
 	return (int)_syscall(SYS_STAT, (uint64_t)path, (uint64_t)buffer, 0, 0, 0, 0);
 }
 
-inline int fstat(int fd, struct stat* buffer)
+static inline int fstat(int fd, struct stat* buffer)
 {
 	return (int)_syscall(SYS_FSTAT, (uint64_t)fd, (uint64_t)buffer, 0, 0, 0, 0);
 }
 
-inline int mkdir(const char* path, mode_t mode)
+static inline int mkdir(const char* path, mode_t mode)
 {
 	return (int)_syscall(SYS_MKDIR, (uint64_t)path, (uint64_t)mode, 0, 0, 0, 0);
 }

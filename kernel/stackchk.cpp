@@ -1,5 +1,5 @@
 #include <types.hpp>
-#include <kstd.hpp>
+#include <panic.hpp>
 
 // FIXME: should be securely randomized by bootloader, still useful for finding bugs
 extern "C" uintptr_t __stack_chk_guard = 0xdeab12b6d60c6703;

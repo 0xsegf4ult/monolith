@@ -9,10 +9,12 @@
 #include <mm/vmm.hpp>
 #include <klog.hpp>
 #include <kstd.hpp>
+#include <panic.hpp>
 #include <types.hpp>
 #include <sys/thread.hpp>
 #include <sys/syscall.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/signal.hpp>
 #include <dev/tty.hpp>
 
 extern "C" void isr_stubs();
@@ -66,19 +68,12 @@ void remove_irq_handler(uint8_t irq)
 	irq_handlers[irq - 32] = nullptr;
 }
 
-static int pf_counter = 0;
-static char trace_buf[64];
-
-struct stack_frame
-{
-	stack_frame* rbp;
-	uint64_t rip;
-};
-
 cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 {
 	uint64_t cr2;
 	asm volatile("movq %%cr2, %0" : "=r"(cr2));
+	
+	auto* thr = smp_current_cpu()->get_current_thread();
 	
 	if(!(ctx->error_code & PF_PRESENT)) 
 	{
@@ -90,101 +85,73 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 		if(ctx->error_code & PF_FETCH)
 			pflags |= pf_fetch;
 
-		log::debug("handle pf RIP {:x} addr {:x}", ctx->rip, cr2);
 		if(vm_page_fault(cr2, pflags))
 			return ctx;
 	}
-
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr && thr->pid > 0)
+		
+	if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
 	{
 		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
-		if(thr->tty)
-		{
-			const char* msg = "Segmentation fault\n";
-			tty_write(thr->tty, (byte*)msg, string_length(msg));
-		}
 
-		if(thr->parent && thr->parent->status == thread_status::sleeping)
-			sched_unblock(thr->parent);
-
-		thread_zombify(thr);
-		sched_block(thread_status::terminated);
+		send_signal(thr, SIGSEGV);
 		return ctx;
 	}
+	
+	panic_prepare();
 
-	pf_counter++;
+	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at memory {:#x} [{:b}]\n", cr2, ctx->error_code);
+	generic_log_nolock("task: {:#x}", thr);
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
 
-	format_to(string_span{&trace_buf[0], 64}, "RAX: {:#x}", ctx->rax);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, " RBX: {:#x}", ctx->rbx);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, " RCX: {:#x}", ctx->rcx);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, " RDX: {:#x}\n", ctx->rdx);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, "RDI: {:#x}", ctx->rdi);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, " RSI: {:#x}\n", ctx->rsi);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, "RSP: {:#x}", ctx->rsp);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, " RBP: {:#x}\n", ctx->rbp);
-	early_serial_write(trace_buf);
-	format_to(string_span{&trace_buf[0], 64}, "RIP: {:#x} mem: {:#x}", ctx->rip, cr2);
-	early_serial_write(trace_buf);
-
-
-	early_serial_write("Stack trace:\n");
-
-	stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rbp);
-	for(uint32_t frame = 0; stk && frame < 32; frame++)
-	{
-		format_to(string_span{&trace_buf[0], 64}, "{:#x}\n", stk->rip);
-		early_serial_write(trace_buf);
-		if(stk->rip == 0x0)
-			break;
-
-		stk = stk->rbp;
-	}
-
-	panic("unhandled page fault");
+	dump_registers(ctx, 0);
+	stacktrace(ctx->rbp, 0);
+	
+	panic_complete();
 	return ctx;
+}
+
+void signal_handle(thread_t* thr)
+{
+	uint64_t rflags;
+	spinlock_acquire_irqsave(thr->sig_lock, rflags);
+	while(thr->sig_pending & (~thr->sig_blocked))
+	{
+		int sigidx = __builtin_ctz(thr->sig_pending & (~thr->sig_blocked));
+		
+		thr->sig_pending &= ~(1u << sigidx);
+
+		if(sigidx + 1 == SIGCHLD)
+			continue;
+
+		generic_log_nolock("cpu{} [{}] signal handle {} sys_exit", smp_current_cpu()->id, thr->name, sigidx + 1);
+		thr->return_signal = sigidx + 1;
+
+		spinlock_release_irqsave(thr->sig_lock, rflags);
+		sys_exit(0);
+	}
+	spinlock_release_irqsave(thr->sig_lock, rflags);
 }
 
 cpu_context_t* handle_gpf(cpu_context_t* ctx)
 {
 	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr && thr->pid > 0)
-	{
-	early_serial_write("Stack trace:\n");
 
-	stack_frame* stk = reinterpret_cast<stack_frame*>(ctx->rbp);
-	for(uint32_t frame = 0; stk && frame < 32; frame++)
+	if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
 	{
-		format_to(string_span{&trace_buf[0], 64}, "{:#x}\n", stk->rip);
-		early_serial_write(trace_buf);
-		if(stk->rip == 0x0)
-			break;
-
-		stk = stk->rbp;
-	}
 		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
-		if(thr->tty)
-		{
-			const char* msg = "Segmentation fault\n";
-			tty_write(thr->tty, (byte*)msg, string_length(msg));
-		}
-
-		if(thr->parent && thr->parent->status == thread_status::sleeping)
-			sched_unblock(thr->parent);
-
-		thread_zombify(thr);
-		sched_block(thread_status::terminated);
+		send_signal(thr, SIGSEGV);
 		return ctx;
 	}
+	
+	panic_prepare();
 
-	panic("general protection fault at RIP {:#x} {:b}", ctx->rip, ctx->error_code);
+	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP {:#x} [{:b}]\n", ctx->rip, ctx->error_code);
+	generic_log_nolock("task: {:#x}", thr);
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+	dump_registers(ctx, 0);
+	stacktrace(ctx->rbp, 0);
+
+	panic_complete();
 	return ctx;
 }
 
@@ -193,6 +160,7 @@ extern "C" void interrupt_handler(cpu_context_t* ctx)
 	if(ctx->interrupt_id == 0x80)
 	{
 		syscall_handler(ctx);
+		
 	}
 	else if(ctx->interrupt_id == 0xFF)
 	{
@@ -210,14 +178,56 @@ extern "C" void interrupt_handler(cpu_context_t* ctx)
 		log::warn("unhandled interrupt {}", ctx->interrupt_id);
 
 	lapic::eoi();
+		
+	auto* thr = smp_current_cpu()->get_current_thread();
+	if(thr && thr->rsp && thr->sig_pending)
+	{
+		signal_handle(thr);
+	}	
+}
+
+constexpr int exception_to_signal(uint64_t exception)
+{
+	switch(exception)
+	{
+	case DivisionError:
+		return SIGFPE;
+	case Debug:
+		return SIGTRAP;
+	case Breakpoint:
+		return SIGTRAP;
+	case Overflow:
+		return SIGSEGV;
+	case BoundExceeded:
+		return SIGSEGV;
+	case InvalidOpcode:
+		return SIGILL;
+	case DeviceUnavailable:
+		return SIGFPE;
+	case SegmentNotPresent:
+		return SIGBUS;
+	case StackSegmentFault:
+		return SIGBUS;
+	case GPFault:
+		return SIGSEGV;
+	case PageFault:
+		return SIGSEGV;
+	case FPUException:
+		return SIGFPE;
+	case AlignmentCheck:
+		return SIGBUS;
+	case MachineCheck:
+		return SIGBUS;
+	case SIMDFPException:
+		return SIGFPE;
+	default:
+		return 0;
+	}
 }
 
 extern "C" void exception_handler(cpu_context_t* ctx)
 {
-	if(pf_counter >= 2)
-	{
-		panic("error while handling page fault");
-	}
+	auto* thr = smp_current_cpu()->get_current_thread();
 
 	if(ctx->interrupt_id == InterruptID::PageFault)
 	{
@@ -227,5 +237,34 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 	{
 		handle_gpf(ctx);
 	}
+	else if(ctx->interrupt_id == InterruptID::NMI)
+	{
+		for(;;)
+			asm volatile("cli; hlt");
+	}
+	else
+	{
+		if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
+		{
+			auto sig = exception_to_signal(ctx->interrupt_id);
+			if(sig)
+				send_signal(thr, sig);
+		}
+		else
+		{
+			panic_prepare();
+
+			generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled exception {:x}\n", ctx->interrupt_id);
+			
+			generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+			
+			dump_registers(ctx, 0);
+			stacktrace(ctx->rbp, 0);
+			panic_complete();
+		}
+	}
+
+	if(thr && thr->rsp && thr->sig_pending)
+		signal_handle(thr);
 }
 

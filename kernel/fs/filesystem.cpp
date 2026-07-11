@@ -7,41 +7,30 @@
 namespace vfs
 {
 
-static vfilesystem_t* fs_list_head = nullptr;
-static vfilesystem_t* fs_list_tail = nullptr;
+static list_head_t fs_list = {&fs_list, &fs_list};
 
 void register_fs(vfilesystem_t* fs, const char* name)
 {
-	fs->next = nullptr;
         strncpy(fs->name, name, 32);
+	list_node_init(fs->list_node);
 
-        if(!fs_list_head)
-        {
-                fs_list_head = fs;
-                fs_list_tail = fs;
-        }
-        else
-        {
-                fs_list_tail->next = fs;
-                fs_list_tail = fs;
-        }
+	list_add_tail(fs_list, fs->list_node);
 }
 
 vfilesystem_t* lookup_fs(const char* name)
 {
- 	vfilesystem_t* fs = nullptr;
- 	vfilesystem_t* list = fs_list_head;
-        while(list)
-        {
-                if(strncmp(list->name, name, 32) == 0)
-                {
-                        fs = list;
-                        break;
-                }
+	vfilesystem_t* fs = nullptr;
+	vfilesystem_t* result = nullptr;
+	list_for_each_entry(fs, fs_list, list_node)
+	{
+		if(strncmp(fs->name, name, 32) == 0)
+		{
+			result = fs;
+			break;
+		}
+	}
 
-                list = list->next;
-        }
-	return fs;
+	return result;
 }
 
 }

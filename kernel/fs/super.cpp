@@ -5,6 +5,7 @@
 #include <dev/block/block.hpp>
 #include <mm/slab.hpp>
 #include <sys/err.hpp>
+#include <list.hpp>
 
 namespace vfs
 {
@@ -50,13 +51,10 @@ int mount(const char* src, const char* target, const char* fstype)
 	mp->sb = sb;
 	mp->sb->fs = fs;
 	mp->sb->bdev = blockdev;
-	mp->next = nullptr;
+	list_node_init(mp->list_node);
 
 	auto* context = vfs::get();
-        auto* mhead = context->mounts;
-        while(mhead && mhead->next)
-                mhead = mhead->next;
-        mhead->next = mp;
+	list_add_tail(context->mounts, mp->list_node);
 
         query->mount = mp;
         return 0;

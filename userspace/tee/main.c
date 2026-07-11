@@ -32,9 +32,6 @@ int main(int argc, const char** argv)
 		if(bytes_read == 0)
 			break;
 
-		if(buffer[0] == 0x03)
-			break;
-
 		write(0, buffer, bytes_read);
 		if(fd)
 		{

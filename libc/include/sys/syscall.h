@@ -29,8 +29,11 @@ enum SYSCALL_ID
 	SYS_SETUID,
 	SYS_GETGID,
 	SYS_SETGID,
+	SYS_GETPID,
+	SYS_SETSID,
+	SYS_GETPGID,
+	SYS_SETPGID,
 	SYS_SOCKET,
-	SYS_DEBUGMSG
 };
 
 __attribute__((always_inline)) inline uint64_t _syscall(uint64_t id, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
@@ -46,11 +49,6 @@ __attribute__((always_inline)) inline uint64_t _syscall(uint64_t id, uint64_t ar
 	uint64_t ret;
 	asm volatile("int $0x80" : "=a"(ret) : "r"(r_rax), "r"(r_rdi), "r"(r_rsi), "r"(r_rdx), "r"(r_rcx), "r"(r_r8), "r"(r_r9));
 	return ret;
-}
-
-inline void debugmsg(const char* message)
-{
-	_syscall(SYS_DEBUGMSG, (uint64_t)message, 0, 0, 0, 0, 0);
 }
 
 #endif

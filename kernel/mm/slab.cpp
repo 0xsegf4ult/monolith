@@ -6,6 +6,7 @@
 #include <kstd.hpp>
 #include <types.hpp>
 #include <klog.hpp>
+#include <panic.hpp>
 
 namespace mm
 {
@@ -92,7 +93,8 @@ void slab_free(virtaddr_t addr)
 		panic("slab: free on metadata pointer");
 
 	slab_cache& cache = *(o_slab->cache);
-	
+	memset((void*)addr, 0x6b, cache.block_size);
+
 	uint64_t rflags;
 	spinlock_acquire_irqsave(cache.lock, rflags);
 

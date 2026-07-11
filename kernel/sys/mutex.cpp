@@ -5,6 +5,7 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 void mutex_init(mutex_t& mutex)
 {
@@ -25,7 +26,15 @@ void mutex_lock(mutex_t& mutex)
 		mutex.waitqueue = thr;
 
 		spinlock_release_irqsave(mutex.spinlock, rflags);
-		sched_block(thread_status::sleeping);
+
+		thread_status exp_state = THREAD_RUNNING;
+		if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_SLEEPING))
+		{
+			if(exp_state != THREAD_SLEEPING)
+				panic("mutex_lock in invalid thread state");
+		}
+
+		sched_yield();
 	}
 	else
 	{
@@ -39,15 +48,26 @@ void mutex_unlock(mutex_t& mutex)
 	uint64_t rflags;
 	spinlock_acquire_irqsave(mutex.spinlock, rflags);
 
+	mutex.locked = false;
+retry_awake:
 	if(mutex.waitqueue)
 	{
 		auto* thr = mutex.waitqueue;
 		mutex.waitqueue = mutex.waitqueue->next;
 		thr->next = nullptr;
 
+		thread_status exp_state = THREAD_SLEEPING;
+		if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_RUNNING))
+		{
+			// thread died while waiting for mutex, try awaking someone else
+			if(exp_state == THREAD_ZOMBIE)
+				goto retry_awake;
+
+			panic("mutex_unlock thread in waitqueue not sleeping {}", get_status_name(exp_state));
+		}
+
 		sched_unblock(thr);
 	}
 
-	mutex.locked = false;
 	spinlock_release_irqsave(mutex.spinlock, rflags);
 }

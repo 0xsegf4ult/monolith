@@ -1,6 +1,9 @@
 #pragma once
 
 #include <types.hpp>
+#include <sys/mutex.hpp>
+#include <sys/spinlock.hpp>
+#include <sys/waitqueue.hpp>
 
 constexpr size_t NCCS = 11;
 using tcflag_t = uint32_t;
@@ -105,14 +108,43 @@ struct winsize_t
 enum tty_io
 {
 	__TIO 		= 90,
+	TIOCSPGRP	= (__TIO << 8) + 1,
 	TCGETS		= (__TIO << 8) + 3,
 	TCSETS		= (__TIO << 8) + 4,
 	TIOCGWINSZ	= (__TIO << 8) + 8
 };
 
-struct tty_device;
+struct thread_t;
 
-void tty_init();
+typedef void (*tty_output_t)(const char*, size_t);
+
+struct tty_device
+{
+        constexpr static size_t buffer_size = 0x1000;
+        
+	byte* read_buffer;
+        uint32_t read_buffer_head;
+        uint32_t read_buffer_tail;
+        
+	byte* write_buffer;
+	uint32_t write_buffer_head;
+	uint32_t write_buffer_tail;
+
+	spinlock_t write_buffer_lock;
+
+        tty_output_t output;
+
+        pid_t session_id;
+        pid_t fg_pgrp;
+
+        wait_queue waitqueue;
+        mutex_t lock;
+
+        termios_t termios;
+        winsize_t winsize;
+};
+
+tty_device* tty_create(uint16_t index, tty_output_t output_fn);
 void tty_consume(tty_device* tty, char c);
 ssize_t tty_read(tty_device* tty, byte* buffer, size_t length);
 ssize_t tty_write(tty_device* tty, const byte* buffer, size_t length);

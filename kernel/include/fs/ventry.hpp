@@ -1,7 +1,8 @@
 #pragma once
 
-#include <types.hpp>
 #include <sys/reflock.hpp>
+#include <list.hpp>
+#include <types.hpp>
 
 namespace vfs
 {
@@ -14,11 +15,11 @@ struct ventry_t
 	char name[64];
 	vnode_t* node;
 	ventry_t* parent;
-	ventry_t* children;
-	ventry_t* sibling_prev;
-	ventry_t* sibling_next;
-	ventry_t* next;
-		
+
+	list_head_t children;
+	list_head_t sibling;
+	ventry_t* next;	
+
 	mount_t* mount;
 	reflock_t ref;
 };

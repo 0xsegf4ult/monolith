@@ -22,12 +22,12 @@
 #define O_CLOFORK	0x1000
 #define O_ACCMODE	(O_RDONLY | O_WRONLY | O_RDWR)
 
-inline int open(const char* path, int flags)
+static inline int open(const char* path, int flags)
 {
 	return (int)(_syscall(SYS_OPEN, (uint64_t)path, (uint64_t)flags, 0, 0, 0, 0));
 }
 
-inline int openat(int dirfd, const char* path, int flags)
+static inline int openat(int dirfd, const char* path, int flags)
 {
 	return (int)(_syscall(SYS_OPENAT, (uint64_t)dirfd, (uint64_t)path, (uint64_t)flags, 0, 0, 0));
 }

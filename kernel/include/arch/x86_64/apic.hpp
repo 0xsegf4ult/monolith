@@ -2,8 +2,10 @@
 
 #include <types.hpp>
 
+constexpr uint32_t APIC_NMI_IPI = 0x400;
 constexpr uint32_t APIC_INIT_IPI = 0x500;
 constexpr uint32_t APIC_STARTUP_IPI = 0x600;
+constexpr uint32_t APIC_ICR_INIT_DEASSERT = 0x4000;
 constexpr uint32_t APIC_REGISTER_LVT_TIMER = 0x320;
 constexpr uint32_t APIC_REGISTER_TIMER_INITCNT = 0x380;
 constexpr uint32_t APIC_REGISTER_TIMER_CURRCNT = 0x390;

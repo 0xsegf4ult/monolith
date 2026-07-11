@@ -3,6 +3,9 @@ set(USERSPACE_LINK_OPTIONS -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOUR
 set(USERSPACE_LINK_LIBRARIES crt0 c)
 
 add_subdirectory("cat")
+add_subdirectory("getty")
+add_subdirectory("init")
+add_subdirectory("login")
 add_subdirectory("ls")
 add_subdirectory("mkdir")
 add_subdirectory("mount")

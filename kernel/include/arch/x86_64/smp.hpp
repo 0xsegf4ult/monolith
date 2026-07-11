@@ -12,3 +12,5 @@ void smp_discover_cpu(uint32_t lapic_id);
 
 cpu_t* smp_get_cpu(uint32_t id);
 cpu_t* smp_current_cpu();
+
+void smp_stop_cpus();

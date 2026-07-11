@@ -11,4 +11,6 @@ target_sources(c PRIVATE
 	stdlib.c
 	string.c
 	termios.c
-	getopt.c)
+	getopt.c
+	ctype.c
+	unistd.c)

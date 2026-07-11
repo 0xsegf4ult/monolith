@@ -4,6 +4,7 @@
 #include <sys/spinlock.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 static uint64_t* pmm_bitmap = nullptr;
 static size_t pmm_bitmap_length = 0;

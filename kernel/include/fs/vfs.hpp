@@ -12,6 +12,7 @@
 #include <sys/stat.hpp>
 #include <stdatomic.h>
 #include <sys/reflock.hpp>
+#include <list.hpp>
 
 namespace vfs
 {
@@ -29,7 +30,7 @@ struct file_descriptor_t
 struct context_t
 {
 	ventry_t* root_node;	
-	mount_t* mounts;
+	list_head_t mounts;
 	file_descriptor_t open_files[64];
 };
 
@@ -79,6 +80,7 @@ enum OPEN_FLAGS
 	O_ACCMODE = O_RDONLY | O_WRONLY | O_RDWR
 };
 
+int open(vnode_t* node, int flags, ventry_t* path);
 int open(const char* path, int flags = 0);
 int openat(ventry_t* dir, const char* path, int flags = 0);
 int openat(int fd, const char* path, int flags = 0);

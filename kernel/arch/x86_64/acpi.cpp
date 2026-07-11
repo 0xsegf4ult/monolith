@@ -7,6 +7,7 @@
 #include <kstd.hpp>
 #include <klog.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 namespace acpi
 {

@@ -1,6 +1,7 @@
+#include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <errno.h>
+#include <signal.h>
 
 void* memcpy(void* dst, const void* src, size_t n)
 {
@@ -333,5 +334,147 @@ const char* strerrordesc_np(int errnum)
 		return "Not supported parameter or option";
 	default:
 		return "Unknown error";
+	}
+}
+
+const char* sigabbrev_np(int sig)
+{
+	switch(sig)
+	{
+	case SIGHUP:
+		return "HUP";
+	case SIGINT:
+		return "INT";
+	case SIGQUIT:
+		return "QUIT";
+	case SIGILL:
+		return "ILL";
+	case SIGTRAP:
+		return "TRAP";
+	case SIGABRT:
+		return "ABRT";
+	case SIGBUS:
+		return "BUS";
+	case SIGFPE:
+		return "FPE";
+	case SIGKILL:
+		return "KILL";
+	case SIGUSR1:
+		return "USR1";
+	case SIGSEGV:
+		return "SEGV";
+	case SIGUSR2:
+		return "USR2";
+	case SIGPIPE:
+		return "PIPE";
+	case SIGALRM:
+		return "ALRM";
+	case SIGTERM:
+		return "TERM";
+	case SIGSTKFLT:
+		return "STKFLT";
+	case SIGCHLD:
+		return "CHLD";
+	case SIGCONT:
+		return "CONT";
+	case SIGSTOP:
+		return "STOP";
+	case SIGTSTP:
+		return "TSTP";
+	case SIGTTIN:
+		return "TTIN";
+	case SIGTTOU:
+		return "TTOU";
+	case SIGURG:
+		return "URG";
+	case SIGXCPU:
+		return "XCPU";
+	case SIGXFSZ:
+		return "XFSZ";
+	case SIGVTALRM:
+		return "VTALRM";
+	case SIGPROF:
+		return "PROF";
+	case SIGWINCH:
+		return "WINCH";
+	case SIGPOLL:
+		return "POLL";
+	case SIGPWR:
+		return "PWR";
+	case SIGSYS:
+		return "SYS";
+	default:
+		return NULL;
+	}
+}
+
+const char* sigdescr_np(int sig)
+{
+	switch(sig)
+	{
+	case SIGHUP:
+		return "Hangup";
+	case SIGINT:
+		return "Interrupt";
+	case SIGQUIT:
+		return "Quit";
+	case SIGILL:
+		return "Illegal instruction";
+	case SIGTRAP:
+		return "Trace/breakpoint trap";
+	case SIGABRT:
+		return "Aborted";
+	case SIGBUS:
+		return "Bus error";
+	case SIGFPE:
+		return "Floating point exception";
+	case SIGKILL:
+		return "Killed";
+	case SIGUSR1:
+		return "User defined signal 1";
+	case SIGSEGV:
+		return "Segmentation fault";
+	case SIGUSR2:
+		return "User defined signal 2";
+	case SIGPIPE:
+		return "Broken pipe";
+	case SIGALRM:
+		return "Alarm clock";
+	case SIGTERM:
+		return "Terminated";
+	case SIGSTKFLT:
+		return "Stack fault";
+	case SIGCHLD:
+		return "Child exited";
+	case SIGCONT:
+		return "Continued";
+	case SIGSTOP:
+		return "Stopped (signal)";
+	case SIGTSTP:
+		return "Stopped";
+	case SIGTTIN:
+		return "Stopped (tty input)";
+	case SIGTTOU:
+		return "Stopped (tty output)";
+	case SIGURG:
+		return "Urgent I/O condition";
+	case SIGXCPU:
+		return "CPU time limit exceeded";
+	case SIGXFSZ:
+		return "File size limit exceeded";
+	case SIGVTALRM:
+		return "Virtual timer expired";
+	case SIGPROF:
+		return "Profiling timer expired";
+	case SIGWINCH:
+		return "Window changed";
+	case SIGPOLL:
+		return "I/O possible";
+	case SIGPWR:
+		return "Power failure";
+	case SIGSYS:
+		return "Bad system call";
+	default:
+		return NULL;
 	}
 }

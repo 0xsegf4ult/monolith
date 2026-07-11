@@ -11,6 +11,7 @@
 #include <types.hpp>
 #include <klog.hpp>
 #include <kstd.hpp>
+#include <panic.hpp>
 
 void address_space::init(virtaddr_t base)
 {

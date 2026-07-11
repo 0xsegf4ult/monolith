@@ -14,9 +14,11 @@
 #include <klog.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 #include <sys/err.hpp>
 #include <sys/thread.hpp>
+#include <list.hpp>
 
 namespace vfs
 {
@@ -38,16 +40,18 @@ void init()
 	rnode->fops = ramfs->fops;
 
 	context->root_node = ventry_new("/", rnode);
-	context->mounts = (mount_t*)kmalloc(sizeof(mount_t));
-	context->root_node->mount = context->mounts;
-	context->mounts->mountpoint = context->root_node;
-	context->mounts->fs = ramfs;
-	context->mounts->sb = (superblock_t*)kmalloc(sizeof(superblock_t));
-	context->mounts->sb->fs = context->mounts->fs;
-	context->mounts->sb->data = (void*)context->root_node;
-	context->mounts->sb->bdev = nullptr;
+	
+	auto* rootfs = (mount_t*)kmalloc(sizeof(mount_t));
+	rootfs->mountpoint = context->root_node;
+	rootfs->fs = ramfs;
+	rootfs->sb = (superblock_t*)kmalloc(sizeof(superblock_t));
+	rootfs->sb->fs = ramfs;
+	rootfs->sb->data = (void*)context->root_node;
+	rootfs->sb->bdev = nullptr;
+	context->root_node->mount = rootfs;
 
-	context->mounts->next = nullptr;
+	list_node_init(context->mounts);
+	list_add_tail(context->mounts, rootfs->list_node);
 
 	memset(context->open_files, 0, 64 * sizeof(file_descriptor_t));
 }
@@ -169,21 +173,42 @@ int unlink(const char* path)
 	spinlock_acquire(dentry->ref.lock);
 	dentry->node = nullptr;
 
-	if(dentry->parent && dentry->parent->children == dentry)
-	{
-		if(dentry->sibling_next)
-			dentry->sibling_next->sibling_prev = nullptr;
-		dentry->parent->children = dentry->sibling_next;
-	}
-	else if(dentry->sibling_prev)
-	{
-		dentry->sibling_prev->sibling_next = dentry->sibling_next;
-	}
+	list_del(dentry->sibling);
 
 	spinlock_release(dentry->ref.lock);
 	ventry_put(dentry);
 
 	return 0;
+}
+
+int open(vnode_t* node, int flags, ventry_t* path)
+{
+	int fs_id = 0;
+	if(node->fops->open)
+		fs_id = node->fops->open(node, flags);
+
+	if(fs_id < 0)
+		return fs_id;
+
+	vnode_ref(node);
+	
+	int fd = -ENFILE;
+	for(int i = 0; i < 64; i++)
+	{
+		if(context->open_files[i].refcount == 0)
+		{
+			fd = i;
+			context->open_files[i].read_pos = 0;
+			context->open_files[i].write_pos = 0;
+			context->open_files[i].inode = node;
+			context->open_files[i].path = path;
+			context->open_files[i].fs_id = fs_id;
+			context->open_files[i].refcount = 1;
+			break;
+		}
+	}
+
+	return fd;
 }
 
 int open(const char* path, int flags)
@@ -215,33 +240,9 @@ int open(const char* path, int flags)
 		return -EBADF;
 	}
 
-	int fs_id = 0;
-	if(node->fops->open)
-		fs_id = node->fops->open(node, flags);
-	
-	if(fs_id < 0)
-	{
+	int fd = open(node, flags, query);
+	if(fd < 0)
 		ventry_put(query);
-		return fs_id;
-	}
-
-	vnode_ref(node);
-	
-	int fd = -1;
-	for(int i = 0; i < 64; i++)
-	{
-		if(context->open_files[i].inode == nullptr)
-		{
-			fd = i;
-			context->open_files[i].read_pos = 0;
-			context->open_files[i].write_pos = 0;
-			context->open_files[i].inode = node;
-			context->open_files[i].path = query;
-			context->open_files[i].fs_id = fs_id;
-			context->open_files[i].refcount = 1;
-			break;
-		}
-	}
 
 	return fd;
 }
@@ -251,7 +252,7 @@ int openat(ventry_t* dir, const char* path, int flags)
 	if(flags)
 		return -EINVAL;
 
-	ventry_t* query;
+	ventry_t* query = nullptr;
 	auto status = lookup_at(dir, path, &query, 0);
 	if(status < 0)
 		return status;
@@ -264,33 +265,9 @@ int openat(ventry_t* dir, const char* path, int flags)
 		return -EBADF;
 	}
 
-	int fs_id = 0;
-	if(node->fops->open)
-		fs_id = node->fops->open(node, flags);
-
-	if(fs_id < 0)
-	{
+	int s_fd = open(node, flags, query);
+	if(s_fd < 0)
 		ventry_put(query);
-		return fs_id;
-	}
-
-	vnode_ref(node);
-
-	int s_fd = -1;
-	for(int i = 0; i < 64; i++)
-	{
-		if(context->open_files[i].inode == nullptr)
-		{
-			s_fd = i;
-			context->open_files[i].read_pos = 0;
-			context->open_files[i].write_pos = 0;
-			context->open_files[i].inode = node;
-			context->open_files[i].path = query;
-			context->open_files[i].fs_id = fs_id;
-			context->open_files[i].refcount = 1;
-			break;
-		}
-	}
 
 	return s_fd;
 }
@@ -352,7 +329,9 @@ int close(int fd)
 	context->open_files[fd].write_pos = 0;
 	context->open_files[fd].inode = nullptr;
 
-	ventry_put(context->open_files[fd].path);
+	if(context->open_files[fd].path)
+		ventry_put(context->open_files[fd].path);
+
 	context->open_files[fd].path = nullptr;
 	context->open_files[fd].fs_id = -1;
 	return 0;
@@ -418,6 +397,7 @@ int fstat(int fd, stat_t* output)
 ssize_t getdents(int fd, byte* buffer, size_t length)
 {
 	auto* inode = context->open_files[fd].inode;
+	
 	if(!inode)
 		return -EBADF;
 

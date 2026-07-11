@@ -14,7 +14,7 @@ static int bindir;
 
 void execute()
 {
-	const char* argv[8];
+	const char* argv[9];
 	int argc = 0;
 	char* token = strtok(buffer, " \n");
 	while(token)
@@ -31,6 +31,8 @@ void execute()
 		for(int i = argc; i < 8; i++)
 			argv[i] = NULL;
 	}
+
+	argv[8] = NULL;
 
 	if(buffer[0] == '/' || buffer[0] == '.')
 	{
@@ -51,12 +53,19 @@ void execute()
 		if(S_ISREG(ex_stat.st_mode))
 		{
 			printf("\n");
-			int s_res = spawn(argv);
+			pid_t s_pid;
+			pid_t save_pgid = getpgid(0);
+			int s_res = spawn(&s_pid, argv, SPAWN_SETPGID);
 			if(s_res < 0)
 			{
 				printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
 			}
-			wait(NULL);
+			tcsetpgrp(STDIN_FILENO, s_pid);
+			int p_status;
+			wait(&p_status);
+			tcsetpgrp(STDIN_FILENO, save_pgid);
+			if(WIFSIGNALED(p_status))
+				printf("%s\n", sigdescr_np(WTERMSIG(p_status)));
 			return;
 		}
 	}
@@ -85,12 +94,19 @@ void execute()
 			if(st_r >= 0 && S_ISREG(ex_stat.st_mode))
 			{
 				printf("\n");
-				int s_res = spawnat(bindir, argv);
+				pid_t s_pid;
+				pid_t save_pgid = getpgid(0);
+				int s_res = spawnat(bindir, &s_pid, argv, SPAWN_SETPGID);
 				if(s_res < 0)
 				{
 					printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
 				}
-				wait(NULL);
+				tcsetpgrp(STDIN_FILENO, s_pid);
+				int p_status;
+				wait(&p_status);
+				tcsetpgrp(STDIN_FILENO, save_pgid);
+				if(WIFSIGNALED(p_status))
+					printf("%s\n", sigdescr_np(WTERMSIG(p_status)));
 				return;
 			}
 		}

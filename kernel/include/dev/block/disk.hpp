@@ -2,6 +2,7 @@
 
 #include <dev/device.hpp>
 #include <types.hpp>
+#include <list.hpp>
 
 namespace vfs
 {
@@ -20,8 +21,7 @@ struct disk_t
 	size_t block_count;
 	size_t block_size;
 
-	partition_t* partition_list_head;
-	partition_t* partition_list_tail;
+	list_head_t partitions;
 	size_t partcount;
 };
 

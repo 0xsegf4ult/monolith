@@ -21,9 +21,10 @@ using namespace vfs;
 
 ventry_t* generic_fs_lookup(ventry_t* parent, const char* path)
 {
-	auto* current = parent->children;
-        while(current != nullptr)
-        {
+	ventry_t* current;
+	ventry_t* tmp;
+	list_for_each_entry_safe(current, tmp, parent->children, sibling)
+	{
 		reflock_acquire(current->ref);
 
                 if(!strncmp(current->name, path, 64))
@@ -35,11 +36,9 @@ ventry_t* generic_fs_lookup(ventry_t* parent, const char* path)
 			return current;
                 }
 
-                auto* sibling = current->sibling_next;
                 auto released = reflock_release_or_lock(current->ref);
 		if(released)
 			spinlock_release(current->ref.lock);
-		current = sibling;
         }
 
         return nullptr;
@@ -63,13 +62,7 @@ int generic_fs_create(ventry_t* parent, const char* path, mode_t mode)
 
         mutex_lock(parent->node->lock);
 
-        if(parent->children)
-	{
-		parent->children->sibling_prev = dirent;
-                dirent->sibling_next = parent->children;
-	}
-
-        parent->children = dirent;
+	list_add_tail(parent->children, dirent->sibling);
 
         mutex_unlock(parent->node->lock);
 
@@ -99,13 +92,7 @@ int generic_fs_mkdir(ventry_t* parent, const char* path, mode_t mode)
 
 	parent->node->nlinks++;
 
-        if(parent->children)
-	{
-		parent->children->sibling_prev = dirent;
-                dirent->sibling_next = parent->children;
-	}
-
-        parent->children = dirent;
+	list_add_tail(parent->children, dirent->sibling);
 
         mutex_unlock(parent->node->lock);
 
@@ -141,14 +128,7 @@ int generic_fs_mknod(ventry_t* parent, const char* path, mode_t mode, dev_t dev)
         dirent->parent = parent;
 
         mutex_lock(parent->node->lock);
-
-        if(parent->children)
-	{
-		parent->children->sibling_prev = dirent;
-                dirent->sibling_next = parent->children;
-	}
-
-        parent->children = dirent;
+	list_add_tail(parent->children, dirent->sibling);
         mutex_unlock(parent->node->lock);
 
 	dcache_insert(dirent);
@@ -168,8 +148,6 @@ int generic_fs_close(int fd)
 
 ssize_t generic_fs_getdents(file_descriptor_t* file, byte* buffer, size_t length)
 {
-	auto* dentry = file->path->children;
-
         byte* write_head = buffer;
 
 	if(write_head < buffer + length)
@@ -194,24 +172,27 @@ ssize_t generic_fs_getdents(file_descriptor_t* file, byte* buffer, size_t length
 		write_head += 3;
 	}
 
-        while(dentry && write_head < buffer + length)
+	ventry_t* current;
+	ventry_t* tmp;
+	list_for_each_entry_safe(current, tmp, file->path->children, sibling)
         {
-                reflock_acquire(dentry->ref);
+		if(write_head >= buffer + length)
+			break;
+        
+		reflock_acquire(current->ref);
 		dirent_info* dirent = reinterpret_cast<dirent_info*>(write_head);
 
-                auto name_len = string_length(dentry->name) + 1;
+                auto name_len = string_length(current->name) + 1;
                 dirent->length = sizeof(dirent_info) + name_len;
                 dirent->type = 0;
 
                 write_head += sizeof(dirent_info);
-                memcpy(write_head, dentry->name, name_len);
+                memcpy(write_head, current->name, name_len);
                 write_head += name_len;
 
-                auto sibling = dentry->sibling_next;
-                auto released = reflock_release_or_lock(dentry->ref);
+                auto released = reflock_release_or_lock(current->ref);
 		if(released)
-			spinlock_release(dentry->ref.lock);
-		dentry = sibling;
+			spinlock_release(current->ref.lock);
         }
 
         return static_cast<ssize_t>(write_head - buffer);

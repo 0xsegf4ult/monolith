@@ -6,6 +6,7 @@
 #include <kstd.hpp>
 #include <klog.hpp>
 #include <mm/slab.hpp>
+#include <list.hpp>
 
 ssize_t part_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
@@ -39,7 +40,7 @@ partition_t* partition_create(disk_t* parent, size_t start_block, size_t block_c
 	part->parent = parent;
 	part->start_lba = start_block;
 	part->block_count = block_count;
-	part->next = nullptr;
+	list_node_init(part->list_node);
 
 	char name_buf[64];
 	format_to(string_span{&name_buf[0], 64}, "/dev/{}p{}", parent->name, index);

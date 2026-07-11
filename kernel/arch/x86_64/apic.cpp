@@ -7,6 +7,7 @@
 #include <kstd.hpp>
 #include <klog.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
 namespace lapic
 {
@@ -34,6 +35,11 @@ void send_ipi(uint32_t id, uint32_t ipi)
 {
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0x310) = id << 24;
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0x300) = ipi;
+
+	while(read(0x300) & 0x1000)
+	{
+		asm volatile("pause");
+	}
 }
 
 void write(uint32_t address, uint32_t data)

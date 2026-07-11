@@ -7,6 +7,7 @@
 #include <mm/slab.hpp>
 #include <sys/reflock.hpp>
 #include <sys/spinlock.hpp>
+#include <list.hpp>
 
 namespace vfs
 {
@@ -23,9 +24,11 @@ ventry_t* ventry_new(const char* name, vnode_t* node)
 
 	dentry->node = node;
 	dentry->parent = nullptr;
-	dentry->children = nullptr;
-	dentry->sibling_prev = nullptr;
-	dentry->sibling_next = nullptr;
+	
+	list_node_init(dentry->children);
+	list_node_init(dentry->sibling);
+	dentry->next = nullptr;
+
 	dentry->mount = nullptr;
 	reflock_init(dentry->ref);
 	return dentry;
