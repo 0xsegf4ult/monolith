@@ -1,37 +1,37 @@
 .macro push_all_registers
-        push %rax
-        push %rbx
-        push %rcx
-        push %rdx
-        push %rsi
-        push %rdi
-        push %rbp
-        push %r8
-        push %r9
-        push %r10
-        push %r11
-        push %r12
-        push %r13
-        push %r14
-        push %r15
+        pushq %rax
+        pushq %rbx
+        pushq %rcx
+        pushq %rdx
+        pushq %rsi
+        pushq %rdi
+        pushq %rbp
+        pushq %r8
+        pushq %r9
+        pushq %r10
+        pushq %r11
+        pushq %r12
+        pushq %r13
+        pushq %r14
+        pushq %r15
 .endm
 
 .macro pop_all_registers
-        pop %r15
-        pop %r14
-        pop %r13
-        pop %r12
-        pop %r11
-        pop %r10
-        pop %r9
-        pop %r8
-        pop %rbp
-        pop %rdi
-        pop %rsi
-        pop %rdx
-        pop %rcx
-        pop %rbx
-        pop %rax
+        popq %r15
+        popq %r14
+        popq %r13
+        popq %r12
+        popq %r11
+        popq %r10
+        popq %r9
+        popq %r8
+        popq %rbp
+        popq %rdi
+        popq %rsi
+        popq %rdx
+        popq %rcx
+        popq %rbx
+        popq %rax
 .endm
 
 .macro interrupt_no_err intr
@@ -59,6 +59,10 @@
 
 .extern exception_handler
 __common_exception:
+	cmpq $0x8, 24(%rsp)
+	je ex_ring0_enter
+	swapgs
+ex_ring0_enter:
 	push_all_registers
 
 	cld
@@ -68,12 +72,20 @@ __common_exception:
 	call exception_handler
 
 	pop_all_registers
-	addq $16, %rsp
 
+	cmpq $0x8, 24(%rsp)
+	je ex_ring0_exit
+	swapgs
+ex_ring0_exit:
+	addq $16, %rsp
 	iretq
 
 .extern interrupt_handler
 __common_interrupt:
+	cmpq $8, 24(%rsp)
+	je irq_ring0_enter
+	swapgs
+irq_ring0_enter:
 	push_all_registers
 
 	cld
@@ -82,11 +94,16 @@ __common_interrupt:
 	call interrupt_handler
 
 	pop_all_registers
-	addq $16, %rsp
 
+	cmpq $0x8, 24(%rsp)
+	je irq_ring0_exit
+	swapgs
+irq_ring0_exit:
+	addq $16, %rsp
 	iretq
 
 .global isr_stubs
+.align 16
 isr_stubs:
 interrupt_no_err        0
 interrupt_no_err        1

@@ -32,6 +32,7 @@ arch_switch_to_usermode:
 	pushq $0x202 # RFLAGS IF | RF
 	pushq $0x1b # USER_CS | DPL_USER
 	pushq %rsi # rip
+	swapgs	
 	iretq
 	int3
 	
