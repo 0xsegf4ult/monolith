@@ -15,7 +15,7 @@
 #include <sys/err.hpp>
 #include <sys/mutex.hpp>
 #include <sys/reflock.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 
 namespace vfs
 {
@@ -189,7 +189,7 @@ int lookup(const char* path, ventry_t** result, int flags)
         if(path[0] == '/')
                 return lookup_at(get_root_dentry(), path + 1, result, flags);
         else
-                return lookup_at(smp_current_cpu()->get_current_thread()->cwd, path, result, flags);
+                return lookup_at(smp_current_cpu()->get_current_task()->cwd, path, result, flags);
 }
 
 }

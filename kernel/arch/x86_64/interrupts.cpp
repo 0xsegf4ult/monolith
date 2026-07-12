@@ -11,7 +11,7 @@
 #include <kstd.hpp>
 #include <panic.hpp>
 #include <types.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/syscall.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/signal.hpp>
@@ -38,7 +38,6 @@ void setup_idt()
 
 	for(int i = 0; i < 32; i++)
 		idt_entries[i] = idt_entry_t(isr_start + (i * 16), KERNEL_CS, IDT_TRAP_GATE, DPL_KERNEL);
-
 	for(int i = 32; i < 256; i++)
 	{
 		auto dpl = DPL_KERNEL;
@@ -73,7 +72,7 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 	uint64_t cr2;
 	asm volatile("movq %%cr2, %0" : "=r"(cr2));
 	
-	auto* thr = smp_current_cpu()->get_current_thread();
+	auto* task = smp_current_cpu()->get_current_task();
 	
 	if(!(ctx->error_code & PF_PRESENT)) 
 	{
@@ -89,19 +88,19 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 			return ctx;
 	}
 		
-	if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
+	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
-		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
+		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
 
-		send_signal(thr, SIGSEGV);
+		send_signal(task, SIGSEGV);
 		return ctx;
 	}
 	
 	panic_prepare();
 
 	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at memory {:#x} [{:b}]\n", cr2, ctx->error_code);
-	generic_log_nolock("task: {:#x}", thr);
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+	generic_log_nolock("task: {:#x}\n", task);
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
 	dump_registers(ctx, 0);
 	stacktrace(ctx->rbp, 0);
@@ -110,44 +109,43 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 	return ctx;
 }
 
-void signal_handle(thread_t* thr)
+void signal_handle(task_t* task)
 {
 	uint64_t rflags;
-	spinlock_acquire_irqsave(thr->sig_lock, rflags);
-	while(thr->sig_pending & (~thr->sig_blocked))
+	spinlock_acquire_irqsave(task->sig_lock, rflags);
+	while(task->sig_pending & (~task->sig_blocked))
 	{
-		int sigidx = __builtin_ctz(thr->sig_pending & (~thr->sig_blocked));
+		int sigidx = __builtin_ctz(task->sig_pending & (~task->sig_blocked));
 		
-		thr->sig_pending &= ~(1u << sigidx);
+		task->sig_pending &= ~(1u << sigidx);
 
 		if(sigidx + 1 == SIGCHLD)
 			continue;
 
-		generic_log_nolock("cpu{} [{}] signal handle {} sys_exit", smp_current_cpu()->id, thr->name, sigidx + 1);
-		thr->return_signal = sigidx + 1;
+		task->return_signal = sigidx + 1;
 
-		spinlock_release_irqsave(thr->sig_lock, rflags);
+		spinlock_release_irqsave(task->sig_lock, rflags);
 		sys_exit(0);
 	}
-	spinlock_release_irqsave(thr->sig_lock, rflags);
+	spinlock_release_irqsave(task->sig_lock, rflags);
 }
 
 cpu_context_t* handle_gpf(cpu_context_t* ctx)
 {
-	auto* thr = smp_current_cpu()->get_current_thread();
+	auto* task = smp_current_cpu()->get_current_task();
 
-	if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
+	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
-		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", thr->name, thr->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
-		send_signal(thr, SIGSEGV);
+		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
+		send_signal(task, SIGSEGV);
 		return ctx;
 	}
 	
 	panic_prepare();
 
 	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP {:#x} [{:b}]\n", ctx->rip, ctx->error_code);
-	generic_log_nolock("task: {:#x}", thr);
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+	generic_log_nolock("task: {:#x}\n", task);
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 	dump_registers(ctx, 0);
 	stacktrace(ctx->rbp, 0);
 
@@ -179,10 +177,10 @@ extern "C" void interrupt_handler(cpu_context_t* ctx)
 
 	lapic::eoi();
 		
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr && thr->rsp && thr->sig_pending)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(task && task->rsp && task->sig_pending)
 	{
-		signal_handle(thr);
+		signal_handle(task);
 	}	
 }
 
@@ -227,7 +225,7 @@ constexpr int exception_to_signal(uint64_t exception)
 
 extern "C" void exception_handler(cpu_context_t* ctx)
 {
-	auto* thr = smp_current_cpu()->get_current_thread();
+	auto* task = smp_current_cpu()->get_current_task();
 
 	if(ctx->interrupt_id == InterruptID::PageFault)
 	{
@@ -244,11 +242,11 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 	}
 	else
 	{
-		if(thr && thr->rsp && ctx->rip <= 0x7fffffffffff)
+		if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 		{
 			auto sig = exception_to_signal(ctx->interrupt_id);
 			if(sig)
-				send_signal(thr, sig);
+				send_signal(task, sig);
 		}
 		else
 		{
@@ -256,7 +254,7 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 
 			generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled exception {:x}\n", ctx->interrupt_id);
 			
-			generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+			generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 			
 			dump_registers(ctx, 0);
 			stacktrace(ctx->rbp, 0);
@@ -264,7 +262,7 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 		}
 	}
 
-	if(thr && thr->rsp && thr->sig_pending)
-		signal_handle(thr);
+	if(task && task->rsp && task->sig_pending)
+		signal_handle(task);
 }
 

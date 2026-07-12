@@ -17,7 +17,6 @@
 #include <panic.hpp>
 
 #include <sys/err.hpp>
-#include <sys/thread.hpp>
 #include <list.hpp>
 
 namespace vfs

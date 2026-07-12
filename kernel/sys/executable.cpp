@@ -1,5 +1,5 @@
 #include <sys/executable.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/err.hpp>
 
 #include <arch/x86_64/cpu.hpp>
@@ -15,13 +15,13 @@
 #include <klog.hpp>
 #include <types.hpp>
 
-int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
+int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 {
 	if(!path)
 		return -EINVAL;
 
 	if(!exec_dir)
-		exec_dir = thr->cwd;
+		exec_dir = task->cwd;
 
 	auto exec_fd = vfs::openat(exec_dir, path);
 	if(exec_fd < 0)
@@ -57,7 +57,7 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 		return -ENOEXEC;
 	}
 
-	thr->entry = ebuf->e_entry;
+	task->entry = ebuf->e_entry;
 	auto* phdrs = (Elf64_Phdr*)kmalloc(ebuf->e_phentsize * ebuf->e_phnum);
 	vfs::seek(exec_fd, ebuf->e_phoff);
 	vfs::read(exec_fd, (byte*)phdrs, ebuf->e_phentsize * ebuf->e_phnum);
@@ -78,7 +78,7 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 
 			uint64_t page_offset = phdr->p_vaddr % 0x1000;
 			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
-			thr->vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags | vm_present);
+			task->current_vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags | vm_present);
 			vfs::seek(exec_fd, phdr->p_offset);
 
 			virtaddr_t cur_page = aligned_vaddr;
@@ -86,7 +86,7 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 			size_t wr_len = phdr->p_filesz;
 			while(wr_len)
 			{
-				virtaddr_t user_page = thr->vm_space->get_mapping(cur_page) + cur_offset + mm::direct_mapping_offset;
+				virtaddr_t user_page = task->current_vm_space->get_mapping(cur_page) + cur_offset + mm::direct_mapping_offset;
 				auto read_count = 0x1000 - cur_offset;
 				if(read_count > wr_len)
 					read_count = wr_len;
@@ -101,7 +101,7 @@ int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir)
 			wr_len += (phdr->p_memsz - phdr->p_filesz);
 			while(wr_len)
 			{
-				virtaddr_t user_page = thr->vm_space->get_mapping(cur_page) + mm::direct_mapping_offset + (cur_page % 0x1000);
+				virtaddr_t user_page = task->current_vm_space->get_mapping(cur_page) + mm::direct_mapping_offset + (cur_page % 0x1000);
 				auto read_count = 0x1000;
 				if(read_count > wr_len)
 					read_count = wr_len;

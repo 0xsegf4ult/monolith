@@ -1,6 +1,7 @@
 #include <sys/waitqueue.hpp>
 #include <sys/spinlock.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/task.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
 #include <panic.hpp>
@@ -15,7 +16,7 @@ void wait_queue_node_init(wait_queue_node& node)
 {
 	list_node_init(node.list_node);
 	node.queue = nullptr;
-	node.thread = nullptr;
+	node.task = nullptr;
 }
 
 void wait_queue_register(wait_queue& queue, wait_queue_node& node)
@@ -71,11 +72,11 @@ void wait_queue_wake(wait_queue& queue)
 		cur->queue = nullptr;
 		list_del(cur->list_node);
 		
-		thread_status exp_state = THREAD_INTR_SLEEPING;
-		if(!atomic_compare_exchange_strong(&cur->thread->status, &exp_state, THREAD_RUNNING))
-			panic("wait_queue_wake: thread on queue not sleeping");
+		task_status exp_state = TASK_INTR_SLEEPING;
+		if(!atomic_compare_exchange_strong(&cur->task->status, &exp_state, TASK_RUNNING))
+			panic("wait_queue_wake: task on queue not sleeping");
 
-		sched_unblock(cur->thread);
+		sched_add_ready(cur->task);
 	}
 
 	spinlock_release_irqsave(queue.lock, rflags);

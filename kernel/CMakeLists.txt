@@ -31,6 +31,7 @@ target_sources(vmmonolith PRIVATE
 	dev/pseudo.cpp
 	dev/rtc.cpp
 	dev/tty.cpp
+	fs/fat/fatfs.cpp
 	fs/procfs/procfs.cpp
 	fs/ramfs/ramfs.cpp
 	fs/generic.cpp
@@ -47,7 +48,7 @@ target_sources(vmmonolith PRIVATE
 	mm/vmm.cpp
 	sys/executable.cpp
 	sys/mutex.cpp
-	sys/thread.cpp
+	sys/task.cpp
 	sys/time.cpp
 	sys/scheduler.cpp
 	sys/signal.cpp

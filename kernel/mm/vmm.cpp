@@ -12,7 +12,7 @@
 #include <fs/vfs.hpp>
 #include <fs/procfs/procfs.hpp>
 
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 
 #include <klog.hpp>
 #include <kstd.hpp>
@@ -112,16 +112,24 @@ address_space* get_kernel_vmspace()
 	return kernel_address_space;
 }
 
+address_space* vmm_userspace_new()
+{
+	auto* space = (address_space*)kmalloc(sizeof(address_space));
+	space->init();
+	clone_kernel_vm(space);
+	return space;
+}
+
 bool vm_page_fault(virtaddr_t addr, uint64_t flags)
 {
 	if(flags & pf_present)
 		return false;
 
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(!thr)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(!task)
 		return false;
 
-	address_space* as = thr->vm_space;
+	address_space* as = task->current_vm_space;
 	
 	uint64_t status = 0;
 	physaddr_t phys = as->get_mapping(addr, &status);

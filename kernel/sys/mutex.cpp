@@ -1,6 +1,6 @@
 #include <sys/mutex.hpp>
 #include <sys/spinlock.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/cpu.hpp>
@@ -21,17 +21,17 @@ void mutex_lock(mutex_t& mutex)
 
 	if(mutex.locked)
 	{
-		auto* thr = smp_current_cpu()->get_current_thread();
-		thr->next = mutex.waitqueue;
-		mutex.waitqueue = thr;
+		auto* task = smp_current_cpu()->get_current_task();
+		task->next = mutex.waitqueue;
+		mutex.waitqueue = task;
 
 		spinlock_release_irqsave(mutex.spinlock, rflags);
 
-		thread_status exp_state = THREAD_RUNNING;
-		if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_SLEEPING))
+		task_status exp_state = TASK_RUNNING;
+		if(!atomic_compare_exchange_strong(&task->status, &exp_state, TASK_SLEEPING))
 		{
-			if(exp_state != THREAD_SLEEPING)
-				panic("mutex_lock in invalid thread state");
+			if(exp_state != TASK_SLEEPING)
+				panic("mutex_lock in invalid task state");
 		}
 
 		sched_yield();
@@ -52,21 +52,21 @@ void mutex_unlock(mutex_t& mutex)
 retry_awake:
 	if(mutex.waitqueue)
 	{
-		auto* thr = mutex.waitqueue;
+		auto* task = mutex.waitqueue;
 		mutex.waitqueue = mutex.waitqueue->next;
-		thr->next = nullptr;
+		task->next = nullptr;
 
-		thread_status exp_state = THREAD_SLEEPING;
-		if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_RUNNING))
+		task_status exp_state = TASK_SLEEPING;
+		if(!atomic_compare_exchange_strong(&task->status, &exp_state, TASK_RUNNING))
 		{
-			// thread died while waiting for mutex, try awaking someone else
-			if(exp_state == THREAD_ZOMBIE)
+			// task died while waiting for mutex, try awaking someone else
+			if(exp_state == TASK_ZOMBIE)
 				goto retry_awake;
 
-			panic("mutex_unlock thread in waitqueue not sleeping {}", get_status_name(exp_state));
+			panic("mutex_unlock task in waitqueue not sleeping {}", get_status_name(exp_state));
 		}
 
-		sched_unblock(thr);
+		sched_add_ready(task);
 	}
 
 	spinlock_release_irqsave(mutex.spinlock, rflags);

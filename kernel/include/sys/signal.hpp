@@ -38,9 +38,9 @@ enum SIGNAL_ID : uint32_t
 	NSIG		= 32
 };
 
-struct thread_t;
+struct task_t;
 
-bool signal_pending(thread_t* thr);
-int send_signal(thread_t* thr, uint32_t signal);
+bool signal_pending(task_t* task);
+int send_signal(task_t* task, uint32_t signal);
 int pid_send_signal(pid_t pid, uint32_t signal);
 int pgrp_send_signal(pid_t pgrp, uint32_t signal);

@@ -4,7 +4,7 @@
 #include <arch/x86_64/serial.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/smp.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <stdatomic.h>
 
 static atomic_int panic_cpu = -1; 
@@ -44,8 +44,8 @@ void panic(const char* string)
         klog_internal_nolock(string);
 	klog_internal_nolock("\n");
        
-	auto* thr = smp_current_cpu()->get_current_thread();
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, thr ? thr->pid : 0, thr ? thr->name : "kernel", thr ? get_status_name(thr->status) : "?");
+	auto* task = smp_current_cpu()->get_current_task();
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "?");
 
 	stacktrace(0, TRACE_PANIC);
 	panic_complete();

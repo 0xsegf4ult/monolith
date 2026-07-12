@@ -3,7 +3,7 @@
 #include <sys/spinlock.hpp>
 #include <list.hpp>
 
-struct thread_t;
+struct task_t;
 
 struct wait_queue;
 
@@ -11,7 +11,7 @@ struct wait_queue_node
 {
 	list_node_t list_node;
 	wait_queue* queue;
-	thread_t* thread;
+	task_t* task;
 };
 
 struct wait_queue

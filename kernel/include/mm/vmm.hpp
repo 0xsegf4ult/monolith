@@ -21,5 +21,6 @@ int vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags
 struct address_space;
 void clone_kernel_vm(address_space* dest);
 address_space* get_kernel_vmspace();
+address_space* vmm_userspace_new();
 
 bool vm_page_fault(virtaddr_t address, uint64_t status);

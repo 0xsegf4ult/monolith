@@ -8,8 +8,8 @@
 #include <klog.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
-#include <sys/thread.hpp>
 #include <sys/err.hpp>
+#include <sys/task.hpp>
 
 using namespace vfs;
 
@@ -174,7 +174,7 @@ void procfs_remove(const char* path)
 
 ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
-	thread_t* target = (thread_t*)file->inode->data;
+	task_t* target = (task_t*)file->inode->data;
 	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\n",
 		target->name,
 		get_status_name(target->status),
@@ -192,23 +192,23 @@ static vfs::fs_file_ops proc_status_fops =
 	.read = read_proc_status
 };
 
-void procfs_register_thread(thread_t* thr)
+void procfs_register_process(task_t* task)
 {
 	char str_buf[64];
-	format_to(string_span{&str_buf[0], 64}, "{}", thr->pid);
+	format_to(string_span{&str_buf[0], 64}, "{}", task->tgid);
 
 	procfs_mkdir(str_buf);
 	
-	format_to(string_span{&str_buf[0], 64}, "{}/status", thr->pid);
+	format_to(string_span{&str_buf[0], 64}, "{}/status", task->tgid);
 
-	procfs_create(str_buf, &proc_status_fops, (void*)thr);
+	procfs_create(str_buf, &proc_status_fops, (void*)task);
 }
 
-void procfs_unregister_thread(thread_t* thr)
+void procfs_unregister_process(task_t* task)
 {
 	char str_buf[64];
-	format_to(string_span{&str_buf[0], 64}, "{}/status", thr->pid);
+	format_to(string_span{&str_buf[0], 64}, "{}/status", task->tgid);
 	procfs_remove(str_buf);
-	format_to(string_span{&str_buf[0], 64}, "{}", thr->pid);
+	format_to(string_span{&str_buf[0], 64}, "{}", task->tgid);
 	procfs_remove(str_buf);
 }

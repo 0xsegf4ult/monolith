@@ -1,9 +1,9 @@
 #pragma once
 
-#include <types.hpp>
 #include <sys/mutex.hpp>
 #include <sys/spinlock.hpp>
 #include <sys/waitqueue.hpp>
+#include <types.hpp>
 
 constexpr size_t NCCS = 11;
 using tcflag_t = uint32_t;
@@ -113,8 +113,6 @@ enum tty_io
 	TCSETS		= (__TIO << 8) + 4,
 	TIOCGWINSZ	= (__TIO << 8) + 8
 };
-
-struct thread_t;
 
 typedef void (*tty_output_t)(const char*, size_t);
 

@@ -4,5 +4,5 @@ namespace vfs
 {
 struct ventry_t;
 }
-struct thread_t;
-int load_executable(const char* path, thread_t* thr, vfs::ventry_t* exec_dir); 
+struct task_t;
+int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir); 

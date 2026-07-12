@@ -14,7 +14,7 @@
 #include <types.hpp>
 
 #include <sys/err.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/cred.hpp>
 
 using namespace vfs;
@@ -50,11 +50,11 @@ int generic_fs_create(ventry_t* parent, const char* path, mode_t mode)
         inode->iops = parent->node->iops;
 	inode->fops = parent->node->fops;
 	
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(task)
 	{
-		inode->uid = thr->cred.euid;
-		inode->gid = thr->cred.egid;
+		inode->uid = task->cred.euid;
+		inode->gid = task->cred.egid;
 	}
 
         auto* dirent = ventry_new(path, inode);
@@ -78,11 +78,11 @@ int generic_fs_mkdir(ventry_t* parent, const char* path, mode_t mode)
 	inode->fops = parent->node->fops;
 	inode->nlinks++;
 	
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(task)
 	{
-		inode->uid = thr->cred.euid;
-		inode->gid = thr->cred.egid;
+		inode->uid = task->cred.euid;
+		inode->gid = task->cred.egid;
 	}
 
         auto* dirent = ventry_new(path, inode);
@@ -117,11 +117,11 @@ int generic_fs_mknod(ventry_t* parent, const char* path, mode_t mode, dev_t dev)
 
         inode->dev = dev;
 	
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(thr)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(task)
 	{
-		inode->uid = thr->cred.euid;
-		inode->gid = thr->cred.egid;
+		inode->uid = task->cred.euid;
+		inode->gid = task->cred.egid;
 	}
 
         auto* dirent = ventry_new(path, inode);

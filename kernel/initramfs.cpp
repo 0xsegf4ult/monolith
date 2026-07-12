@@ -1,6 +1,7 @@
 #include <initramfs.hpp>
 #include <types.hpp>
 #include <klog.hpp>
+#include <kfmt.hpp>
 #include <fs/vfs.hpp>
 
 struct ustar_record
@@ -41,8 +42,10 @@ void initramfs_unpack(byte* data, size_t length)
 	{
 		ustar_record* record = reinterpret_cast<ustar_record*>(data);
 
+		char path[64];
+
 		auto namel = string_length(record->name);
-		if(namel > 64)
+		if(namel > 63)
 		{
 			log::error("tar: filename too long");
 			return;
@@ -51,19 +54,20 @@ void initramfs_unpack(byte* data, size_t length)
 		if(namel == 0)
 			break;
 
-		if(record->name[namel - 1] == '/')
-			record->name[namel - 1] = '\0';
+		format_to(string_span{&path[0], 64}, "/{}", record->name);
+		if(path[namel] == '/')
+			path[namel] = '\0';
 
 		auto mode = oct2uint(record->mode, 7);		
 		auto size = oct2uint(record->size, 11);
 		if(record->type == '5')
 		{
-			vfs::mkdir(record->name, mode);
+			vfs::mkdir(path, mode);
 		}
 		else if(record->type == '0')
 		{
-			vfs::create(record->name, mode);
-			auto fd = vfs::open(record->name);
+			vfs::create(path, mode);
+			auto fd = vfs::open(path);
 			vfs::write(fd, data + 512, size);
 			vfs::close(fd);
 		}

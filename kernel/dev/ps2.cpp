@@ -255,7 +255,6 @@ void interrupt_handler()
 
 	if(cur_tty && !release_flag)
 	{
-
 		const char* reg_tbl = shift ? &shifted_scancodes[0] : &regular_scancodes[0];
 		if(scancode == 0x2e && ctrl)
 		{

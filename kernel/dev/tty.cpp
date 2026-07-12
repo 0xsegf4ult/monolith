@@ -13,7 +13,7 @@
 #include <mm/vmm.hpp>
 
 #include <sys/mutex.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/signal.hpp>
 
@@ -47,18 +47,18 @@ constexpr winsize_t default_winsize = {
 
 int tty_open(vfs::vnode_t* node, int flags)
 {
-	auto* thr = smp_current_cpu()->get_current_thread();
+	auto* task = smp_current_cpu()->get_current_task();
 
 	auto minor = node->dev.minor();
 	auto* tty = (tty_device*)(chardev_get(node->dev)->data);
 	if(!tty)
 		return -ENXIO;	
 
-	if(!thr->tty && thr->sid == thr->pid && tty->session_id == 0)
+	if(!task->tty && is_session_leader(task) && tty->session_id == 0)
 	{
-		thr->tty = tty;
-		tty->session_id = thr->sid;
-		tty->fg_pgrp = thr->pgid;
+		task->tty = tty;
+		tty->session_id = task->sid;
+		tty->fg_pgrp = task->pgid;
 	}
 
 	return 0;
@@ -117,22 +117,22 @@ ssize_t tty_read(tty_device* tty, byte* buffer, size_t length)
 	mutex_lock(tty->lock);
 	if(tty->read_buffer_head == tty->read_buffer_tail)
 	{
-		thread_t* thr = smp_current_cpu()->get_current_thread();
+		auto* task = smp_current_cpu()->get_current_task();
 		int wret = 0;
 		while(1)
 		{
-			wait_queue_register(tty->waitqueue, thr->wait);
-			thread_status exp_state = THREAD_RUNNING;
-			if(!atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_INTR_SLEEPING))	
+			wait_queue_register(tty->waitqueue, task->wait);
+			task_status exp_state = TASK_RUNNING;
+			if(!atomic_compare_exchange_strong(&task->status, &exp_state, TASK_INTR_SLEEPING))	
 			{
-				if(exp_state != THREAD_INTR_SLEEPING)
+				if(exp_state != TASK_INTR_SLEEPING)
 					panic("wq_register cmpxchg failed");
 			}
 
 			if(tty->read_buffer_head != tty->read_buffer_tail)
 				break;
 
-			if(signal_pending(thr))
+			if(signal_pending(task))
 			{
 				wret = -EINTR;
 				break;
@@ -142,9 +142,9 @@ ssize_t tty_read(tty_device* tty, byte* buffer, size_t length)
 			sched_yield();
 			mutex_lock(tty->lock);
 		}
-		wait_queue_unregister(thr->wait);
-		thread_status exp_state = THREAD_INTR_SLEEPING;
-		atomic_compare_exchange_strong(&thr->status, &exp_state, THREAD_RUNNING);
+		wait_queue_unregister(task->wait);
+		task_status exp_state = TASK_INTR_SLEEPING;
+		atomic_compare_exchange_strong(&task->status, &exp_state, TASK_RUNNING);
 		if(wret < 0)
 		{
 			mutex_unlock(tty->lock);
@@ -201,8 +201,8 @@ ssize_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t lengt
 int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
-	auto* thr = smp_current_cpu()->get_current_thread();
-	if(!tty || tty != thr->tty)
+	auto* task = smp_current_cpu()->get_current_task();
+	if(!tty || tty != task->tty)
 		return -ENOTTY;
 
 	switch(op)
@@ -213,12 +213,12 @@ int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 		if(!arg || arg > 0x7fffffffffff)
                         return -EFAULT;
 		
-		if(thr->sid != tty->session_id)
+		if(task->sid != tty->session_id)
 			return -ENOTTY;
 
 		memcpy(&pgrp, (byte*)arg, sizeof(pid_t));
 		auto* leader = get_pgrp_leader(pgrp);
-		if(!leader || leader->sid != thr->sid)
+		if(!leader || leader->sid != task->sid)
 			return -EPERM;
 
 		tty->fg_pgrp = pgrp;

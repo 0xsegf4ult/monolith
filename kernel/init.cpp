@@ -32,7 +32,7 @@
 #include <mm/vmm.hpp>
 
 #include <sys/executable.hpp>
-#include <sys/thread.hpp>
+#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/time.hpp>
 
@@ -186,7 +186,7 @@ extern "C" void init()
 
 	efifb_init(framebuffer);
 
-	threading_init();
+	task_init();
 	smp_init();
 
 	panic("idle thread died");
@@ -202,7 +202,7 @@ void kernel_main()
 	time_set_boottime(time);
 	log::info("rtc: updated system time to {}", time);
 
-	vfs::mkdir("proc", 0755);
+	vfs::mkdir("/proc", 0755);
 	procfs_init();
 	fatfs_init();
 	vfs::mount(nullptr, "/proc", "procfs");
@@ -216,9 +216,9 @@ void kernel_main()
 	initramfs_unpack(initramfs_address, initramfs_size);
 
 	const char* argv[2] = {"/bin/init", nullptr};
-	auto* init_proc = create_thread("init", argv, true);
+	auto* init_proc = process_userspace_new("init", argv);
 	int init_status = load_executable("/bin/init", init_proc, nullptr);
 	if(init_status < 0)
-		panic("could not execute /bin/init!");
+		panic("spawn /bin/init returned status {}", -init_status);
 	sched_add_ready(init_proc);
 }

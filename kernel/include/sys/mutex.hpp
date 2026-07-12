@@ -3,12 +3,12 @@
 #include <sys/spinlock.hpp>
 #include <types.hpp>
 
-struct thread_t;
+struct task_t;
 
 struct mutex_t
 {
 	spinlock_t spinlock;
-	thread_t* waitqueue;
+	task_t* waitqueue;
 	bool locked;
 };
 
