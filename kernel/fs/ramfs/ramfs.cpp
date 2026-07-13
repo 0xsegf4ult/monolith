@@ -7,9 +7,14 @@
 #include <kstd.hpp>
 #include <types.hpp>
 
+#include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/mmu.hpp>
+#include <arch/x86_64/smp.hpp>
+
 #include <klog.hpp>
 
 #include <sys/err.hpp>
+#include <sys/task.hpp>
 #include <list.hpp>
 
 using namespace vfs;
@@ -43,8 +48,9 @@ ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 		auto rp = file->read_pos;
 		while(rp >= 4096)
 		{
-			if(!spage)
-				return 0;
+			if(!spage || &spage->list_node == &data->pages)
+				return -ENXIO;
+
 			spage = list_next_entry(spage, list_node);
 			rp -= 4096;
 		}
@@ -103,7 +109,8 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 		}
 	}
 
-	ramfs_page* spage = list_first_entry(&reinterpret_cast<ramfs_data*>(file->inode->data)->pages, ramfs_page, list_node);
+	ramfs_data* data = (ramfs_data*)file->inode->data;
+	ramfs_page* spage = list_first_entry(&data->pages, ramfs_page, list_node);
 	if(file->write_pos)
 	{
 		auto wp = file->write_pos;
@@ -133,6 +140,57 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 	return orig_l - length;
 }
 
+static bool ramfs_vm_fault(vm_object* object, virtaddr_t addr, uint32_t flags)
+{
+	auto* space = object->space;
+	auto* data = (ramfs_data*)(object->file->inode->data);
+	ramfs_page* spage = list_first_entry(&data->pages, ramfs_page, list_node);
+	off_t offset = object->offset;
+
+	while(offset && spage && &spage->list_node != &data->pages)
+	{
+		offset -= 0x1000;
+		spage = list_next_entry(spage, list_node);
+	}
+
+	if(offset)
+		return false;	
+	
+	if(object->prot & PROT_WRITE && (flags & VM_FAULT_WRITE))
+	{
+		log::debug("write to COW mapped file, reallocating");
+		auto new_page = pmm_allocate();
+		mmu_map(space->mmu_root, new_page + VM_DMAP_BASE, addr, object->prot, VM_FLAG_OWNER);
+		mmu_invalidate(space->mmu_root, addr, 0x1000);
+		memcpy((void*)addr, spage->data, 0x1000);
+		space->resident_file++;
+
+		return true;
+	}
+	else if(object->prot & PROT_READ)
+	{
+		uint32_t prot = object->prot & (~PROT_WRITE);
+		mmu_map(space->mmu_root, (physaddr_t)spage->data - VM_DMAP_BASE, addr, prot, 0);
+		return true;
+	}
+
+	return false;
+}
+
+static vm_object_ops ramfs_vm_ops =
+{
+	.fault = ramfs_vm_fault
+};
+
+static int ramfs_mmap(file_descriptor_t* file, vm_object* range)
+{	
+	if(range->prot & PROT_WRITE)
+		range->flags |= VM_FLAG_COW;
+
+	range->vm_ops = &ramfs_vm_ops;
+	return 0;
+}
+
 static fs_inode_ops ramfs_iops =
 {
 	.lookup = generic_fs_lookup,
@@ -147,7 +205,8 @@ static fs_file_ops ramfs_fops =
 	.open = generic_fs_open,
 	.close = generic_fs_close,
 	.read = ramfs_read,
-	.write = ramfs_write
+	.write = ramfs_write,
+	.mmap = ramfs_mmap,
 };
 
 int ramfs_super_init(block_device_t* bdev, superblock_t** out_sb)

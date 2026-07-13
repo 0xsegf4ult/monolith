@@ -1,5 +1,5 @@
 set(USERSPACE_COMPILE_OPTIONS -target x86_64-none-elf -ffreestanding -msse2 -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
-set(USERSPACE_LINK_OPTIONS -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot)
+set(USERSPACE_LINK_OPTIONS -fuse-ld=lld -no-pie -nostdlib --sysroot=${CMAKE_SOURCE_DIR}/buildroot -Wl,-z,separate-code)
 set(USERSPACE_LINK_LIBRARIES crt0 c)
 
 add_subdirectory("cat")

@@ -177,7 +177,7 @@ ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t leng
 {
 	task_t* target = (task_t*)file->inode->data;
 	vm_space* targetvm = target->current_vm_space;
-	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\nVirtAnon: {} kB\nRssAnon: {} kB\n",
+	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\nVirtAnon: {} kB\nRssAnon: {} kB\nVirtFile: {}kB\nRssFile: {} kB\n",
 		target->name,
 		get_status_name(target->status),
 		target->pid,
@@ -186,7 +186,9 @@ ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t leng
 		target->cred.uid,
 		target->cred.gid,
 		targetvm->mapped_anon * 4,
-		targetvm->resident_anon * 4
+		targetvm->resident_anon * 4,
+		targetvm->mapped_file * 4,
+		targetvm->resident_file * 4
 	);		
 	return length;
 }
@@ -194,6 +196,42 @@ ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t leng
 static vfs::fs_file_ops proc_status_fops =
 {
 	.read = read_proc_status
+};
+
+ssize_t read_proc_maps(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	task_t* target = (task_t*)file->inode->data;
+	vm_space* targetvm = target->current_vm_space;
+
+	size_t remaining = length;
+	string_span out_buffer = {(char*)buffer, length};
+
+	mutex_lock(targetvm->lock);
+	vm_object* range;
+	list_for_each_entry(range, targetvm->objects, list_node)
+	{
+		if(!out_buffer.size())
+			break;
+
+		out_buffer = format_to(out_buffer, "{:016x} - {:016x} {}{}{} {:08x} {}\n",
+			range->base,
+			range->base + range->length,
+			(range->prot & PROT_READ) ? 'r' : '-',
+			(range->prot & PROT_WRITE) ? 'w' : '-',
+			(range->prot & PROT_EXEC) ? 'x' : '-',
+			0,
+			range->file ? range->file->path->name : "[anon]"
+		);
+	}
+
+	mutex_unlock(targetvm->lock);
+
+	return length;
+}
+
+static vfs::fs_file_ops proc_maps_fops =
+{
+	.read = read_proc_maps
 };
 
 void procfs_register_process(task_t* task)
@@ -206,11 +244,17 @@ void procfs_register_process(task_t* task)
 	format_to(string_span{&str_buf[0], 64}, "{}/status", task->tgid);
 
 	procfs_create(str_buf, &proc_status_fops, (void*)task);
+
+	format_to(string_span{&str_buf[0], 64}, "{}/maps", task->tgid);
+
+	procfs_create(str_buf, &proc_maps_fops, (void*)task);
 }
 
 void procfs_unregister_process(task_t* task)
 {
 	char str_buf[64];
+	format_to(string_span{&str_buf[0], 64}, "{}/maps", task->tgid);
+	procfs_remove(str_buf);
 	format_to(string_span{&str_buf[0], 64}, "{}/status", task->tgid);
 	procfs_remove(str_buf);
 	format_to(string_span{&str_buf[0], 64}, "{}", task->tgid);

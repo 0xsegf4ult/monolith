@@ -186,14 +186,21 @@ static void vm_free_range(vm_space* space, vm_object* range)
 	size_t addr = range->base;
 	while(len)
 	{
-		mmu_unmap(space->mmu_root, addr);
 		if(range->flags & VM_FLAG_FILE)
 		{
+			// delete private copies of COW pages
+			if(range->prot & PROT_WRITE)
+			{
+				auto mapping = vm_space_get_mapping(space, addr);
+				if(mapping.base && mapping.flags & VM_FLAG_OWNER)
+				{
+					pmm_free(mapping.base);
+					space->resident_file--;
+				}
+			}
+			space->mapped_file--;
 		}
-		else if(range->flags & VM_FLAG_DEVICE)
-		{
-		}
-		else
+		else if(!(range->flags & VM_FLAG_DEVICE))
 		{
 			auto mapping = vm_space_get_mapping(space, addr);
 			if(mapping.base && mapping.base != zero_cowmem && mapping.flags & VM_FLAG_OWNER)
@@ -201,6 +208,8 @@ static void vm_free_range(vm_space* space, vm_object* range)
 				pmm_free(mapping.base);
 			}
 		}
+		
+		mmu_unmap(space->mmu_root, addr);
 
 		addr += MMU_PAGE_SIZE;
 		len -= (len < MMU_PAGE_SIZE) ? len : MMU_PAGE_SIZE;
@@ -214,6 +223,7 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 	size_t length = page_align(info.length);
 	
 	const bool is_device = info.flags & VM_FLAG_DEVICE;
+	const bool is_file = info.flags & VM_FLAG_FILE;
 	if(is_device)
 	{
 		if(!info.phys_base)
@@ -231,17 +241,28 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 	const bool read_access = prot & PROT_READ;
 	const bool write_access = prot & PROT_WRITE;
 	
-	bool cow = (write_access && !prefault && !is_device);
+	bool cow = (write_access && !is_file && !prefault && !is_device);
 	if(cow)
-	{
 		vmflags |= VM_FLAG_COW;
-	}
 	
 	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
 	range->base = page_align_down(info.virt_base);
 	range->length = length;
-	range->prot = vm_prot_t(info.prot);
-	range->flags = vm_flags_t(vmflags);
+	range->prot = info.prot;
+	range->flags = vmflags;
+	
+	if(is_file)
+	{
+		range->file = &vfs::get_open_fd(info.fd);
+		range->file->refcount++;
+		range->offset = info.offset;
+	}
+	else
+	{
+		range->file = nullptr;
+	}
+
+	range->space = space;
 	list_node_init(range->list_node);
 
 	bool valid = false;
@@ -261,43 +282,52 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 		return 0;
 	}
 
-	/*
-	 *  COW pages have PROT_WRITE set in VMM bookkeeping structures
-	 *  but we have to remove it on the actual page tables
-	 */  
-	if(cow)	
-		prot &= (~PROT_WRITE);
-
-	physaddr_t phys = is_device ? page_align_down(info.phys_base) : zero_cowmem;
 	mutex_lock(space->lock);
-	uint32_t mmuflags = 0;
-	virtaddr_t alloc_base = range->base;
-	while(length)
+	if(is_file)
 	{
-		if(!is_device)
-		{
-			if(prefault)
-			{
-				space->resident_anon++;
-				phys = pmm_allocate();
-				mmuflags = VM_FLAG_OWNER;
-			}
-			else
-				phys = zero_cowmem;
-		}
-
-		if(prot & PROT_READ)
-			mmu_map(space->mmu_root, phys, alloc_base, prot, mmuflags);
-		
-		if(is_device)
-			phys += MMU_PAGE_SIZE;
-			
-		space->mapped_anon++;
-		alloc_base += MMU_PAGE_SIZE;
-		length -= (length < MMU_PAGE_SIZE) ? length : MMU_PAGE_SIZE;
+		space->mapped_file += (length / 0x1000);
+		range->file->inode->fops->mmap(range->file, range);
 	}
-	mutex_unlock(space->lock);
+	else
+	{
+		/*
+		 *  COW pages have PROT_WRITE set in VMM bookkeeping structures
+		 *  but we have to remove it on the actual page tables
+		 */  
+		if(cow)	
+			prot &= (~PROT_WRITE);
 
+		physaddr_t phys = is_device ? page_align_down(info.phys_base) : zero_cowmem;
+		uint32_t mmuflags = 0;
+		virtaddr_t alloc_base = range->base;
+		while(length)
+		{
+			if(!is_device)
+			{
+				if(prefault)
+				{
+					space->resident_anon++;
+					phys = pmm_allocate();
+					mmuflags = VM_FLAG_OWNER;
+				}
+				else
+					phys = zero_cowmem;
+			}
+
+			if(prot & PROT_READ)
+				mmu_map(space->mmu_root, phys, alloc_base, prot, mmuflags);
+			
+			if(is_device)
+				phys += MMU_PAGE_SIZE;
+			
+			space->mapped_anon++;
+
+			alloc_base += MMU_PAGE_SIZE;
+			length -= (length < MMU_PAGE_SIZE) ? length : MMU_PAGE_SIZE;
+		}
+	}
+
+	mutex_unlock(space->lock);
 	return range->base;
 }
 
@@ -332,7 +362,7 @@ vm_object* vm_space_get_range(vm_space* space, virtaddr_t base)
 	mutex_lock(space->lock);
 	list_for_each_entry(cur, space->objects, list_node)
 	{
-		if(cur->base == base)
+		if(cur->base <= base && cur->base + cur->length > base)
 		{
 			mutex_unlock(space->lock);
 			return cur;
@@ -421,6 +451,7 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	{
 		if((flags & VM_FAULT_WRITE) && (range->prot & (PROT_READ | PROT_WRITE)) && (range->flags & VM_FLAG_COW))
 		{
+
 			physaddr_t new_phys = pmm_allocate();
 			if(!new_phys)
 				return false;
@@ -447,6 +478,15 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	}
 	else
 	{
+		if(range->flags & VM_FLAG_FILE)
+		{
+			if(range->vm_ops && range->vm_ops->fault)
+			{
+				if(range->vm_ops->fault(range, addr, flags))
+					return true;
+			}
+		}
+
 		return false;
 	}
 }

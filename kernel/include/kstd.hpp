@@ -13,3 +13,14 @@ extern "C" void* memcpy(void* dest, const void* src, size_t n);
 extern "C" void* memset(void* dest, int data, size_t n);
 extern "C" void* memmove(void* dest, const void* src, size_t n);
 extern "C" int memcmp(const void* s1, const void* s2, size_t n);
+
+constexpr uint64_t align_up(uint64_t value, uint64_t alignment)
+{
+        return (value + alignment - 1) & (~(alignment - 1));
+}
+
+constexpr uint64_t align_down(uint64_t value, uint64_t alignment)
+{
+        return value & ~(alignment - 1);
+}
+

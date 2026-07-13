@@ -658,16 +658,18 @@ constexpr void fmt_process(string_span& out_buffer, string_view& fmt, const fmt_
 }
 
 template <typename... Args>
-constexpr void format_to(string_span out_buffer, string_view fmt)
+constexpr string_span format_to(string_span out_buffer, string_view fmt)
 {
 	parse_fmt_string(out_buffer, fmt);
 	out_buffer[0] = '\0';
+	return out_buffer;
 }
 
 template <typename... Args>
-constexpr void format_to(string_span out_buffer, string_view fmt, Args&&... args)
+constexpr string_span format_to(string_span out_buffer, string_view fmt, Args&&... args)
 {
 	const fmt_argument arguments[sizeof...(Args)]{make_argument(args)...};
 	fmt_process(out_buffer, fmt, arguments, static_cast<int>(sizeof...(Args)));
 	out_buffer[0] = '\0';
+	return out_buffer;
 }

@@ -5,6 +5,10 @@
 #include <types.hpp>
 
 class page_table;
+namespace vfs
+{
+	struct file_descriptor_t;
+}
 
 enum vm_flags_t : uint32_t
 {
@@ -35,12 +39,24 @@ enum pf_flag_t : uint32_t
 	VM_FAULT_FETCH 		= 8,
 };
 
+struct vm_space;
+struct vm_object;
+
+struct vm_object_ops
+{
+	bool (*fault)(vm_object* obj, virtaddr_t addr, uint32_t fault_flags);
+};
+
 struct vm_object
 {
 	virtaddr_t base;
 	size_t length;
-	vm_prot_t prot;
-	vm_flags_t flags;
+	uint32_t prot;
+	uint32_t flags;
+	vfs::file_descriptor_t* file;
+	off_t offset;
+	vm_object_ops* vm_ops;
+	vm_space* space;
 	list_node_t list_node;
 };
 

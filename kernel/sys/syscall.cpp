@@ -119,7 +119,7 @@ enum SPAWNFLAGS
 	SPAWN_SETPGID = 1
 };
 
-int common_spawn(pid_t* out_pid, const char** argv, uint64_t flags, int at_fd)
+static int common_spawn(pid_t* out_pid, const char** argv, uint64_t flags, int at_fd)
 {
 	auto* parent = smp_current_cpu()->get_current_task();
 
@@ -389,7 +389,7 @@ int sys_getcwd(char* buffer, size_t max_len)
 
 void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	if(addr || !length)
+	if(addr || !length || offset & 0xFFF)
 		return (void*)-EINVAL;
 
 	if(!(flags & MAP_PRIVATE) && !(flags & MAP_SHARED))
@@ -402,8 +402,11 @@ void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t off
 	bool is_anon = (flags & MAP_ANONYMOUS);
 	if(is_anon)
 	{
-		if(addr)
+		if(fd >= 0)
 			return (void*)-EINVAL;
+
+		if(flags & MAP_SHARED)
+			return (void*)-ENOTSUP;
 
 		auto virt = vm_space_map(task->current_vm_space,
 		{
@@ -411,20 +414,50 @@ void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t off
 			.prot = (prot & 7) | PROT_USER 
 		});
 		
-		if(!virt)
-			return (void*)-ENOMEM;
-
 		return (void*)virt;
 	}
 	else
 	{
-		return (void*)-EINVAL;
+		if(fd < 0)
+			return (void*)-EBADF;
+
+		int v_fd = task->open_files[fd];
+		if(v_fd < 0)
+			return (void*)-EBADF;
+
+		auto& filp = vfs::get_open_fd(v_fd);
+		if(!filp.inode->fops->mmap)
+			return (void*)-ENODEV;
+
+		auto virt = vm_space_map(task->current_vm_space,
+		{
+			.length = length,
+			.prot = (prot & 7) | PROT_USER,
+			.flags = VM_FLAG_FILE,
+			.offset = offset,
+			.fd = v_fd
+		});
+
+		return (void*)virt;
 	}
 }
 
 int sys_munmap(void* addr, size_t length)
 {
-	return -1;
+	//TODO: page size might not be 4K
+	if(!length || (virtaddr_t)addr & 0xFFF)
+		return -EINVAL;
+
+	if((virtaddr_t)addr < VM_USERSPACE_BASE)
+		return -EINVAL;
+
+	if((virtaddr_t)addr + length > VM_USERSPACE_END)
+		return -EINVAL;
+
+	auto* task = smp_current_cpu()->get_current_task();
+	vm_space_unmap(task->current_vm_space, (virtaddr_t)addr, length);
+
+	return 0;
 }
 
 int sys_mount(const char* source, const char* target, const char* fsname)

@@ -3,6 +3,7 @@
 #include <sys/err.hpp>
 
 #include <arch/x86_64/cpu.hpp>
+#include <arch/x86_64/mmu.hpp>
 #include <arch/x86_64/smp.hpp>
 
 #include <fs/vfs.hpp>
@@ -74,45 +75,38 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 				protflags |= PROT_EXEC;
 			}
 
-			uint64_t page_offset = phdr->p_vaddr % 0x1000;
-			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
-			vm_space_map(task->current_vm_space, 
-			{ 
-				.length = phdr->p_memsz + page_offset, 
-				.prot = protflags,
-				.flags = VM_FLAG_ALLOCATED,
-				.virt_base = aligned_vaddr
-			});
-			vfs::seek(exec_fd, phdr->p_offset);
+			virtaddr_t map_vaddr = align_down(phdr->p_vaddr, MMU_PAGE_SIZE);
+			off_t map_offset = align_down(phdr->p_offset, MMU_PAGE_SIZE);
+			virtaddr_t align_rem = phdr->p_vaddr - map_vaddr;
 
-			virtaddr_t cur_page = aligned_vaddr;
-			size_t cur_offset = page_offset;
-			size_t wr_len = phdr->p_filesz;
-			while(wr_len)
+			if(phdr->p_filesz)
 			{
-				virtaddr_t user_page = vm_space_get_mapping(task->current_vm_space, cur_page).base + cur_offset + VM_DMAP_BASE;
-				auto read_count = 0x1000 - cur_offset;
-				if(read_count > wr_len)
-					read_count = wr_len;
-
-	//			log::debug("read {:x} bytes to {:x} -> {:x}", read_count, user_page, cur_page + cur_offset);
-				vfs::read(exec_fd, (byte*)user_page, read_count);
-				cur_page += read_count + cur_offset;
-				cur_offset = 0;
-				wr_len -= read_count;
+				vm_space_map(task->current_vm_space, 
+				{ 
+					.length = phdr->p_filesz + align_rem, 
+					.prot = protflags,
+					.flags = VM_FLAG_FILE | VM_FLAG_COW,
+					.virt_base = map_vaddr,
+					.offset = map_offset,
+					.fd = exec_fd
+				});
 			}
 
-			wr_len += (phdr->p_memsz - phdr->p_filesz);
-			while(wr_len)
+			if(phdr->p_memsz > phdr->p_filesz)
 			{
-				virtaddr_t user_page = vm_space_get_mapping(task->current_vm_space, cur_page).base + VM_DMAP_BASE + (cur_page % 0x1000);
-				auto read_count = 0x1000;
-				if(read_count > wr_len)
-					read_count = wr_len;
-				//log::debug("zero {:x} bytes at {:x} -> {:x}", read_count, user_page, cur_page);
-				memset((void*)user_page, 0, read_count);
-				cur_page += read_count;
-				wr_len -= read_count;
+				auto file_end_addr = phdr->p_vaddr + phdr->p_filesz;
+				auto mem_end_addr = phdr->p_vaddr + phdr->p_memsz;
+
+				auto anon_map_start = align_up(file_end_addr, MMU_PAGE_SIZE);
+				auto anon_map_end = align_up(mem_end_addr, MMU_PAGE_SIZE);
+
+				vm_space_map(task->current_vm_space,
+				{
+					.length = anon_map_end - anon_map_start,
+					.prot = protflags,
+					.virt_base = anon_map_start
+				});
+
 			}
 		}
 		phdr++;
