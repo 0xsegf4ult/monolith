@@ -24,8 +24,6 @@
 #include <kstd.hpp>
 #include <panic.hpp>
 
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/memory_map.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
@@ -144,7 +142,7 @@ extern "C" void init()
 	if(rsdp_request.response == nullptr)
 		panic("EFI RSDP pointer invalid");
 
-	auto* rsdp = reinterpret_cast<const acpi::rsdp_v1*>(reinterpret_cast<byte*>(rsdp_request.response->address) + mm::direct_mapping_offset);
+	auto* rsdp = reinterpret_cast<const acpi::rsdp_v1*>(reinterpret_cast<byte*>(rsdp_request.response->address) + VM_DMAP_BASE);
 
 	size_t max_fb = 0;
 	efifb_framebuffer framebuffer;
@@ -157,7 +155,7 @@ extern "C" void init()
 			if(fsize > max_fb)
 			{
 				max_fb = fsize;
-				framebuffer.address = (virtaddr_t)fb->address - mm::direct_mapping_offset;
+				framebuffer.address = (virtaddr_t)fb->address - VM_DMAP_BASE;
 				framebuffer.width = fb->width;
 				framebuffer.height = fb->height;
 				framebuffer.pitch = fb->pitch;
@@ -209,10 +207,14 @@ void kernel_main()
 
 	vmm_late_init();
 
+	netdev_init();
+	arp_init();
+	ipv4_init();
+
 	pcie::enumerate();
 
 	log::info("initramfs [{:#x} - {:#x}]", initramfs_address, reinterpret_cast<virtaddr_t>(initramfs_address) + initramfs_size);
-	mmu_map_range(get_kernel_vmspace()->root_pml4, (physaddr_t)initramfs_address - mm::direct_mapping_offset, (virtaddr_t)initramfs_address, initramfs_size, vm_flags_to_x86(vm_present | vm_write));
+	mmu_map_range(vm_get_kernel_space()->mmu_root, (physaddr_t)initramfs_address - VM_DMAP_BASE, (virtaddr_t)initramfs_address, initramfs_size, PROT_READ, 0);
 	initramfs_unpack(initramfs_address, initramfs_size);
 
 	const char* argv[2] = {"/bin/init", nullptr};

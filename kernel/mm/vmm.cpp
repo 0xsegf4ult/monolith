@@ -1,7 +1,6 @@
 #include <mm/vmm.hpp>
-#include <mm/address_space.hpp>
+#include <mm/vm_space.hpp>
 #include <mm/memory_map.hpp>
-#include <mm/layout.hpp>
 #include <mm/slab.hpp>
 #include <mm/pmm.hpp>
 
@@ -16,9 +15,12 @@
 
 #include <klog.hpp>
 #include <kstd.hpp>
+#include <list.hpp>
 #include <types.hpp>
+#include <panic.hpp>
 
-static address_space* kernel_address_space = nullptr;
+static vm_space* kernel_address_space = nullptr;
+static physaddr_t zero_cowmem;
 
 extern "C"
 {
@@ -32,24 +34,30 @@ extern "C"
 
 void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 {	
-	kernel_address_space = (address_space*)kmalloc(sizeof(address_space));
-	kernel_address_space->init(0xffffc00000000000);
+	kernel_address_space = (vm_space*)kmalloc(sizeof(vm_space));
+	list_node_init(kernel_address_space->objects);
+	kernel_address_space->start_address = VM_VMALLOC_BASE;
+	kernel_address_space->end_address = VM_KERNEL_BASE;
 
-	auto text_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_text_start));
-	auto text_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_text_end) - reinterpret_cast<virtaddr_t>(&_text_start));
-	auto rodata_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_rodata_start));
-	auto rodata_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_rodata_end) - reinterpret_cast<virtaddr_t>(&_rodata_start));
-	auto databss_start = mm::page_align_down(reinterpret_cast<virtaddr_t>(&_data_start));
-	auto databss_length = mm::page_align(reinterpret_cast<virtaddr_t>(&_bss_end) - reinterpret_cast<virtaddr_t>(&_data_start));
+	kernel_address_space->mmu_root = mmu_new_pgdir();
+	mutex_init(kernel_address_space->lock);
 
-	log::info("mm: mapping kernel .text [{:#x} - {:#x}] R-X", text_start, text_start + text_length);
-	mmu_map_range(get_kernel_vmspace()->root_pml4, text_start - mm::kernel_mapping_offset + kload_addr, text_start, text_length, vm_flags_to_x86(vm_exec | vm_present));
-	log::info("mm: mapping kernel .rodata [{:#x} - {:#x}] R--", rodata_start, rodata_start + rodata_length);
-	mmu_map_range(get_kernel_vmspace()->root_pml4, rodata_start - mm::kernel_mapping_offset + kload_addr, rodata_start, rodata_length, vm_flags_to_x86(vm_present));
-	log::info("mm: mapping kernel .data .bss [{:#x} - {:#x}] RW-", databss_start, databss_start + databss_length);
-	mmu_map_range(get_kernel_vmspace()->root_pml4, databss_start - mm::kernel_mapping_offset + kload_addr, databss_start, databss_length, vm_flags_to_x86(vm_write | vm_present));
+	kernel_address_space->mapped_anon = 0;
+	kernel_address_space->mapped_file = 0;
+	kernel_address_space->resident_anon = 0;
+	kernel_address_space->resident_file = 0;
 
-	log::info("mm: HHDM mapping physical memory RW-");
+	auto text_start = page_align_down(reinterpret_cast<virtaddr_t>(&_text_start));
+	auto text_length = page_align(reinterpret_cast<virtaddr_t>(&_text_end) - reinterpret_cast<virtaddr_t>(&_text_start));
+	auto rodata_start = page_align_down(reinterpret_cast<virtaddr_t>(&_rodata_start));
+	auto rodata_length = page_align(reinterpret_cast<virtaddr_t>(&_rodata_end) - reinterpret_cast<virtaddr_t>(&_rodata_start));
+	auto databss_start = page_align_down(reinterpret_cast<virtaddr_t>(&_data_start));
+	auto databss_length = page_align(reinterpret_cast<virtaddr_t>(&_bss_end) - reinterpret_cast<virtaddr_t>(&_data_start));
+
+	mmu_map_range(kernel_address_space->mmu_root, text_start - VM_KERNEL_BASE + kload_addr, text_start, text_length, PROT_EXEC | PROT_READ, 0);
+	mmu_map_range(kernel_address_space->mmu_root, rodata_start - VM_KERNEL_BASE + kload_addr, rodata_start, rodata_length, PROT_READ, 0);
+	mmu_map_range(kernel_address_space->mmu_root, databss_start - VM_KERNEL_BASE + kload_addr, databss_start, databss_length, PROT_READ | PROT_WRITE, 0);
+
 	for(size_t i = 0; i < memmap.num_regions; i++)
 	{
 		const auto& region = memmap.regions[i];
@@ -57,15 +65,18 @@ void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
 		if(region.type != mm::mem_region::RegionType::Usable && region.type != mm::mem_region::RegionType::Allocated && region.type != mm::mem_region::RegionType::ACPI_Table)
 			continue;
 
-		auto begin = mm::page_align_down(region.begin);
-		auto length = mm::page_align(region.end) - begin;
-		mmu_map_range(get_kernel_vmspace()->root_pml4, begin, begin + mm::direct_mapping_offset, length, vm_flags_to_x86(vm_write | vm_present));
+		auto begin = page_align_down(region.begin);
+		auto length = page_align(region.end) - begin;
+		mmu_map_range(kernel_address_space->mmu_root, begin, begin + VM_DMAP_BASE, length, PROT_READ | PROT_WRITE, 0);
 	}
 
-	kernel_address_space->switch_to();
+	smp_current_cpu()->set_pagetable(kernel_address_space->mmu_root);
+
+	zero_cowmem = pmm_allocate();
+	memset((void*)(zero_cowmem + VM_DMAP_BASE), 0, MMU_PAGE_SIZE);
 }
 
-ssize_t vmstat_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+static ssize_t vmstat_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	format_to(string_span{(char*)buffer, length}, "free_pages: {}\nused_pages: {}", pmm_free_pages_count(), pmm_used_pages_count());
 	return length;
@@ -81,96 +92,361 @@ void vmm_late_init()
 	procfs_create("vmstat", &vmstat_fops);
 }
 
-virtaddr_t vmalloc(size_t length, uint64_t flags, void* arg)
+static bool space_check_range(vm_space* space, vm_object* range)
 {
-	return kernel_address_space->alloc(length, flags | vm_present, arg);
+	vm_object* cur;
+
+	if(range->base < space->start_address)
+		return false;
+
+	if(range->base + range->length >= space->end_address)
+		return false;
+
+	mutex_lock(space->lock);
+	list_for_each_entry(cur, space->objects, list_node)
+	{
+		if(cur->base <= range->base)
+		{
+			if(cur->base + cur->length > range->base)
+			{
+				mutex_unlock(space->lock);
+				return false;
+			}
+		}
+		else
+		{
+			if(cur->base < range->base + range->length)
+			{
+				mutex_unlock(space->lock);
+				return false;
+			}
+
+			break;
+		}
+	}
+
+	if(list_empty(space->objects))
+		list_add(space->objects, range->list_node);
+	else
+		list_add_tail(cur->list_node, range->list_node);
+
+	mutex_unlock(space->lock);
+	return true;
 }
 
-void vmfree(virtaddr_t addr)
+static bool space_find_free_range(vm_space* space, vm_object* range)
 {
-	kernel_address_space->free(addr);
+	mutex_lock(space->lock);
+
+	virtaddr_t alloc_base = 0;
+	vm_object* prev = nullptr;
+
+	if(list_empty(space->objects))
+	{
+		alloc_base = space->start_address;
+	}
+	else
+	{
+		vm_object* cur;
+		list_for_each_entry(cur, space->objects, list_node)
+		{
+			auto prev_end = prev ? prev->base + prev->length : space->start_address;
+			if(prev_end + range->length <= cur->base)
+			{
+				alloc_base = prev_end;
+				break;
+			}
+
+			if(cur->list_node.next == &space->objects)
+				alloc_base = cur->base + cur->length;
+
+			prev = cur;
+		}
+	}
+
+	if(!alloc_base)
+	{
+		mutex_unlock(space->lock);
+		return false;
+	}
+
+	range->base = alloc_base;
+	if(!prev)
+		list_add(space->objects, range->list_node);
+	else
+		list_add(prev->list_node, range->list_node);	
+
+	mutex_unlock(space->lock);
+	return true;
 }
 
-int vm_map(physaddr_t phys, virtaddr_t virt, uint64_t flags)
+static void vm_free_range(vm_space* space, vm_object* range)
 {
-	return kernel_address_space->map(phys, virt, flags);
+	size_t len = range->length;
+	size_t addr = range->base;
+	while(len)
+	{
+		mmu_unmap(space->mmu_root, addr);
+		if(range->flags & VM_FLAG_FILE)
+		{
+		}
+		else if(range->flags & VM_FLAG_DEVICE)
+		{
+		}
+		else
+		{
+			auto mapping = vm_space_get_mapping(space, addr);
+			if(mapping.base && mapping.base != zero_cowmem && mapping.flags & VM_FLAG_OWNER)
+			{
+				pmm_free(mapping.base);
+			}
+		}
+
+		addr += MMU_PAGE_SIZE;
+		len -= (len < MMU_PAGE_SIZE) ? len : MMU_PAGE_SIZE;
+	}
+	mmu_invalidate(space->mmu_root, range->base, range->length);
+	kfree(range);
 }
 
-int vm_map_range(physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags)
+virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 {
-	return kernel_address_space->map_range(phys, virt, length, flags);
+	size_t length = page_align(info.length);
+	
+	const bool is_device = info.flags & VM_FLAG_DEVICE;
+	if(is_device)
+	{
+		if(!info.phys_base)
+			panic("vm_space_map: DEVICE mapping requires physical memory backing");
+	}
+	else
+	{
+		if(info.phys_base)
+			panic("vm_space_map: physical base allowed only for DEVICE mappings");
+	}
+	
+	uint32_t prot = info.prot;
+	uint32_t vmflags = info.flags;
+	const bool prefault = vmflags & VM_FLAG_ALLOCATED; 
+	const bool read_access = prot & PROT_READ;
+	const bool write_access = prot & PROT_WRITE;
+	
+	bool cow = (write_access && !prefault && !is_device);
+	if(cow)
+	{
+		vmflags |= VM_FLAG_COW;
+	}
+	
+	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
+	range->base = page_align_down(info.virt_base);
+	range->length = length;
+	range->prot = vm_prot_t(info.prot);
+	range->flags = vm_flags_t(vmflags);
+	list_node_init(range->list_node);
+
+	bool valid = false;
+
+	if(info.virt_base)
+	{
+		valid = space_check_range(space, range);
+	}
+	else
+	{
+		valid = space_find_free_range(space, range);
+	}
+
+	if(!valid)
+	{
+		kfree(range);
+		return 0;
+	}
+
+	/*
+	 *  COW pages have PROT_WRITE set in VMM bookkeeping structures
+	 *  but we have to remove it on the actual page tables
+	 */  
+	if(cow)	
+		prot &= (~PROT_WRITE);
+
+	physaddr_t phys = is_device ? page_align_down(info.phys_base) : zero_cowmem;
+	mutex_lock(space->lock);
+	uint32_t mmuflags = 0;
+	virtaddr_t alloc_base = range->base;
+	while(length)
+	{
+		if(!is_device)
+		{
+			if(prefault)
+			{
+				space->resident_anon++;
+				phys = pmm_allocate();
+				mmuflags = VM_FLAG_OWNER;
+			}
+			else
+				phys = zero_cowmem;
+		}
+
+		if(prot & PROT_READ)
+			mmu_map(space->mmu_root, phys, alloc_base, prot, mmuflags);
+		
+		if(is_device)
+			phys += MMU_PAGE_SIZE;
+			
+		space->mapped_anon++;
+		alloc_base += MMU_PAGE_SIZE;
+		length -= (length < MMU_PAGE_SIZE) ? length : MMU_PAGE_SIZE;
+	}
+	mutex_unlock(space->lock);
+
+	return range->base;
 }
 
-void clone_kernel_vm(address_space* dest)
+void vm_space_unmap(vm_space* space, virtaddr_t addr, size_t length)
 {
-	for(int i = 255; i < 512; i++)
-		dest->root_pml4[i] = kernel_address_space->root_pml4[i];
+	mutex_lock(space->lock);
+	vm_object* tmp;
+	vm_object* cur;
+
+	list_for_each_entry_safe(cur, tmp, space->objects, list_node)
+	{
+		if(cur->base == addr)
+		{
+			if(length && length != cur->length)
+				log::warn("vm_space_unmap: partial unmap unsupported!");
+
+			list_del(cur->list_node);
+
+			vm_free_range(space, cur);
+			goto finish;
+		}
+	}
+
+	log::warn("vm_space_unmap: invalid range");
+finish:
+	mutex_unlock(space->lock);
 }
 
-address_space* get_kernel_vmspace()
+vm_object* vm_space_get_range(vm_space* space, virtaddr_t base)
+{
+	vm_object* cur;
+	mutex_lock(space->lock);
+	list_for_each_entry(cur, space->objects, list_node)
+	{
+		if(cur->base == base)
+		{
+			mutex_unlock(space->lock);
+			return cur;
+		}
+	}
+	mutex_unlock(space->lock);
+	return nullptr;
+}
+
+vm_mapping vm_space_get_mapping(vm_space* space, virtaddr_t base)
+{
+	return mmu_get_phys(space->mmu_root, base);
+}
+
+void vm_clone_kernel(vm_space* dest)
+{
+	for(int i = 256; i < 512; i++)
+		dest->mmu_root[i] = kernel_address_space->mmu_root[i];
+}
+
+vm_space* vm_get_kernel_space()
 {
 	return kernel_address_space;
 }
 
-address_space* vmm_userspace_new()
+vm_space* vm_userspace_new()
 {
-	auto* space = (address_space*)kmalloc(sizeof(address_space));
-	space->init();
-	clone_kernel_vm(space);
+	auto* space = (vm_space*)kmalloc(sizeof(vm_space));
+	list_node_init(space->objects);
+	space->start_address = VM_USERSPACE_BASE;
+	space->end_address = VM_USERSPACE_END;
+	
+	space->mmu_root = mmu_new_pgdir();
+	mutex_init(space->lock);
+
+	space->mapped_anon = 0;
+	space->mapped_file = 0;
+	space->resident_anon = 0;
+	space->resident_file = 0;
+
+	vm_clone_kernel(space);
 	return space;
 }
 
-bool vm_page_fault(virtaddr_t addr, uint64_t flags)
+void vm_space_destroy(vm_space* space)
 {
-	if(flags & pf_present)
+	mutex_lock(space->lock);
+	
+	vm_object* tmp;
+	vm_object* cur;
+	list_for_each_entry_safe(cur, tmp, space->objects, list_node)
+	{
+		vm_free_range(space, cur);
+	}	
+
+	mmu_destroy(space->mmu_root);
+	mutex_unlock(space->lock);
+	kfree(space);
+}
+
+bool vm_page_fault(virtaddr_t addr, uint32_t flags)
+{
+	if(addr < VM_USERSPACE_BASE || addr > VM_USERSPACE_END)
 		return false;
 
 	auto* task = smp_current_cpu()->get_current_task();
 	if(!task)
 		return false;
 
-	address_space* as = task->current_vm_space;
-	
-	uint64_t status = 0;
-	physaddr_t phys = as->get_mapping(addr, &status);
-//	log::debug("mapped to phys {:x} flags {:b} fault {:b}", phys, status, flags);
-	if(!phys)
+	vm_space* space = task->current_vm_space;
+	vm_object* range = vm_space_get_range(space, addr);
+	if(!range)
 		return false;
 
-	if((flags & pf_write) && !(status & vm_write))
-	{
-//		log::debug("tried write to readonly page");
+	if((flags & VM_FAULT_WRITE) && !(range->prot & PROT_WRITE))
 		return false;
-	}
-	if((flags & pf_user) && !(status & vm_user))
-	{
-//		log::debug("tried userspace write to kernel page");
+	if((flags & VM_FAULT_USER) && !(range->prot & PROT_USER))
 		return false;
-	}
-	if((flags & pf_fetch) && !(status & vm_exec))
-	{
-//		log::debug("tried instruction fetch from noexec page");
+	if((flags & VM_FAULT_FETCH) && !(range->prot & PROT_EXEC))
 		return false;
-	}
 
-	if(status & vm_swapped)
+	auto mapping = vm_space_get_mapping(space, addr);
+
+	bool present = flags & VM_FAULT_PRESENT;
+	if(present)
 	{
-//		log::debug("page is swapped out");
-		if(phys == vm_allocate)
+		if((flags & VM_FAULT_WRITE) && (range->prot & (PROT_READ | PROT_WRITE)) && (range->flags & VM_FLAG_COW))
 		{
-			phys = pmm_allocate();
-			if(!phys)
+			physaddr_t new_phys = pmm_allocate();
+			if(!new_phys)
 				return false;
 
-			// FIXME: wont update flags in vm_object, but those are unused for now
-			mutex_lock(as->lock);
-			mmu_map(as->root_pml4, phys, addr, vm_flags_to_x86(status | vm_present));
-			mutex_unlock(as->lock);
-//			log::debug("allocated lazy page {:x} for {:x}", phys, addr);
-			return true;
+			if(mapping.base == zero_cowmem) 
+			{
+				memset((void*)(new_phys + VM_DMAP_BASE), 0, MMU_PAGE_SIZE);
+			}
+		       	else
+			{
+				memcpy((void*)(new_phys + VM_DMAP_BASE), (void*)(mapping.base + VM_DMAP_BASE), MMU_PAGE_SIZE);
+				//FIXME: need some mechanism to release orphaned COW pages	
+			}
+
+			mutex_lock(space->lock);
+			mmu_map(space->mmu_root, new_phys, addr, range->prot | PROT_WRITE, range->flags | VM_FLAG_OWNER);
+			mmu_invalidate(space->mmu_root, addr, MMU_PAGE_SIZE);
+			space->resident_anon++;
+			mutex_unlock(space->lock);
+			return true;	
 		}
+
 		return false;
 	}
-
-	return false;
+	else
+	{
+		return false;
+	}
 }

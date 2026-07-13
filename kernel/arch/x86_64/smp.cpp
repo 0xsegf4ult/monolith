@@ -11,7 +11,6 @@
 #include <kstd.hpp> 
 #include <panic.hpp>
 
-#include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 
 #include <sys/scheduler.hpp>
@@ -107,7 +106,7 @@ void smp_init()
 	apic_timer_enable();
 
 	auto* pgt = smp_current_cpu()->get_pagetable();
-	mmu_map(pgt, trampoline_start, trampoline_start, PTE_WRITABLE | PTE_PRESENT);
+	mmu_map(pgt, trampoline_start, trampoline_start, PROT_READ | PROT_WRITE | PROT_EXEC, 0);
 	
 	void (*fptr)(uint32_t) = smp_start_ap;
 
@@ -118,7 +117,7 @@ void smp_init()
 	for(int i = 1; i < cpu_count; i++)
 	{
 		auto lid = smp_get_cpu(i)->lapic_id;
-		auto alloc = vmalloc(0x1000, vm_write | vm_present) + 0x1000;
+		auto alloc = vmalloc(0x1000) + 0x1000;
 		memcpy((void*)((virtaddr_t)(trampoline_rsp) - lid * 8), &alloc, sizeof(void*));
 	}
 
@@ -135,7 +134,7 @@ void smp_init()
 		asm volatile("pause");
 	}
 
-	mmu_unmap(pgt, trampoline_start, false);
+	mmu_unmap(pgt, trampoline_start);
 
 	sched_start_bsp();
 }

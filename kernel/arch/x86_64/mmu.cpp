@@ -1,8 +1,7 @@
 #include <arch/x86_64/mmu.hpp>
 
-#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
-#include <mm/vm_object.hpp>
+#include <mm/vmm.hpp>
 
 #include <kstd.hpp>
 #include <types.hpp>
@@ -10,7 +9,7 @@
 page_table* get_pte(page_table* table, uint64_t entry)
 {
 	if(table[entry].get_raw() & PTE_PRESENT && table[entry].get())
-		return reinterpret_cast<page_table*>(table[entry].get() + mm::direct_mapping_offset);
+		return reinterpret_cast<page_table*>(table[entry].get() + VM_DMAP_BASE);
 
 	return nullptr;
 }
@@ -19,7 +18,7 @@ page_table* create_pte(page_table* table, uint64_t entry, uint64_t flags)
 {
 	auto pt_phys = pmm_allocate();
 
-	page_table* pt = reinterpret_cast<page_table*>(pt_phys + mm::direct_mapping_offset);
+	page_table* pt = reinterpret_cast<page_table*>(pt_phys + VM_DMAP_BASE);
 	memset(pt, 0, sizeof(uint64_t) * 512);
 
 	table[entry] = page_table(pt_phys & page_mask_4K);
@@ -38,7 +37,30 @@ page_table* get_or_create_pte(page_table* table, uint64_t entry, uint64_t flags)
 
 constexpr static uint64_t secflags = PTE_WRITABLE | PTE_USER;
 
-void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags)
+constexpr uint64_t convert_vm_params(uint32_t prot, uint32_t flags)
+{
+	uint64_t pte_flags = 0;
+
+	if(prot & PROT_READ)
+		pte_flags |= PTE_PRESENT;
+	if(prot & PROT_WRITE)
+		pte_flags |= PTE_WRITABLE;
+	if(!(prot & PROT_EXEC))
+		pte_flags |= PTE_NOEXEC;
+	if(prot & PROT_USER)
+		pte_flags |= PTE_USER;
+	if(prot & PROT_UNCACHED)
+		pte_flags |= PTE_CACHE_DISABLE;
+	if(prot & PROT_WRITECOMBINE)
+		pte_flags |= PTE_WRITECOMBINING;
+
+	if(flags & VM_FLAG_OWNER)
+		pte_flags |= PTE_OWNER;
+
+	return pte_flags;
+}
+
+void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint32_t prot, uint32_t flags)
 {
 	auto pml4_index = get_pagetable_index(virt, 4);
 	auto pdpt_index = get_pagetable_index(virt, 3);
@@ -49,64 +71,26 @@ void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags
 	page_table* pd = get_or_create_pte(pdpt, pdpt_index, secflags);
 	page_table* pt = get_or_create_pte(pd, pd_index, secflags);
 	pt[pt_index] = page_table(phys & page_mask_4K);
-	pt[pt_index].set_flags(flags);
+	pt[pt_index].set_flags(convert_vm_params(prot, flags));
 }
 
-void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags)
+void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint32_t prot, uint32_t flags)
 {
-	auto pml4_index = get_pagetable_index(virt, 4);
-	auto pdpt_index = get_pagetable_index(virt, 3);
-	auto pd_index = get_pagetable_index(virt, 2);
-
-	page_table* pdpt = get_or_create_pte(table, pml4_index, secflags);
-	page_table* pd = get_or_create_pte(pdpt, pdpt_index, secflags);
-	pd[pd_index] = page_table(phys & page_mask_2M);
-	pd[pd_index].set_flags(flags | PTE_HUGE);
-}
-
-void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags)
-{
-	auto pml4_index = get_pagetable_index(virt, 4);
-	auto pdpt_index = get_pagetable_index(virt, 3);
-
-	page_table* pdpt = get_or_create_pte(table, pml4_index, secflags);
-	pdpt[pdpt_index] = page_table(phys & page_mask_1G);
-	pdpt[pdpt_index].set_flags(flags | PTE_HUGE);
-}
-
-void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags, bool allow_huge)
-{
-	size_t cur_pgsz = 0;
-	
 	while(length > 0)
 	{
-		if(allow_huge && length >= page_size_1G)
-		{
-			mmu_map_GB(table, phys, virt, flags);
-			cur_pgsz = page_size_1G;
-		}
-		else if(allow_huge && length >= page_size_2M)
-		{
-			mmu_map_MB(table, phys, virt, flags);
-			cur_pgsz = page_size_2M;
-		}
-		else
-		{
-			mmu_map(table, phys, virt, flags);
-			cur_pgsz = page_size_4K;
-		}
+		mmu_map(table, phys, virt, prot, flags);
 
-		phys += cur_pgsz;
-		virt += cur_pgsz;
+		phys += page_size_4K;
+		virt += page_size_4K;
 
-		if(length <= cur_pgsz)
+		if(length <= page_size_4K)
 			break;
 
-		length -= cur_pgsz;
+		length -= page_size_4K;
 	}
 }
 
-void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free)
+void mmu_unmap(page_table* table, virtaddr_t virt)
 {
 	auto pml4_index = get_pagetable_index(virt, 4);
 	auto pdpt_index = get_pagetable_index(virt, 3);
@@ -117,12 +101,75 @@ void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free)
 	page_table* pd = get_pte(pdpt, pdpt_index);
 	page_table* pt = get_pte(pd, pd_index);
 
-	physaddr_t phys = pt[pt_index].get();
 	pt[pt_index] = 0;
-	asm volatile("invlpg (%0)" :: "r"(virt) : "memory");	
+}
 
-	if(do_pmm_free)
-		pmm_free(phys);
+void mmu_invalidate(page_table* table, virtaddr_t virt, size_t length)
+{
+	while(length)
+	{
+		asm volatile("invlpg (%0)" :: "r"(virt) : "memory");
+		virt += MMU_PAGE_SIZE;
+		length -= MMU_PAGE_SIZE;
+	}
+}
+
+vm_mapping mmu_get_phys(page_table* table, virtaddr_t virt)
+{
+	auto pml4_index = get_pagetable_index(virt, 4);
+	auto pdpt_index = get_pagetable_index(virt, 3);
+	auto pd_index = get_pagetable_index(virt, 2);
+	auto pt_index = get_pagetable_index(virt, 1);
+
+	vm_mapping mapping;
+	mapping.base = 0;
+	mapping.prot = 0;
+	mapping.flags = 0;
+	mapping.present = false;
+
+	auto* pdpt = get_pte(table, pml4_index);
+	if(!pdpt)
+		return mapping;
+
+	auto* pd = get_pte(pdpt, pdpt_index);
+	if(!pd)
+		return mapping;
+
+	auto* pt = get_pte(pd, pd_index);
+	if(!pt)
+		return mapping;
+
+	auto entry = pt[pt_index].get_raw();
+	mapping.base = pt[pt_index].get();
+
+	if(entry & PTE_PRESENT)
+	{
+		mapping.prot |= PROT_READ;
+		mapping.present = true;
+	}
+		
+	if(entry & PTE_WRITABLE)
+		mapping.prot |= PROT_WRITE;
+	if(!(entry & PTE_NOEXEC))
+		mapping.prot |= PROT_EXEC;
+	if(entry & PTE_USER)
+		mapping.prot |= PROT_USER;
+	if(entry & PTE_CACHE_DISABLE)
+		mapping.prot |= PROT_UNCACHED;
+	if(entry & PTE_WRITECOMBINING)
+		mapping.prot |= PROT_WRITECOMBINE;
+
+	if(entry & PTE_OWNER)
+		mapping.flags |= VM_FLAG_OWNER;
+	
+	return mapping;
+}
+
+page_table* mmu_new_pgdir()
+{
+	page_table* pgdir = (page_table*)(pmm_allocate() + VM_DMAP_BASE);
+	memset(pgdir, 0, MMU_PAGE_SIZE);
+	return pgdir;
 }
 
 void mmu_destroy(page_table* root)
@@ -134,7 +181,7 @@ void mmu_destroy(page_table* root)
 		if(!(pml_entry->get_raw() & PTE_PRESENT))
 			continue;
 		
-		page_table* pdpt = (page_table*)(pml_entry->get() + mm::direct_mapping_offset);
+		page_table* pdpt = (page_table*)(pml_entry->get() + VM_DMAP_BASE);
 
 		for(int j = 0; j < 512; j++)
 		{
@@ -142,7 +189,7 @@ void mmu_destroy(page_table* root)
 			if(!(pdpt_entry->get_raw() & PTE_PRESENT))
 				continue;
 
-			page_table* pd = (page_table*)(pdpt_entry->get() + mm::direct_mapping_offset);
+			page_table* pd = (page_table*)(pdpt_entry->get() + VM_DMAP_BASE);
 			for(int k = 0; k < 512; k++)
 			{
 				page_table* pd_entry = &pd[k];
@@ -161,5 +208,5 @@ void mmu_destroy(page_table* root)
 		*pml_entry = 0;
 	}
 
-	pmm_free((physaddr_t)(root) - mm::direct_mapping_offset);
+	pmm_free((physaddr_t)(root) - VM_DMAP_BASE);
 }

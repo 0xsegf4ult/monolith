@@ -4,8 +4,6 @@
 #include <dev/net/e1000/e1000.hpp>
 
 #include <arch/x86_64/mmu.hpp>
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 #include <types.hpp>
 #include <klog.hpp>
@@ -17,8 +15,8 @@ static virtaddr_t base_address = 0;
 
 void set_base(physaddr_t base)
 {
-	base_address = base + mm::direct_mapping_offset;
-	mmu_map_range(get_kernel_vmspace()->root_pml4, base, base_address, 256 * 8 * 8 * 4096, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
+	base_address = base + VM_DMAP_BASE;
+	mmu_map_range(vm_get_kernel_space()->mmu_root, base, base_address, 256 * 8 * 8 * 4096, PROT_READ | PROT_WRITE | PROT_UNCACHED, 0);
 }
 
 }
@@ -169,7 +167,13 @@ bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor)
 	physaddr_t tbl_base = bar_width == 64 ? read_bar(bir) : physaddr_t(read_bar32(bir));
 	size_t tbl_barsize = bar_width == 64 ? get_bar_size(bir) : get_bar32_size(bir);
 
-	out_descriptor.table = (uint32_t*)(vmalloc(tbl_barsize, vm_write | vm_mmio, &tbl_base) + table_offset);
+	out_descriptor.table = (uint32_t*)(vm_space_map(vm_get_kernel_space(),
+	{
+		.length = tbl_barsize, 
+		.prot = PROT_READ | PROT_WRITE | PROT_UNCACHED,
+		.flags = VM_FLAG_DEVICE,
+		.phys_base = tbl_base
+	}) + table_offset);
 
 	if(!out_descriptor.table)
 		return false;

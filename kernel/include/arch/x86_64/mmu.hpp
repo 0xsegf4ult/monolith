@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mm/vm_object.hpp>
+#include <mm/vm_space.hpp>
 #include <types.hpp>
 
 enum PTEBits : uint64_t
@@ -9,12 +9,14 @@ enum PTEBits : uint64_t
 	PTE_WRITABLE = (1 << 1),
 	PTE_USER = (1 << 2),
 	PTE_WRITETHROUGH = (1 << 3),
+	PTE_WRITECOMBINING = (1 << 3), // PWT maps to PAT1, which we set to WC
 	PTE_CACHE_DISABLE = (1 << 4),
 	PTE_ACCESSED = (1 << 5),
 	PTE_DIRTY = (1 << 6),
 	PTE_HUGE = (1 << 7),
 	PTE_PAT = (1 << 7),
 	PTE_GLOBAL = (1 << 8),
+	PTE_OWNER = (1 << 9), // maps to VM_FLAG_OWNER
 	PTE_NOEXEC = 0x8000000000000000
 };
 
@@ -35,6 +37,8 @@ constexpr uint64_t page_size_4K = 1 << 12;
 constexpr uint64_t page_size_2M = 1 << 21;
 constexpr uint64_t page_size_1G = 1 << 30;
 
+constexpr size_t MMU_PAGE_SIZE = 0x1000;
+
 constexpr uint64_t get_pagetable_index(uint64_t address, int8_t level = 1)
 {
 	int8_t shift = 12 + ((level - 1) * 9);
@@ -49,6 +53,16 @@ constexpr uint32_t addr_to_pagenum(uint64_t address)
 constexpr virtaddr_t pagenum_to_addr(uint32_t pagenum)
 {
 	return pagenum << 12;
+}
+
+constexpr uint64_t page_align(uint64_t address)
+{
+        return (address + MMU_PAGE_SIZE - 1) & (~(MMU_PAGE_SIZE - 1));
+}
+
+constexpr uint64_t page_align_down(uint64_t address)
+{
+        return address & ~(MMU_PAGE_SIZE - 1);
 }
 
 class page_table
@@ -79,32 +93,15 @@ private:
 	uint64_t raw;
 };
 
-constexpr PTEBits vm_flags_to_x86(uint64_t flags)
-{
-	uint64_t result{0};
-
-	if(flags & vm_present)
-		result |= PTE_PRESENT;
-	if(flags & vm_write)
-		result |= PTE_WRITABLE;
-	if(!(flags & vm_exec))
-		result |= PTE_NOEXEC;
-	if(flags & vm_user)
-		result |= PTE_USER;
-	if(flags & vm_mmio)
-		result |= PTE_CACHE_DISABLE;
-	if(flags & vm_uc)
-		result |= PTE_CACHE_DISABLE;
-
-	return PTEBits{result};
-}
-
 page_table* get_pte(page_table* table, uint64_t entry);
-page_table* create_pte(page_table* table, uint64_t entry, uint64_t flags = 0);
-page_table* get_or_create_pte(page_table* table, uint64_t entry, uint64_t flags = 0);
-void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
-void mmu_map_MB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
-void mmu_map_GB(page_table* table, physaddr_t phys, virtaddr_t virt, uint64_t flags = 0);
-void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint64_t flags = 0, bool allow_huge = false);
-void mmu_unmap(page_table* table, virtaddr_t virt, bool do_pmm_free = true);
+page_table* create_pte(page_table* table, uint64_t entry, uint32_t prot, uint32_t flags);
+page_table* get_or_create_pte(page_table* table, uint64_t entry, uint32_t prot, uint32_t flags);
+
+void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint32_t prot, uint32_t flags);
+void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint32_t prot, uint32_t flags);
+void mmu_unmap(page_table* table, virtaddr_t virt);
+void mmu_invalidate(page_table* table, virtaddr_t virt, size_t length);
+vm_mapping mmu_get_phys(page_table* table, virtaddr_t virt);
+
+page_table* mmu_new_pgdir();
 void mmu_destroy(page_table* root);

@@ -15,7 +15,7 @@
 #include <sys/cred.hpp>
 #include <sys/stat.hpp>
 #include <sys/signal.hpp>
-#include <mm/address_space.hpp>
+#include <mm/vmm.hpp>
 
 #include <klog.hpp>
 #include <panic.hpp>
@@ -389,12 +389,15 @@ int sys_getcwd(char* buffer, size_t max_len)
 
 void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	if(!length)
+	if(addr || !length)
 		return (void*)-EINVAL;
 
-	if(!(flags & MAP_PRIVATE))
+	if(!(flags & MAP_PRIVATE) && !(flags & MAP_SHARED))
 		return (void*)-EINVAL;
 
+	if((flags & MAP_PRIVATE) && (flags & MAP_SHARED))
+		return (void*)-EINVAL;
+		
 	auto* task = smp_current_cpu()->get_current_task();
 	bool is_anon = (flags & MAP_ANONYMOUS);
 	if(is_anon)
@@ -402,13 +405,12 @@ void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t off
 		if(addr)
 			return (void*)-EINVAL;
 
-		uint64_t vmflags = 0;
-		if(prot & PROT_WRITE)
-			vmflags |= vm_write;
-		if(prot & PROT_EXEC)
-			vmflags |= vm_exec;
-
-		auto virt = task->current_vm_space->alloc(length, vmflags | vm_user);
+		auto virt = vm_space_map(task->current_vm_space,
+		{
+			.length = length,
+			.prot = (prot & 7) | PROT_USER 
+		});
+		
 		if(!virt)
 			return (void*)-ENOMEM;
 

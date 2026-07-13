@@ -6,8 +6,6 @@
 #include <arch/x86_64/smp.hpp>
 
 #include <fs/vfs.hpp>
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 #include <elf.hpp>
@@ -66,19 +64,25 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 	{
 		if(phdr->p_type == PT_LOAD)
 		{
-			uint64_t vmflags = vm_user;
+			uint32_t protflags = PROT_USER | PROT_READ;
 			if(phdr->p_flags & PF_W)
-				vmflags |= vm_write;
+				protflags |= PROT_WRITE;
 			if(phdr->p_flags & PF_X)
 			{
 				if(phdr->p_flags & PF_W)
 					log::warn("section has W+X flags!");
-				vmflags |= vm_exec;
+				protflags |= PROT_EXEC;
 			}
 
 			uint64_t page_offset = phdr->p_vaddr % 0x1000;
 			virtaddr_t aligned_vaddr = phdr->p_vaddr - page_offset;
-			task->current_vm_space->alloc_placed(aligned_vaddr, phdr->p_memsz + page_offset, vmflags | vm_present);
+			vm_space_map(task->current_vm_space, 
+			{ 
+				.length = phdr->p_memsz + page_offset, 
+				.prot = protflags,
+				.flags = VM_FLAG_ALLOCATED,
+				.virt_base = aligned_vaddr
+			});
 			vfs::seek(exec_fd, phdr->p_offset);
 
 			virtaddr_t cur_page = aligned_vaddr;
@@ -86,7 +90,7 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 			size_t wr_len = phdr->p_filesz;
 			while(wr_len)
 			{
-				virtaddr_t user_page = task->current_vm_space->get_mapping(cur_page) + cur_offset + mm::direct_mapping_offset;
+				virtaddr_t user_page = vm_space_get_mapping(task->current_vm_space, cur_page).base + cur_offset + VM_DMAP_BASE;
 				auto read_count = 0x1000 - cur_offset;
 				if(read_count > wr_len)
 					read_count = wr_len;
@@ -101,7 +105,7 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 			wr_len += (phdr->p_memsz - phdr->p_filesz);
 			while(wr_len)
 			{
-				virtaddr_t user_page = task->current_vm_space->get_mapping(cur_page) + mm::direct_mapping_offset + (cur_page % 0x1000);
+				virtaddr_t user_page = vm_space_get_mapping(task->current_vm_space, cur_page).base + VM_DMAP_BASE + (cur_page % 0x1000);
 				auto read_count = 0x1000;
 				if(read_count > wr_len)
 					read_count = wr_len;

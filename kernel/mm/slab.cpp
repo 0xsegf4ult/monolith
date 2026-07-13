@@ -1,7 +1,6 @@
 #include <mm/slab.hpp>
 #include <mm/pmm.hpp>
 #include <mm/vmm.hpp>
-#include <mm/layout.hpp>
 #include <sys/spinlock.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
@@ -63,7 +62,7 @@ byte* slab_alloc(slab_cache& cache)
 	}
 
 	physaddr_t alloc_phys = pmm_allocate();
-	auto* new_slab = reinterpret_cast<slab*>(alloc_phys + mm::direct_mapping_offset);
+	auto* new_slab = reinterpret_cast<slab*>(alloc_phys + VM_DMAP_BASE);
 	new_slab->next = nullptr;
 
 	if(prev)
@@ -144,7 +143,7 @@ void* kmalloc(size_t size)
 	}
 
 	// FIXME: no way to kfree, add some sort of tracking
-	auto virt = vmalloc(size, vm_write | vm_present);
+	auto virt = vmalloc(size);
 	if(!virt)
 		return nullptr;
 

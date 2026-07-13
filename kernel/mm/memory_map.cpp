@@ -1,5 +1,6 @@
+#include <arch/x86_64/mmu.hpp>
 #include <mm/memory_map.hpp>
-#include <mm/layout.hpp>
+#include <mm/vmm.hpp>
 
 #include <klog.hpp>
 #include <kstd.hpp>
@@ -35,19 +36,19 @@ void* memory_map::reserve(size_t size)
 		{
 			if(num_regions == max_regions)
 				return nullptr;
-			log::info("memmap: update region [{:#x} - {:#x}] -> [{:#x} - {:#x}]", region->begin, region->end, mm::page_align(region->begin + size), region->end);
-			region->begin = mm::page_align(begin + size);
+			log::info("memmap: update region [{:#x} - {:#x}] -> [{:#x} - {:#x}]", region->begin, region->end, page_align(region->begin + size), region->end);
+			region->begin = page_align(begin + size);
 
 			mem_region* new_region = regions + num_regions;
 
 			new_region->begin = begin;
-			new_region->end = mm::page_align(begin + size);
+			new_region->end = page_align(begin + size);
 			new_region->type = mem_region::RegionType::Allocated;
 
 			log::info("memmap: region [{:#x} - {:#x}] -> allocated", new_region->begin, new_region->end);
 
 			num_regions++;
-			return reinterpret_cast<void*>(begin + mm::direct_mapping_offset);
+			return reinterpret_cast<void*>(begin + VM_DMAP_BASE);
 		}
 	}
 

@@ -208,7 +208,7 @@ int fatfs_super_init(block_device_t* bdev, superblock_t** out_sb)
 	priv_data->sb = sb;
 	priv_data->root = nullptr;
 
-	auto buffer = vmalloc(0x1000, vm_write);
+	auto buffer = vmalloc(0x1000);
 	bdev->bops->pread_blocks(bdev, (byte*)buffer, 2, 0);
 
 	bpb_t* bpb = (bpb_t*)buffer;

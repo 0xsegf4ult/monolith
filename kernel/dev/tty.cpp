@@ -286,11 +286,11 @@ tty_device* tty_create(uint16_t index, tty_output_t output_fn)
 
 	auto* device = (tty_device*)kmalloc(sizeof(tty_device));
 
-	device->read_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));
+	device->read_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size));
 	device->read_buffer_head = 0;
 	device->read_buffer_tail = 0;
 
-	device->write_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size, vm_write));
+	device->write_buffer = reinterpret_cast<byte*>(vmalloc(tty_device::buffer_size));
 	device->write_buffer_head = 0;
 	device->write_buffer_tail = 0;
 

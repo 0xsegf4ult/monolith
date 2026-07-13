@@ -3,7 +3,7 @@
 #include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/timer.hpp>
 #include <dev/pcie.hpp>
-#include <mm/layout.hpp>
+#include <mm/vmm.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
 #include <types.hpp>
@@ -20,7 +20,7 @@ const sdt_header* find_table(const sdt_header* root_table, const char* id)
 	for(int i = 0; i < num_entries; i++)
 	{
 		auto* address = reinterpret_cast<const physaddr_t*>(hdr + (i * sizeof(physaddr_t)));
-		auto* header = reinterpret_cast<const sdt_header*>(*address + mm::direct_mapping_offset);
+		auto* header = reinterpret_cast<const sdt_header*>(*address + VM_DMAP_BASE);
 		if(!strncmp(header->signature, id, 4))
 			return header;
 	}
@@ -127,7 +127,7 @@ acpi_tables parse_tables(const acpi::rsdp_v1* rsdp)
 	if(!tables.xsdp->xsdt_address)
 		panic("XSDT pointer invalid");
 
-	tables.xsdt = reinterpret_cast<const acpi::sdt_header*>(tables.xsdp->xsdt_address + mm::direct_mapping_offset);
+	tables.xsdt = reinterpret_cast<const acpi::sdt_header*>(tables.xsdp->xsdt_address + VM_DMAP_BASE);
 	log::info("acpi: XSDT {:#x} {:#x}", tables.xsdt, tables.xsdt->length);
 
 	tables.fadt = reinterpret_cast<const acpi::fadt*>(acpi::find_table(tables.xsdt, "FACP"));

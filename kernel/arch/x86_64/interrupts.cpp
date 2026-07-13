@@ -67,33 +67,32 @@ void remove_irq_handler(uint8_t irq)
 	irq_handlers[irq - 32] = nullptr;
 }
 
-cpu_context_t* handle_pagefault(cpu_context_t* ctx)
+static void handle_pagefault(cpu_context_t* ctx)
 {
 	uint64_t cr2;
 	asm volatile("movq %%cr2, %0" : "=r"(cr2));
 	
 	auto* task = smp_current_cpu()->get_current_task();
 	
-	if(!(ctx->error_code & PF_PRESENT)) 
-	{
-		uint64_t pflags = 0;
-		if(ctx->error_code & PF_WRITE)
-			pflags |= pf_write;
-		if(ctx->error_code & PF_USER)
-			pflags |= pf_user;
-		if(ctx->error_code & PF_FETCH)
-			pflags |= pf_fetch;
+	uint64_t pflags = 0;
+	if(ctx->error_code & PF_PRESENT)
+		pflags |= VM_FAULT_PRESENT;
+	if(ctx->error_code & PF_WRITE)
+		pflags |= VM_FAULT_WRITE;
+	if(ctx->error_code & PF_USER)
+		pflags |= VM_FAULT_USER;
+	if(ctx->error_code & PF_FETCH)
+		pflags |= VM_FAULT_FETCH;
 
-		if(vm_page_fault(cr2, pflags))
-			return ctx;
-	}
+	if(vm_page_fault(page_align_down(cr2), pflags))
+		return;
 		
 	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
 		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
 
 		send_signal(task, SIGSEGV);
-		return ctx;
+		return;
 	}
 	
 	panic_prepare();
@@ -106,10 +105,9 @@ cpu_context_t* handle_pagefault(cpu_context_t* ctx)
 	stacktrace(ctx->rbp, 0);
 	
 	panic_complete();
-	return ctx;
 }
 
-void signal_handle(task_t* task)
+static void signal_handle(task_t* task)
 {
 	uint64_t rflags;
 	spinlock_acquire_irqsave(task->sig_lock, rflags);
@@ -130,7 +128,7 @@ void signal_handle(task_t* task)
 	spinlock_release_irqsave(task->sig_lock, rflags);
 }
 
-cpu_context_t* handle_gpf(cpu_context_t* ctx)
+static void handle_gpf(cpu_context_t* ctx)
 {
 	auto* task = smp_current_cpu()->get_current_task();
 
@@ -138,7 +136,7 @@ cpu_context_t* handle_gpf(cpu_context_t* ctx)
 	{
 		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
 		send_signal(task, SIGSEGV);
-		return ctx;
+		return ;
 	}
 	
 	panic_prepare();
@@ -150,7 +148,6 @@ cpu_context_t* handle_gpf(cpu_context_t* ctx)
 	stacktrace(ctx->rbp, 0);
 
 	panic_complete();
-	return ctx;
 }
 
 extern "C" void interrupt_handler(cpu_context_t* ctx)

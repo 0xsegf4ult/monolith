@@ -12,8 +12,6 @@
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
@@ -201,13 +199,13 @@ void nvme_register_namespace(nvme_device* device, uint32_t ns)
 	char devname[32];
 	format_to(string_span{&devname[0], 32}, "nvme{}n{}", device->id, ns);
 
-	nvme_ns->identify = (nvme_identify_namespace*)vmalloc(0x1000, vm_write);
+	nvme_ns->identify = (nvme_identify_namespace*)vmalloc(0x1000);
 
 	nvme_cmd cmd{};
 	cmd.header.opcode = NVME_ADMIN_OP_IDENTIFY;
 	cmd.nsid = ns;
 	cmd.identify.cns = 0;
-	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)nvme_ns->identify);
+	cmd.prp1 = vm_space_get_mapping(vm_get_kernel_space(), (virtaddr_t)nvme_ns->identify).base;
 	cmd.prp2 = 0;
 	
 	log::debug("{}: send identify command", devname);
@@ -219,8 +217,8 @@ void nvme_register_namespace(nvme_device* device, uint32_t ns)
 	
 	log::debug("{}: {:#x} blocks blk_size {:#x} -> {} MiB", devname, nvme_ns->identify->nsze, 1 << lba_shift, nvme_ns->identify->nsze * (1 << lba_shift) / (1 << 20));
 
-	nvme_ns->dma_page = vmalloc(0x1000, vm_write);
-	nvme_ns->dma_page_phys = get_kernel_vmspace()->get_mapping(nvme_ns->dma_page);
+	nvme_ns->dma_page = vmalloc(0x1000);
+	nvme_ns->dma_page_phys = vm_space_get_mapping(vm_get_kernel_space(), nvme_ns->dma_page).base;
 
 	nvme_ns->disk = disk_create(dev_t{4, uint16_t((ns - 1) * 128)}, devname, nvme_ns, &nvme_ns_fops, &nvme_ns_bops);
 	nvme_ns->block_size = (1 << lba_shift);
@@ -262,7 +260,14 @@ void nvme_init_controller(pcie_device& dev)
 	auto base = device->pcie.read_bar(0);
 	auto bar_size = device->pcie.get_bar_size(0);
 
-	device->base_address = vmalloc(bar_size, vm_write | vm_mmio, &base);
+	auto* kernel_vm = vm_get_kernel_space();
+	device->base_address = vm_space_map(kernel_vm,
+	{
+		.length = bar_size,
+		.prot = PROT_READ | PROT_WRITE | PROT_UNCACHED,
+		.flags = VM_FLAG_DEVICE,
+		.phys_base = base
+	});
 
 	auto ctrl_cap = device->read_register<nvme_capability>(NVME_REGISTER_CAPABILITY);
 	
@@ -282,15 +287,15 @@ void nvme_init_controller(pcie_device& dev)
 		asm volatile("pause");
 	}
 	
-	device->submission_queue.address = (void*)vmalloc(0x1000, vm_write);
-	device->submission_queue.phys_address =	get_kernel_vmspace()->get_mapping((virtaddr_t)device->submission_queue.address); 
+	device->submission_queue.address = (void*)vmalloc(0x1000);
+	device->submission_queue.phys_address =	vm_space_get_mapping(kernel_vm, (virtaddr_t)device->submission_queue.address).base; 
 	device->submission_queue.size = 64;
 	device->submission_queue.tail = 0;
 	device->submission_queue.entry_size = 64; 
 	device->write_register<physaddr_t>(NVME_REGISTER_ADMIN_SUBMISSION_QUEUE, device->submission_queue.phys_address);
 
-	device->completion_queue.address = (void*)vmalloc(0x1000, vm_write);
-	device->completion_queue.phys_address = get_kernel_vmspace()->get_mapping((virtaddr_t)device->completion_queue.address);
+	device->completion_queue.address = (void*)vmalloc(0x1000);
+	device->completion_queue.phys_address = vm_space_get_mapping(kernel_vm, (virtaddr_t)device->completion_queue.address).base;
 	device->completion_queue.size = 64;
 	device->completion_queue.tail = 0;
 	device->completion_queue.entry_size = 16;
@@ -340,13 +345,13 @@ void nvme_init_controller(pcie_device& dev)
 
 	log::debug("nvme{}: controller started!", id);
 	
-	device->identify = (nvme_identify_controller*)vmalloc(0x1000, vm_write);
+	device->identify = (nvme_identify_controller*)vmalloc(0x1000);
 
 	nvme_cmd cmd{};
 	cmd.header.opcode = NVME_ADMIN_OP_IDENTIFY;
 	cmd.nsid = 0;
 	cmd.identify.cns = 1;
-	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)device->identify);
+	cmd.prp1 = vm_space_get_mapping(kernel_vm, (virtaddr_t)device->identify).base;
 	cmd.prp2 = 0;
 
 	log::debug("nvme{}: send identify cmd", id);
@@ -360,8 +365,8 @@ void nvme_init_controller(pcie_device& dev)
 
 	auto num_namespaces = device->identify->num_namespaces;
 
-	device->io_cq.address = (void*)vmalloc(0x1000, vm_write);
-	device->io_cq.phys_address = get_kernel_vmspace()->get_mapping((virtaddr_t)device->io_cq.address);
+	device->io_cq.address = (void*)vmalloc(0x1000);
+	device->io_cq.phys_address = vm_space_get_mapping(kernel_vm, (virtaddr_t)device->io_cq.address).base;
 	device->io_cq.size = 64;
 	device->io_cq.tail = 0;
 	device->io_cq.entry_size = 16;
@@ -378,8 +383,8 @@ void nvme_init_controller(pcie_device& dev)
 	log::debug("nvme{}: cmd_create_cq", id);
 	device->admin_submit_await(cq_cmd);
 
-	device->io_sq.address = (void*)vmalloc(0x1000, vm_write);
-	device->io_sq.phys_address = get_kernel_vmspace()->get_mapping((virtaddr_t)device->io_sq.address);
+	device->io_sq.address = (void*)vmalloc(0x1000);
+	device->io_sq.phys_address = vm_space_get_mapping(kernel_vm, (virtaddr_t)device->io_sq.address).base;
 	device->io_sq.size = 64;
 	device->io_sq.tail = 0;
 	device->io_sq.entry_size = 64;
@@ -397,12 +402,12 @@ void nvme_init_controller(pcie_device& dev)
 	log::debug("nvme{}: cmd_create_sq", id);
 	device->admin_submit_await(sq_cmd);
 
-	auto nsid_alloc = vmalloc(0x1000, vm_write);
+	auto nsid_alloc = vmalloc(0x1000);
 
 	cmd.header.opcode = NVME_ADMIN_OP_IDENTIFY; 
 	cmd.nsid = 0;
 	cmd.identify.cns = 2;
-	cmd.prp1 = get_kernel_vmspace()->get_mapping((virtaddr_t)nsid_alloc);
+	cmd.prp1 = vm_space_get_mapping(kernel_vm, (virtaddr_t)nsid_alloc).base;
 	cmd.prp2 = 0;
 	
 	log::debug("nvme{}: identify namespaces", id);

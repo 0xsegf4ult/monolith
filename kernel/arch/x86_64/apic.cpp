@@ -1,8 +1,6 @@
 #include <arch/x86_64/apic.hpp>
 #include <arch/x86_64/mmu.hpp>
 #include <arch/x86_64/cpu.hpp>
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
@@ -16,13 +14,13 @@ static virtaddr_t base_address = 0;
 
 void set_base(physaddr_t base)
 {
-	base_address = base + mm::direct_mapping_offset;
-	mmu_map(get_kernel_vmspace()->root_pml4, base, base_address, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
+	base_address = base + VM_DMAP_BASE;
+	mmu_map(vm_get_kernel_space()->mmu_root, base, base_address, PROT_READ | PROT_WRITE | PROT_UNCACHED, 0);
 }
 
 void enable()
 {
-	wrmsr(LAPIC_BASE, (base_address - mm::direct_mapping_offset) | 0x800);
+	wrmsr(LAPIC_BASE, (base_address - VM_DMAP_BASE) | 0x800);
 	*reinterpret_cast<volatile uint32_t*>(base_address + 0xf0) = 0x1ff;
 }
 
@@ -60,10 +58,10 @@ namespace ioapic
 
 void ioapic_instance::enable(physaddr_t address, uint32_t gsi)
 {
-	base_address = address + mm::direct_mapping_offset;
+	base_address = address + VM_DMAP_BASE;
 	gsi_base = gsi;
 
-	mmu_map(get_kernel_vmspace()->root_pml4, address, base_address, vm_flags_to_x86(vm_write | vm_mmio | vm_present));
+	mmu_map(vm_get_kernel_space()->mmu_root, address, base_address, PROT_READ | PROT_WRITE | PROT_UNCACHED, 0);
 
 	id = (mmio_read(0x00) >> 24) * 0xf0;
 	ver = mmio_read(0x01);

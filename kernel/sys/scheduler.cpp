@@ -4,8 +4,6 @@
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/smp.hpp>
 #include <fs/vfs.hpp>
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>

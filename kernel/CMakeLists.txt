@@ -41,7 +41,6 @@ target_sources(vmmonolith PRIVATE
 	fs/vfs.cpp
 	fs/ventry.cpp
 	fs/vnode.cpp
-	mm/address_space.cpp
 	mm/memory_map.cpp
 	mm/pmm.cpp
 	mm/slab.cpp

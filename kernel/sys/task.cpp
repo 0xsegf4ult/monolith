@@ -13,8 +13,6 @@
 #include <fs/vfs.hpp>
 #include <fs/procfs/procfs.hpp>
 
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
@@ -47,7 +45,7 @@ constexpr size_t user_stack_size = 0x4000;
 
 static void kernel_stack_init(task_t* task, virtaddr_t entry)
 {
-	auto stack_alloc = vmalloc(kernel_stack_size, vm_write | vm_present);
+	auto stack_alloc = vmalloc(kernel_stack_size);
        	auto* stack_ptr = reinterpret_cast<uint64_t*>(stack_alloc + kernel_stack_size);
 	*(--stack_ptr) = entry; // RIP
 	*(--stack_ptr) = 0; // RBP
@@ -64,7 +62,12 @@ static void kernel_stack_init(task_t* task, virtaddr_t entry)
 
 static void user_stack_init(task_t* task)
 {
-	task->rsp = task->current_vm_space->alloc(user_stack_size, vm_write | vm_user | vm_present) + user_stack_size - 8;
+	task->rsp = vm_space_map(task->current_vm_space, 
+	{
+		.length = user_stack_size, 
+		.prot = PROT_READ | PROT_WRITE | PROT_USER,
+	       	.flags = VM_FLAG_ALLOCATED
+	}) + user_stack_size - 8;
 }
 
 static void fd_table_init(task_t* task)
@@ -80,7 +83,7 @@ static void user_copy_args(task_t* task, const char** argv)
 	for(argc = 0; argv[argc]; ++argc)
 		argv_size += string_length(argv[argc]) + 1;
 
-	auto rsp_phys = task->current_vm_space->get_mapping(task->rsp) + ((user_stack_size - 8) & 0xfff) + mm::direct_mapping_offset;
+	auto rsp_phys = vm_space_get_mapping(task->current_vm_space, task->rsp).base + ((user_stack_size - 8) & 0xfff) + VM_DMAP_BASE;
 	auto rsp_phys_orig = rsp_phys;
 
 	auto rsp_argv_offset = rsp_phys - argv_size;
@@ -130,7 +133,7 @@ task_t* task_new(const char* name, pid_t forcepid)
 	task->sid = task->sid;
 	task->tgid = task->pid;
 
-	task->vm_space = nullptr;
+	task->owned_vm_space = nullptr;
 	task->current_vm_space = nullptr;
 	atomic_store_explicit(&task->status, TASK_RUNNING, memory_order_relaxed);
 	atomic_store_explicit(&task->flags, 0, memory_order_relaxed);
@@ -182,7 +185,7 @@ task_t* task_new(const char* name, pid_t forcepid)
 task_t* thread_kernel_new(const char* name, virtaddr_t entry)
 {
 	auto* task = task_new(name, 0);
-	task->current_vm_space = get_kernel_vmspace();
+	task->current_vm_space = vm_get_kernel_space();
 	kernel_stack_init(task, entry);
 	fd_table_init(task);
 
@@ -193,8 +196,8 @@ task_t* process_userspace_new(const char* name, const char** argv)
 {
 	auto* task = task_new(name, -1);
 	
-	task->vm_space = vmm_userspace_new(); 
-	task->current_vm_space = task->vm_space;
+	task->owned_vm_space = vm_userspace_new(); 
+	task->current_vm_space = task->owned_vm_space;
 	task->cwd = vfs::get_root_dentry();
 
 	kernel_stack_init(task, reinterpret_cast<virtaddr_t>(task_entry_stub));
@@ -269,11 +272,8 @@ void task_zombify(task_t* task)
 		task->cwd = nullptr;
 	}
 
-	if(task->vm_space)
-	{
-		task->vm_space->destroy();
-		kfree(task->vm_space);
-	}
+	if(task->owned_vm_space)
+		vm_space_destroy(task->owned_vm_space);
 
 	atomic_fetch_or(&task->flags, TASK_CAN_REAP);
 	atomic_store(&task->status, TASK_ZOMBIE);
@@ -289,7 +289,7 @@ void task_destroy(task_t* task)
 	if(task->pid && task->pid == task->tgid)
 		procfs_unregister_process(task);
 
-	vmfree(task->rsp0_top - kernel_stack_size + 56);
+	vfree(task->rsp0_top - kernel_stack_size + 56);
 	kfree(task);
 }
 

@@ -6,13 +6,12 @@
 
 #include <fs/vfs.hpp>
 
-#include <mm/address_space.hpp>
-#include <mm/layout.hpp>
 #include <mm/vmm.hpp>
 
 #include <types.hpp>
 #include <klog.hpp>
 #include <kstd.hpp>
+#include <sys/err.hpp>
 
 extern uint8_t font_data[];
 
@@ -31,9 +30,8 @@ void efifb_init(efifb_framebuffer framebuffer)
 	fb.hc = fb.height / 16;
 	fb.bpp = (fb.bpp + 7) / 8;
 
-	//FIXME: map as WC
-	mmu_map_range(get_kernel_vmspace()->root_pml4, fb.address, fb.address + mm::direct_mapping_offset, fb.height * fb.pitch, vm_flags_to_x86(vm_write | vm_present));
-	fb.address += mm::direct_mapping_offset;
+	mmu_map_range(vm_get_kernel_space()->mmu_root, fb.address, fb.address + VM_DMAP_BASE, fb.height * fb.pitch, PROT_READ | PROT_WRITE | PROT_WRITECOMBINE, 0);
+	fb.address += VM_DMAP_BASE;
 		
 	fb.cursor_x = 0;
 	fb.cursor_y = 0;

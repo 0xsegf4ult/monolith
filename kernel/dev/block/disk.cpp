@@ -87,7 +87,7 @@ void disk_parse_gpt(disk_t* disk, byte* buffer)
 
 void disk_scan(disk_t* disk)
 {
-	byte* buffer = (byte*)vmalloc(0x1000, vm_write);
+	byte* buffer = (byte*)vmalloc(0x1000);
 	char path_buf[64];
 	format_to(string_span{&path_buf[0], 64}, "/dev/{}", disk->name);
 	int fd = vfs::open(path_buf, 0);
@@ -99,5 +99,5 @@ void disk_scan(disk_t* disk)
 	disk_parse_gpt(disk, buffer);
 
 	vfs::close(fd);
-	vmfree((virtaddr_t)buffer);
+	vfree((virtaddr_t)buffer);
 }

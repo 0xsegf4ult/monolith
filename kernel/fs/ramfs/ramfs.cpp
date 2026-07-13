@@ -1,9 +1,9 @@
 #include <fs/ramfs/ramfs.hpp>
 #include <fs/generic.hpp>
 #include <fs/vfs.hpp>
-#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
+#include <mm/vmm.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
 
@@ -79,7 +79,7 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 		auto req = wr_len - fsize;
 		while(req)
 		{
-			auto dpage = pmm_allocate() + mm::direct_mapping_offset;		
+			auto dpage = pmm_allocate() + VM_DMAP_BASE;	
 			auto* ipage = (ramfs_page*)kmalloc(sizeof(ramfs_page));
 			ipage->data = reinterpret_cast<byte*>(dpage);
 			list_node_init(ipage->list_node);

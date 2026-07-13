@@ -7,7 +7,6 @@
 #include <fs/lookup.hpp>
 #include <fs/ramfs/ramfs.hpp>
 
-#include <mm/layout.hpp>
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 

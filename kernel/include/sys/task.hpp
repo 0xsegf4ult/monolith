@@ -39,7 +39,7 @@ constexpr const char* get_status_name(task_status status)
 	}
 }
 
-struct address_space;
+struct vm_space;
 
 namespace vfs
 {
@@ -58,8 +58,8 @@ struct task_t
 	virtaddr_t rsp0;
 	virtaddr_t rsp;
 	virtaddr_t rsp0_top;
-	address_space* vm_space;
-	address_space* current_vm_space;
+	vm_space* owned_vm_space;
+	vm_space* current_vm_space;
 	virtaddr_t entry;
 	
 	pid_t pid;

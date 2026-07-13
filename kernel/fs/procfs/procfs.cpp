@@ -4,6 +4,7 @@
 #include <fs/vfs.hpp>
 #include <fs/super.hpp>
 #include <mm/slab.hpp>
+#include <mm/vmm.hpp>
 
 #include <klog.hpp>
 #include <kstd.hpp>
@@ -175,14 +176,17 @@ void procfs_remove(const char* path)
 ssize_t read_proc_status(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	task_t* target = (task_t*)file->inode->data;
-	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\n",
+	vm_space* targetvm = target->current_vm_space;
+	format_to(string_span{(char*)buffer, length}, "Name: {}\nState: {}\nPid: {}\nPgid: {}\nSid: {}\nUid: {}\nGid: {}\nVirtAnon: {} kB\nRssAnon: {} kB\n",
 		target->name,
 		get_status_name(target->status),
 		target->pid,
 		target->pgid,
 		target->sid,
 		target->cred.uid,
-		target->cred.gid
+		target->cred.gid,
+		targetvm->mapped_anon * 4,
+		targetvm->resident_anon * 4
 	);		
 	return length;
 }
