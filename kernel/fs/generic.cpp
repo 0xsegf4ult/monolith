@@ -2,20 +2,19 @@
 #include <fs/ventry.hpp>
 #include <fs/vfs.hpp>
 
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 #include <dev/block/block.hpp>
 
 #include <mm/slab.hpp>
 
+#include <sys/err.hpp>
+#include <sys/cred.hpp>
+#include <sys/smp.hpp>
+#include <sys/task.hpp>
+
 #include <kstd.hpp>
 #include <types.hpp>
-
-#include <sys/err.hpp>
-#include <sys/task.hpp>
-#include <sys/cred.hpp>
 
 using namespace vfs;
 
@@ -50,7 +49,7 @@ int generic_fs_create(ventry_t* parent, const char* path, mode_t mode)
         inode->iops = parent->node->iops;
 	inode->fops = parent->node->fops;
 	
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task)
 	{
 		inode->uid = task->cred.euid;
@@ -78,7 +77,7 @@ int generic_fs_mkdir(ventry_t* parent, const char* path, mode_t mode)
 	inode->fops = parent->node->fops;
 	inode->nlinks++;
 	
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task)
 	{
 		inode->uid = task->cred.euid;
@@ -117,7 +116,7 @@ int generic_fs_mknod(ventry_t* parent, const char* path, mode_t mode, dev_t dev)
 
         inode->dev = dev;
 	
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task)
 	{
 		inode->uid = task->cred.euid;

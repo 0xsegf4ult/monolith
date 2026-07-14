@@ -2,6 +2,7 @@
 #include <dev/nvme/nvme_structs.hpp>
 
 #include <arch/x86_64/interrupts.hpp>
+#include <arch/generic.hpp>
 
 #include <dev/pcie.hpp>
 #include <dev/device.hpp>
@@ -83,7 +84,7 @@ struct nvme_device
 			if(completion->phase_tag == 1)
 				break;
 
-			asm volatile("pause");
+			arch_pause();
 		}
 		log::debug("nvme{}: cmd completed with status {}", id, uint16_t(completion->status));
 
@@ -137,7 +138,7 @@ ssize_t nvme_read(nvme_namespace* ns, uint64_t lba, size_t blocks, byte* buffer)
 			if(completion->phase_tag == 1)
 				break;
 
-			asm volatile("pause");
+			arch_pause();
 		}
 
 		memcpy(buffer + (offset * ns->block_size), (void*)ns->dma_page, count * ns->block_size);
@@ -284,7 +285,7 @@ void nvme_init_controller(pcie_device& dev)
 		
 	while(device->read_register<nvme_status>(NVME_REGISTER_CONTROLLER_STATUS).ready)
 	{
-		asm volatile("pause");
+		arch_pause();
 	}
 	
 	device->submission_queue.address = (void*)vmalloc(0x1000);
@@ -340,12 +341,13 @@ void nvme_init_controller(pcie_device& dev)
 			return;
 		}
 
-		asm volatile("pause");
+		arch_pause();
 	}
 
 	log::debug("nvme{}: controller started!", id);
 	
 	device->identify = (nvme_identify_controller*)vmalloc(0x1000);
+	log::debug("nvme_identify mapped at {:#x}", device->identify);
 
 	nvme_cmd cmd{};
 	cmd.header.opcode = NVME_ADMIN_OP_IDENTIFY;

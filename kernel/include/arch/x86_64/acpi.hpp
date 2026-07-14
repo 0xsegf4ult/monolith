@@ -196,17 +196,31 @@ struct __attribute__((packed)) mcfg : public sdt_header
 	char reserved[8];
 };
 
-struct acpi_tables
+struct __attribute__((packed)) hpet : public sdt_header
 {
-	const rsdp_v2* xsdp;
-	const sdt_header* xsdt;
-	const fadt* fadt;
-	const madt* madt;
-	const mcfg* mcfg;
+	uint8_t hw_rev_id;
+	uint8_t comparator_count : 5;
+	uint8_t counter_size : 1;
+	uint8_t reserved : 1;
+	uint8_t legacy_replacement : 1;
+	uint16_t pci_vendor_id;
+	acpi_gas address;
+	uint8_t hpet_number;
+	uint16_t minimum_tick;
+	uint8_t page_protection;
 };
 
-const sdt_header* find_table(const sdt_header* root_table, const char* id);
-acpi_tables parse_tables(const rsdp_v1* rsdp);
-acpi_tables& get_tables();
-
 }
+
+struct acpi_tables
+{
+	const acpi::rsdp_v2* xsdp;
+	const acpi::sdt_header* xsdt;
+	const acpi::fadt* fadt;
+	const acpi::madt* madt;
+	const acpi::mcfg* mcfg;
+	const acpi::hpet* hpet;
+};
+
+void acpi_parse_rsdp(const acpi::rsdp_v1* rsdp);
+acpi_tables& acpi_get_tables();

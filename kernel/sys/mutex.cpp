@@ -1,9 +1,8 @@
 #include <sys/mutex.hpp>
 #include <sys/spinlock.hpp>
-#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
-#include <arch/x86_64/smp.hpp>
-#include <arch/x86_64/cpu.hpp>
+#include <sys/smp.hpp>
+#include <sys/task.hpp>
 #include <types.hpp>
 #include <panic.hpp>
 
@@ -21,7 +20,7 @@ void mutex_lock(mutex_t& mutex)
 
 	if(mutex.locked)
 	{
-		auto* task = smp_current_cpu()->get_current_task();
+		auto* task = smp_current_task();
 		task->next = mutex.waitqueue;
 		mutex.waitqueue = task;
 

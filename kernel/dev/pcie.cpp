@@ -3,42 +3,32 @@
 #include <dev/nvme/nvme.hpp>
 #include <dev/net/e1000/e1000.hpp>
 
-#include <arch/x86_64/mmu.hpp>
+#include <arch/x86_64/acpi.hpp>
+
 #include <mm/vmm.hpp>
 #include <types.hpp>
 #include <klog.hpp>
 
-namespace pcie
-{
-
 static virtaddr_t base_address = 0;
-
-void set_base(physaddr_t base)
-{
-	base_address = base + VM_DMAP_BASE;
-	mmu_map_range(vm_get_kernel_space()->mmu_root, base, base_address, 256 * 8 * 8 * 4096, PROT_READ | PROT_WRITE | PROT_UNCACHED, 0);
-}
-
-}
 
 uint32_t pcie_device::read_config32(uint32_t offset) const
 {
-	return *reinterpret_cast<const volatile uint32_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
+	return *reinterpret_cast<const volatile uint32_t*>(base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
 }
 
 uint64_t pcie_device::read_config64(uint32_t offset) const
 {
-	return *reinterpret_cast<const volatile uint64_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
+	return *reinterpret_cast<const volatile uint64_t*>(base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset);
 }
 
 void pcie_device::write_config32(uint32_t offset, uint32_t data)
 {
-	*(reinterpret_cast<volatile uint32_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
+	*(reinterpret_cast<volatile uint32_t*>(base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
 }
 
 void pcie_device::write_config64(uint32_t offset, uint64_t data)
 {
-	*(reinterpret_cast<volatile uint64_t*>(pcie::base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
+	*(reinterpret_cast<volatile uint64_t*>(base_address + (((bus * 256) + (device * 8) + function) * 4096) + offset)) = data;
 }
 
 uint16_t pcie_device::vendor_id() const
@@ -185,10 +175,7 @@ bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor)
 	return true;
 }
 
-namespace pcie
-{
-
-void device_dispatch_driver(pcie_device& dev)
+static void device_dispatch_driver(pcie_device& dev)
 {
 	if(dev.class_code() == 1 && dev.subclass_code() == 8)
 		nvme_init_controller(dev);
@@ -199,9 +186,9 @@ void device_dispatch_driver(pcie_device& dev)
 	}	
 }
 
-void scan_bus(uint8_t bus);
+static void scan_bus(uint8_t bus);
 
-void scan_device(uint8_t bus, uint8_t device)
+static void scan_device(uint8_t bus, uint8_t device)
 {
 	pcie_device dev{bus, device, 0};
 
@@ -249,7 +236,7 @@ void scan_device(uint8_t bus, uint8_t device)
 	device_dispatch_driver(dev);
 }
 
-void scan_bus(uint8_t bus)
+static void scan_bus(uint8_t bus)
 {
 	for(uint8_t dev = 0; dev < 32; dev++)
 	{
@@ -257,9 +244,26 @@ void scan_bus(uint8_t bus)
 	}
 }
 
-void enumerate()
+void pcie_init()
 {
+	auto* mcfg = acpi_get_tables().mcfg;
+	auto* raw = (const byte*)mcfg;
+	raw += sizeof(acpi::mcfg);
+
+	auto len = mcfg->length - sizeof(acpi::mcfg);
+	auto ecam_count = len / sizeof(acpi::mcfg_ecam);
+
+	if(ecam_count > 1)
+		log::warn("pcie: MCFG has multiple ECAM entries");
+
+	auto* ecam = (const acpi::mcfg_ecam*)raw;
+	log::info("pcie: ECAM base {:#x} segment {} bus {}-{}", ecam->base_address, ecam->segment_group, ecam->start_bus, ecam->end_bus);
+
+	physaddr_t base = ecam->base_address; 
+	base_address = base + VM_DMAP_BASE;
+	mmu_map_range(vm_get_kernel_space()->mmu_root, base, base_address, 256 * 8 * 8 * 4096, PROT_READ | PROT_WRITE | PROT_UNCACHED, 0);
+
 	scan_bus(0);
 }
 
-}
+

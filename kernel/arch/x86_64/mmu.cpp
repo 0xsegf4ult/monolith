@@ -1,5 +1,6 @@
 #include <arch/x86_64/mmu.hpp>
 
+#include <mm/mmu.hpp>
 #include <mm/pmm.hpp>
 #include <mm/vmm.hpp>
 
@@ -80,13 +81,13 @@ void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t l
 	{
 		mmu_map(table, phys, virt, prot, flags);
 
-		phys += page_size_4K;
-		virt += page_size_4K;
+		phys += ARCH_PAGE_SIZE;
+		virt += ARCH_PAGE_SIZE;
 
-		if(length <= page_size_4K)
+		if(length <= ARCH_PAGE_SIZE)
 			break;
 
-		length -= page_size_4K;
+		length -= ARCH_PAGE_SIZE;
 	}
 }
 
@@ -109,8 +110,8 @@ void mmu_invalidate(page_table* table, virtaddr_t virt, size_t length)
 	while(length)
 	{
 		asm volatile("invlpg (%0)" :: "r"(virt) : "memory");
-		virt += MMU_PAGE_SIZE;
-		length -= MMU_PAGE_SIZE;
+		virt += ARCH_PAGE_SIZE;
+		length -= ARCH_PAGE_SIZE;
 	}
 }
 
@@ -168,7 +169,7 @@ vm_mapping mmu_get_phys(page_table* table, virtaddr_t virt)
 page_table* mmu_new_pgdir()
 {
 	page_table* pgdir = (page_table*)(pmm_allocate() + VM_DMAP_BASE);
-	memset(pgdir, 0, MMU_PAGE_SIZE);
+	memset(pgdir, 0, ARCH_PAGE_SIZE);
 	return pgdir;
 }
 
@@ -209,4 +210,11 @@ void mmu_destroy(page_table* root)
 	}
 
 	pmm_free((physaddr_t)(root) - VM_DMAP_BASE);
+}
+
+void mmu_clone(page_table* source, page_table* dest, uint32_t prot)
+{
+	int start = (prot & PROT_USER) ? 0 : 256;
+	for(int i = start; i < 512; i++)
+		dest[i] = source[i];
 }

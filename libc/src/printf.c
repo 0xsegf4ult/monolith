@@ -117,7 +117,7 @@ int printf(const char* fmt, ...)
 	int i = vsprintf(buffer, fmt, args);
 	va_end(args);
 
-	write(stdout, buffer, i);
+	write(STDOUT_FILENO, buffer, i);
 	return i;
 }
 

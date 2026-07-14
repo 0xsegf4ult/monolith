@@ -3,21 +3,19 @@
 #include <dev/character.hpp>
 #include <dev/device.hpp>
 
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
-
 #include <fs/ops.hpp>
 #include <fs/vfs.hpp>
 
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
+#include <sys/err.hpp>
+
 #include <sys/mutex.hpp>
-#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/signal.hpp>
-
-#include <sys/err.hpp>
+#include <sys/smp.hpp>
+#include <sys/task.hpp>
 
 #include <klog.hpp>
 #include <kstd.hpp>
@@ -47,7 +45,7 @@ constexpr winsize_t default_winsize = {
 
 int tty_open(vfs::vnode_t* node, int flags)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 
 	auto minor = node->dev.minor();
 	auto* tty = (tty_device*)(chardev_get(node->dev)->data);
@@ -117,7 +115,7 @@ ssize_t tty_read(tty_device* tty, byte* buffer, size_t length)
 	mutex_lock(tty->lock);
 	if(tty->read_buffer_head == tty->read_buffer_tail)
 	{
-		auto* task = smp_current_cpu()->get_current_task();
+		auto* task = smp_current_task();
 		int wret = 0;
 		while(1)
 		{
@@ -201,7 +199,7 @@ ssize_t tty_write(vfs::file_descriptor_t* file, const byte* buffer, size_t lengt
 int tty_ioctl(vfs::file_descriptor_t* file, uint64_t op, uint64_t arg)
 {
 	auto* tty = (tty_device*)(chardev_get(file->inode->dev)->data);
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(!tty || tty != task->tty)
 		return -ENOTTY;
 

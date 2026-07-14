@@ -40,9 +40,9 @@ enable_xsave:
 	xsetbv
 	ret
 
-.global disable_interrupts
-.type disable_interrupts, @function
-disable_interrupts:
+.global arch_disable_interrupts
+.type arch_disable_interrupts, @function
+arch_disable_interrupts:
 	pushq %rbp
 	movq %rsp, %rbp
 	pushfq
@@ -51,9 +51,9 @@ disable_interrupts:
 	popq %rbp
 	ret
 
-.global restore_flags
-.type restore_flags, @function
-restore_flags:
+.global arch_restore_flags
+.type arch_restore_flags, @function
+arch_restore_flags:
 	pushq %rbp
 	movq %rsp, %rbp
 	pushq %rdi

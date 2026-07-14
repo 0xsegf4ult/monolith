@@ -41,10 +41,4 @@ struct pcie_device
 	bool enable_msix(msix_descriptor_t& out_descriptor);
 };
 
-namespace pcie
-{
-
-void set_base(physaddr_t base);
-void enumerate();
-
-}
+void pcie_init();

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mm/vm_space.hpp>
 #include <types.hpp>
 
 enum PTEBits : uint64_t
@@ -30,14 +29,6 @@ enum PFBits : uint64_t
 };
 
 constexpr uint64_t page_mask_4K = 0xfff0fffffffff000;
-constexpr uint64_t page_mask_2M = 0xfff0ffffffe00000;
-constexpr uint64_t page_mask_1G = 0xfff0ffffe0000000;
-
-constexpr uint64_t page_size_4K = 1 << 12;
-constexpr uint64_t page_size_2M = 1 << 21;
-constexpr uint64_t page_size_1G = 1 << 30;
-
-constexpr size_t MMU_PAGE_SIZE = 0x1000;
 
 constexpr uint64_t get_pagetable_index(uint64_t address, int8_t level = 1)
 {
@@ -53,16 +44,6 @@ constexpr uint32_t addr_to_pagenum(uint64_t address)
 constexpr virtaddr_t pagenum_to_addr(uint32_t pagenum)
 {
 	return pagenum << 12;
-}
-
-constexpr uint64_t page_align(uint64_t address)
-{
-        return (address + MMU_PAGE_SIZE - 1) & (~(MMU_PAGE_SIZE - 1));
-}
-
-constexpr uint64_t page_align_down(uint64_t address)
-{
-        return address & ~(MMU_PAGE_SIZE - 1);
 }
 
 class page_table
@@ -96,12 +77,3 @@ private:
 page_table* get_pte(page_table* table, uint64_t entry);
 page_table* create_pte(page_table* table, uint64_t entry, uint32_t prot, uint32_t flags);
 page_table* get_or_create_pte(page_table* table, uint64_t entry, uint32_t prot, uint32_t flags);
-
-void mmu_map(page_table* table, physaddr_t phys, virtaddr_t virt, uint32_t prot, uint32_t flags);
-void mmu_map_range(page_table* table, physaddr_t phys, virtaddr_t virt, size_t length, uint32_t prot, uint32_t flags);
-void mmu_unmap(page_table* table, virtaddr_t virt);
-void mmu_invalidate(page_table* table, virtaddr_t virt, size_t length);
-vm_mapping mmu_get_phys(page_table* table, virtaddr_t virt);
-
-page_table* mmu_new_pgdir();
-void mmu_destroy(page_table* root);

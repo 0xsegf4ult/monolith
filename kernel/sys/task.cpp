@@ -1,8 +1,13 @@
 #include <sys/task.hpp>
+#include <sys/executable.hpp>
+#include <sys/scheduler.hpp>
+#include <sys/spinlock.hpp>
+#include <sys/smp.hpp>
+#include <sys/signal.hpp>
+#include <sys/time.hpp>
+#include <sys/waitqueue.hpp>
 
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
-#include <arch/x86_64/context.hpp>
+#include <arch/generic.hpp>
 
 #include <dev/tty.hpp>
 
@@ -17,11 +22,6 @@
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
-#include <sys/executable.hpp>
-#include <sys/scheduler.hpp>
-#include <sys/spinlock.hpp>
-#include <sys/signal.hpp>
-#include <sys/waitqueue.hpp>
 #include <panic.hpp>
 #include <list.hpp>
 
@@ -30,13 +30,16 @@ static atomic_int next_pid = 1;
 list_head_t g_task_list = {&g_task_list, &g_task_list};
 spinlock_t g_task_list_lock;
 
+task_t* sleep_queue_head = nullptr;
+spinlock_t sleep_queue_lock;
+
 static task_t* init_task = nullptr;
 
 typedef void (*entry_function_t)();
 
 void task_entry_stub()
 {
-	auto self = smp_current_cpu()->get_current_task();
+	auto self = smp_current_task();
 	arch_switch_to_usermode(self->rsp, self->entry);
 }
 
@@ -338,4 +341,91 @@ void task_init()
 {
 	list_node_init(g_task_list);
 	spinlock_init(g_task_list_lock);
+
+	sleep_queue_head = nullptr;
+	spinlock_init(sleep_queue_lock);
+}
+
+int task_sleep(const timespec* spec, timespec* remain)
+{
+	auto* task = smp_current_task();
+	uint64_t time_ns = spec->tv_sec * 1000000000 + spec->tv_nsec;
+	uint64_t time_acc = 0;
+
+	task_t* prev = nullptr;
+
+	uint64_t rflags;
+	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
+	task_t* cur = sleep_queue_head;
+	
+	task->sleep_delta = time_ns;
+
+	while(cur && task->sleep_delta >= cur->sleep_delta)
+	{
+		task->sleep_delta -= cur->sleep_delta;
+		prev = cur;
+		cur = cur->next;
+	}
+
+	task->next = cur;
+
+	if(!prev)
+		sleep_queue_head = task;
+	else
+		prev->next = task;
+
+	if(cur)
+		cur->sleep_delta -= task->sleep_delta;
+	spinlock_release_irqsave(sleep_queue_lock, rflags);
+
+	task_status exp_state = TASK_RUNNING;
+	atomic_compare_exchange_strong(&task->status, &exp_state, TASK_INTR_SLEEPING);
+	sched_yield();
+
+	// FIXME: blows up when stopped with ^C
+	// check here if interrupted
+	// unlink self from sleep list
+	// store remaining time into *remain
+	// return EINTR
+
+	return 0;
+}
+
+void task_tick_sleepers(uint64_t ns)
+{
+	uint64_t rflags;
+	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
+	task_t* cur = sleep_queue_head;
+	while(cur && ns)
+	{
+		log::debug("tick sleepers {}ns", ns);
+		auto* next = cur->next;
+		if(cur->sleep_delta <= ns)
+		{
+			ns -= cur->sleep_delta;
+			cur->sleep_delta = 0;
+			cur->next = nullptr;
+
+			task_status exp_status = TASK_INTR_SLEEPING;
+			if(!atomic_compare_exchange_strong(&cur->status, &exp_status, TASK_RUNNING))
+			{
+				log::debug("failed to wake sleeping task");
+				goto skip_update;
+			}
+
+			sched_add_ready(cur);
+		}
+		else
+		{
+			cur->sleep_delta -= ns;
+			ns = 0;
+			goto skip_update;
+		}
+
+		cur = next;
+	}
+
+	sleep_queue_head = cur;
+skip_update:
+	spinlock_release_irqsave(sleep_queue_lock, rflags);
 }

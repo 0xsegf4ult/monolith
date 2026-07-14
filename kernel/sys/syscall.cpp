@@ -1,24 +1,25 @@
 #include <sys/syscall.hpp>
-#include <kstd.hpp>
-#include <klog.hpp>
-#include <types.hpp>
-
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/context.hpp>
-#include <arch/x86_64/smp.hpp>
-#include <fs/lookup.hpp>
-#include <fs/vfs.hpp>
+#include <sys/cred.hpp>
 #include <sys/err.hpp>
 #include <sys/executable.hpp>
-#include <sys/task.hpp>
 #include <sys/scheduler.hpp>
-#include <sys/cred.hpp>
-#include <sys/stat.hpp>
 #include <sys/signal.hpp>
+#include <sys/smp.hpp>
+#include <sys/stat.hpp>
+#include <sys/task.hpp>
+#include <sys/time.hpp>
+
+#include <fs/lookup.hpp>
+#include <fs/vfs.hpp>
+
 #include <mm/vmm.hpp>
 
+#include <net/socket.hpp>
+
+#include <kstd.hpp>
 #include <klog.hpp>
 #include <panic.hpp>
+#include <types.hpp>
 
 int sys_open(const char* path, int flags)
 {
@@ -29,7 +30,7 @@ int sys_open(const char* path, int flags)
 	if(v_fd < 0)
 		return v_fd;
 	
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	int fd = -1;
 	for(int i = 0; i < 32; i++)
 	{
@@ -51,7 +52,7 @@ int sys_open(const char* path, int flags)
 
 int sys_openat(int fd, const char* path, int flags)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0 || !path)
 		return -EINVAL;
 
@@ -80,7 +81,7 @@ int sys_openat(int fd, const char* path, int flags)
 
 int sys_close(int fd)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 		return -EBADF;
 
@@ -92,7 +93,7 @@ int sys_close(int fd)
 
 ssize_t sys_read(int fd, byte* buffer, size_t length)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 	       return -EBADF;
 
@@ -104,7 +105,7 @@ ssize_t sys_read(int fd, byte* buffer, size_t length)
 
 ssize_t sys_write(int fd, const byte* buffer, size_t length)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 		return -EBADF;
 
@@ -121,7 +122,7 @@ enum SPAWNFLAGS
 
 static int common_spawn(pid_t* out_pid, const char** argv, uint64_t flags, int at_fd)
 {
-	auto* parent = smp_current_cpu()->get_current_task();
+	auto* parent = smp_current_task();
 
 	auto* proc = process_userspace_new(argv[0], argv);
 	atomic_store(&proc->parent, parent);
@@ -179,7 +180,7 @@ int sys_spawn(pid_t* out_pid, const char** argv, uint64_t flags)
 
 int sys_spawnat(int fd, pid_t* out_pid, const char** argv, uint64_t flags)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task->open_files[fd] < 0 || !argv || !argv[0])
 		return -EINVAL;
 	
@@ -192,7 +193,7 @@ int sys_spawnat(int fd, pid_t* out_pid, const char** argv, uint64_t flags)
 
 void sys_exit(int status)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task->pid == 1)
 		panic("init exited with status {}", uint32_t(status));
 
@@ -224,7 +225,7 @@ void sys_exit(int status)
 
 pid_t sys_wait(int* status)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	bool found_child = false;
 	int out_status = 0;
 	pid_t pid = 0;
@@ -297,7 +298,7 @@ pid_t sys_wait(int* status)
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 		return -EBADF;
 
@@ -317,7 +318,7 @@ int sys_stat(const char* path, vfs::stat_t* buffer)
 
 int sys_fstat(int fd, vfs::stat_t* buffer)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 		return -EBADF;
 
@@ -332,7 +333,7 @@ int sys_fstat(int fd, vfs::stat_t* buffer)
 
 ssize_t sys_getdents(int fd, byte* buffer, size_t length)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(fd < 0 || task->open_files[fd] < 0)
 		return -EBADF;
 	
@@ -355,7 +356,7 @@ int sys_chdir(const char* path)
 	if(!S_ISDIR(query->node->mode))
 	       return -ENOTDIR;	
 
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	ventry_ref(query);
 	ventry_put(task->cwd);
 	task->cwd = query;
@@ -379,7 +380,7 @@ int sys_getcwd(char* buffer, size_t max_len)
 	if(reinterpret_cast<virtaddr_t>(buffer) > 0x7fffffffffff)
 		return -EFAULT;
 
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	
 	//FIXME: resolve full name from root
 	strncpy(buffer, task->cwd->name, max_len);
@@ -398,7 +399,7 @@ void* sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t off
 	if((flags & MAP_PRIVATE) && (flags & MAP_SHARED))
 		return (void*)-EINVAL;
 		
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	bool is_anon = (flags & MAP_ANONYMOUS);
 	if(is_anon)
 	{
@@ -454,7 +455,7 @@ int sys_munmap(void* addr, size_t length)
 	if((virtaddr_t)addr + length > VM_USERSPACE_END)
 		return -EINVAL;
 
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	vm_space_unmap(task->current_vm_space, (virtaddr_t)addr, length);
 
 	return 0;
@@ -479,12 +480,12 @@ int sys_mount(const char* source, const char* target, const char* fsname)
 
 int sys_getuid()
 {
-	return smp_current_cpu()->get_current_task()->cred.uid;
+	return smp_current_task()->cred.uid;
 }
 
 int sys_setuid(uid_t uid)
 {
-	auto* creds = &smp_current_cpu()->get_current_task()->cred;
+	auto* creds = &smp_current_task()->cred;
 	if(creds->euid == 0)
 	{
 		creds->uid = uid;
@@ -501,12 +502,12 @@ int sys_setuid(uid_t uid)
 
 int sys_getgid()
 {
-	return smp_current_cpu()->get_current_task()->cred.gid;
+	return smp_current_task()->cred.gid;
 }
 
 int sys_setgid(gid_t gid)
 {
-	auto* creds = &smp_current_cpu()->get_current_task()->cred;
+	auto* creds = &smp_current_task()->cred;
 	if(creds->euid == 0)
 	{
 		creds->gid = gid;
@@ -523,13 +524,13 @@ int sys_setgid(gid_t gid)
 
 pid_t sys_getpid()
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	return task->tgid;
 }
 
 int sys_setsid()
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 
 	// already is a process group leader, good enough check?
 	if(task->tgid == task->pgid)
@@ -543,7 +544,7 @@ int sys_setsid()
 
 pid_t sys_getpgid(pid_t pid)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(pid == 0)
 		return task->pgid;
 
@@ -565,7 +566,7 @@ int sys_setpgid(pid_t pid, pid_t pgid)
 	if(pid != 0)
 		return -EACCES;
 
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task->tgid == task->sid)
 		return -EPERM;
 
@@ -586,6 +587,140 @@ int sys_setpgid(pid_t pid, pid_t pgid)
 	return 0;
 }
 
+int sys_socket(int domain, int type, int protocol)
+{
+	socket_t* sock = nullptr;
+	int status = socket_create(&sock, domain, type, protocol);
+	if(status < 0)
+		return status;
+
+	auto s_fd = socket_open(sock);
+	if(s_fd < 0)
+	{
+		socket_put(sock);
+		return s_fd;
+	}
+
+	auto* task = smp_current_task();
+	int fd = -1;
+	for(int i = 0; i < 32; i++)
+	{
+		if(task->open_files[i] == -1)
+		{
+			fd = i;
+			break;
+		}
+	}
+
+	if(fd < 0)
+	{
+		vfs::close(s_fd);
+		return -EMFILE;
+	}
+	task->open_files[fd] = s_fd;
+	return fd;
+}
+
+int sys_bind(int sockfd, const sockaddr* addr, socklen_t addrlen)
+{
+	if(!addr || reinterpret_cast<virtaddr_t>(addr) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(sockfd < 0)
+		return -EBADF;
+
+	auto* task = smp_current_task();
+	auto s_fd = task->open_files[sockfd];
+	if(s_fd < 0)
+		return -EBADF;
+
+	auto& filp = vfs::get_open_fd(s_fd);
+	if(!S_ISSOCK(filp.inode->mode))
+		return -ENOTSOCK;
+
+	return socket_bind((socket_t*)filp.inode->data, addr, addrlen);
+}
+
+ssize_t sys_recvfrom(int sockfd, byte* buf, size_t len, int flags, sockaddr* src_addr, socklen_t* addrlen)
+{
+	if(!buf || reinterpret_cast<virtaddr_t>(buf) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(reinterpret_cast<virtaddr_t>(src_addr) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(reinterpret_cast<virtaddr_t>(addrlen) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(sockfd < 0)
+		return -EBADF;
+	
+	auto* task = smp_current_task();
+	auto s_fd = task->open_files[sockfd];
+	if(s_fd < 0)
+		return -EBADF;
+
+	auto& filp = vfs::get_open_fd(s_fd);
+	if(!S_ISSOCK(filp.inode->mode))
+		return -ENOTSOCK;
+
+	return socket_recvfrom((socket_t*)filp.inode->data, buf, len, flags, src_addr, addrlen);	
+}
+
+ssize_t sys_sendto(int sockfd, const byte* buf, size_t len, int flags, const sockaddr* dest_addr, socklen_t addrlen)
+{
+	if(!buf || reinterpret_cast<virtaddr_t>(buf) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(reinterpret_cast<virtaddr_t>(dest_addr) > 0x7fffffffffff)
+		return -EFAULT;
+
+	if(sockfd < 0)
+		return -EBADF;
+	
+	auto* task = smp_current_task();
+	auto s_fd = task->open_files[sockfd];
+	if(s_fd < 0)
+		return -EBADF;
+
+	auto& filp = vfs::get_open_fd(s_fd);
+	if(!S_ISSOCK(filp.inode->mode))
+		return -ENOTSOCK;
+
+	return socket_sendto((socket_t*)filp.inode->data, buf, len, flags, dest_addr, addrlen);	
+}
+
+int sys_clock_gettime(clockid_t clockid, timespec* tv)
+{
+	if(clockid != CLOCK_REALTIME)
+		return -EINVAL;
+
+	if(!tv || reinterpret_cast<virtaddr_t>(tv) > 0x7fffffffffff)
+                return -EFAULT;
+
+	*tv = time_get_current();
+	return 0;
+}	
+
+int sys_clock_nanosleep(clockid_t clockid, int flags, const timespec* t, timespec* remain)
+{
+	if(clockid != CLOCK_REALTIME)
+		return -EINVAL;
+
+	if(!t || reinterpret_cast<virtaddr_t>(t) > 0x7fffffffffff)
+                return -EFAULT;
+
+	if(reinterpret_cast<virtaddr_t>(remain) > 0x7fffffffffff)
+                return -EFAULT;
+
+	timespec sleep_spec;
+	memcpy(&sleep_spec, t, sizeof(timespec));
+	if(sleep_spec.tv_sec < 0)
+		return -EINVAL;
+	if(sleep_spec.tv_nsec > 999999999)
+		return -EINVAL;
+
+	return task_sleep(&sleep_spec, remain);
 }
 
 void syscall_handler(cpu_context_t* ctx)
@@ -675,6 +810,24 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case SETPGID:
 		ctx->rax = static_cast<uint64_t>(sys_setpgid((pid_t)ctx->rdi, (pid_t)ctx->rsi));
+		break;
+	case SOCKET:
+		ctx->rax = static_cast<uint64_t>(sys_socket((int)ctx->rdi, (int)ctx->rsi, (int)ctx->rdx));
+		break;
+	case BIND:
+		ctx->rax = static_cast<uint64_t>(sys_bind((int)ctx->rdi, (const sockaddr*)ctx->rsi, (socklen_t)ctx->rdx));
+		break;
+	case RECVFROM:
+		ctx->rax = static_cast<uint64_t>(sys_recvfrom((int)ctx->rdi, (byte*)ctx->rsi, (size_t)ctx->rdx, (int)ctx->rcx, (sockaddr*)ctx->r8, (socklen_t*)ctx->r9));
+		break;
+	case SENDTO:
+		ctx->rax = static_cast<uint64_t>(sys_sendto((int)ctx->rdi, (const byte*)ctx->rsi, (size_t)ctx->rdx, (int)ctx->rcx, (const sockaddr*)ctx->r8, (socklen_t)ctx->r9));
+		break;
+	case CLOCK_GETTIME:
+		ctx->rax = static_cast<uint64_t>(sys_clock_gettime((clockid_t)ctx->rdi, (timespec*)ctx->rsi));
+		break;
+	case CLOCK_NANOSLEEP:
+		ctx->rax = static_cast<uint64_t>(sys_clock_nanosleep((clockid_t)ctx->rdi, (int)ctx->rsi, (const timespec*)ctx->rdx, (timespec*)ctx->rcx));
 		break;
 	default:
 		log::error("unknown syscall {:x}", uint64_t(id));

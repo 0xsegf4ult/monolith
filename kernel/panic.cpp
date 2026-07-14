@@ -1,28 +1,27 @@
 #include <panic.hpp>
+
+#include <arch/generic.hpp>
+#include <sys/smp.hpp>
+#include <sys/task.hpp>
+
 #include <klog.hpp>
 
-#include <arch/x86_64/serial.hpp>
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
-#include <sys/task.hpp>
 #include <stdatomic.h>
 
 static atomic_int panic_cpu = -1; 
 
 void panic_prepare()
 {
-	asm volatile("cli");
+	arch_disable_interrupts();
 
 	int expected_cpu = -1;
-	int desired_cpu = smp_current_cpu()->id;
+	int desired_cpu = smp_current_cpu();
 	if(!atomic_compare_exchange_strong_explicit(&panic_cpu, &expected_cpu, desired_cpu, memory_order_release, memory_order_relaxed))
 	{
 		if(expected_cpu != desired_cpu)
-		{
-			while(1)
-				asm volatile("cli; hlt");
-		}
-
+			arch_halt();
+	
+		arch_halt();	
 		generic_log_nolock("nested panic?");
 	}
 
@@ -32,8 +31,7 @@ void panic_prepare()
 
 void panic_complete()
 {
-       	while(1)	
-		asm volatile("cli; hlt");
+	arch_halt();
 }
 
 void panic(const char* string)
@@ -44,8 +42,8 @@ void panic(const char* string)
         klog_internal_nolock(string);
 	klog_internal_nolock("\n");
        
-	auto* task = smp_current_cpu()->get_current_task();
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "?");
+	auto* task = smp_current_task();
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "?");
 
 	stacktrace(0, TRACE_PANIC);
 	panic_complete();

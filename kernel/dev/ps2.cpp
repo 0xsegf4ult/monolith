@@ -1,7 +1,7 @@
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
 
-#include <arch/x86_64/apic.hpp>
+#include <arch/x86_64/ioapic.hpp>
 #include <arch/x86_64/io.hpp>
 #include <arch/x86_64/interrupts.hpp>
 
@@ -9,9 +9,6 @@
 #include <types.hpp>
 
 #include <sys/scheduler.hpp>
-
-namespace ps2
-{
 
 enum kbd_modifier_key : uint32_t
 {
@@ -226,7 +223,7 @@ constexpr char shifted_scancodes[] =
 
 static uint32_t keyboard0_mod = 0; 
 
-void interrupt_handler()
+static void interrupt_handler()
 {
 	auto scancode = io::inb(0x60);
 
@@ -279,7 +276,7 @@ void interrupt_handler()
 	}
 }
 
-void init()
+void ps2_init()
 {
 	log::info("ps2: initializing controller");
 
@@ -303,13 +300,11 @@ void init()
 	log::info("ps2: detected keyboard");
 
 	auto irq = allocate_irq();
-	ioapic::get(0).write_redirection_entry(0x1, irq);
+	ioapic_write_redirection_entry(0x1, irq);
 	install_irq_handler(irq, interrupt_handler);
 }
 
-void set_tty(tty_device* tty)
+void ps2_set_tty(tty_device* tty)
 {
 	cur_tty = tty;
-}
-
 }

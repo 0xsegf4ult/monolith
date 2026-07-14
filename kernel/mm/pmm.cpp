@@ -1,6 +1,6 @@
 #include <mm/pmm.hpp>
 #include <mm/memory_map.hpp>
-#include <arch/x86_64/mmu.hpp>
+#include <mm/mmu.hpp>
 #include <sys/spinlock.hpp>
 #include <kstd.hpp>
 #include <types.hpp>
@@ -40,7 +40,7 @@ void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 
 void pmm_initialize(mm::memory_map& memmap)
 {
-	const auto required_bits = page_align(memmap.memory_top / 8) / 4096;
+	const auto required_bits = align_up(memmap.memory_top / 8, ARCH_PAGE_SIZE) / 4096;
 	const auto required_u64 = (required_bits + 63) / 64;
 	pmm_bitmap_length = required_u64;
 

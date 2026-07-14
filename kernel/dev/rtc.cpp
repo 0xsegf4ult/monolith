@@ -84,7 +84,7 @@ int rtc_init()
 {
 	spinlock_init(lock);
 
-	auto* fadt = acpi::get_tables().fadt;
+	auto* fadt = acpi_get_tables().fadt;
 	if(fadt)
 	{
 		century_register = fadt->century;

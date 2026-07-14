@@ -14,7 +14,6 @@ PHDRS
 SECTIONS
 {
 	. = 0xffffffff80000000;
-	virt_kernel_start = .;
 
 	.limine_requests : 
 	{
@@ -67,8 +66,6 @@ SECTIONS
 		*(COMMON)
 		_bss_end = .;
 	} : data
-
-	virt_kernel_end = .;
 
 	/DISCARD/ :
 	{

@@ -5,19 +5,20 @@ target_link_options(vmmonolith PRIVATE -T ${CMAKE_CURRENT_LIST_DIR}/arch/x86_64/
 target_include_directories(vmmonolith PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
 target_sources(vmmonolith PRIVATE
 	arch/x86_64/acpi.cpp
-	arch/x86_64/apic.cpp
 	arch/x86_64/arch.S
-	arch/x86_64/cpu.cpp
+	arch/x86_64/boot.cpp
 	arch/x86_64/context.S
 	arch/x86_64/context.cpp
 	arch/x86_64/gdt.cpp
 	arch/x86_64/interrupts.cpp
 	arch/x86_64/isr_stubs.S
+	arch/x86_64/ioapic.cpp
+	arch/x86_64/lapic.cpp
 	arch/x86_64/mmu.cpp
+	arch/x86_64/pit.cpp
 	arch/x86_64/serial.cpp
 	arch/x86_64/smp.cpp
 	arch/x86_64/smpboot.S
-	arch/x86_64/timer.cpp
 	dev/block/block.cpp
 	dev/block/disk.cpp
 	dev/block/partition.cpp
@@ -25,6 +26,7 @@ target_sources(vmmonolith PRIVATE
 	dev/console.cpp
 	dev/efifb.cpp
 	dev/efifb_font.cpp
+	dev/net/e1000/e1000.cpp
 	dev/nvme/nvme.cpp
 	dev/pcie.cpp
 	dev/ps2.cpp
@@ -45,10 +47,19 @@ target_sources(vmmonolith PRIVATE
 	mm/pmm.cpp
 	mm/slab.cpp
 	mm/vmm.cpp
+	net/arp.cpp
+	net/ether.cpp
+	net/ipv4/ipv4.cpp
+	net/ipv4/raw.cpp
+	net/ipv4/route.cpp
+	net/ipv4/udp.cpp
+	net/netdev.cpp
+	net/socket.cpp
 	sys/executable.cpp
 	sys/mutex.cpp
 	sys/task.cpp
 	sys/time.cpp
+	sys/timer.cpp
 	sys/scheduler.cpp
 	sys/signal.cpp
 	sys/syscall.cpp

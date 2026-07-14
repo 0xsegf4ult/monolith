@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mm/mmu.hpp>
 #include <mm/vm_space.hpp>
 #include <types.hpp>
 
@@ -28,7 +29,7 @@ struct vm_mapping_info
 	physaddr_t phys_base = 0;
 	virtaddr_t virt_base = 0;
 
-	size_t offset = 0;	
+	off_t offset = 0;	
 	int fd = -1;
 };
 
@@ -37,7 +38,6 @@ void vm_space_unmap(vm_space* space, virtaddr_t addr, size_t length);
 vm_object* vm_space_get_range(vm_space* space, virtaddr_t base);
 vm_mapping vm_space_get_mapping(vm_space* space, virtaddr_t base);
 
-void vm_clone_kernel(vm_space* dest);
 vm_space* vm_get_kernel_space();
 vm_space* vm_userspace_new();
 void vm_space_destroy(vm_space* space);

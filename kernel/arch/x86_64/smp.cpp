@@ -1,10 +1,15 @@
-#include <arch/x86_64/smp.hpp>
-#include <arch/x86_64/apic.hpp>
+#include <sys/smp.hpp>
+
+#include <arch/generic.hpp>
+
+#include <arch/x86_64/acpi.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/gdt.hpp>
+#include <arch/x86_64/ioapic.hpp>
 #include <arch/x86_64/interrupts.hpp>
+#include <arch/x86_64/lapic.hpp>
 #include <arch/x86_64/mmu.hpp>
-#include <arch/x86_64/timer.hpp>
+#include <arch/x86_64/pit.hpp>
 
 #include <types.hpp>
 #include <klog.hpp>
@@ -14,10 +19,11 @@
 #include <mm/vmm.hpp>
 
 #include <sys/scheduler.hpp>
+#include <sys/task.hpp>
 #include <cpuid.h>
 #include <stdatomic.h>
 
-static cpu_t cpus[arch_max_cpus];
+static cpu_t cpus[CONFIG_MAX_CPUS];
 static size_t cpu_count = 1;
 extern "C" void enable_sse();
 extern "C" void enable_xsave();
@@ -30,9 +36,48 @@ constexpr physaddr_t trampoline_rsp = 0x1fd0;
 
 atomic_uint running_cpu_count = 1; 
 
+static cpu_t* smp_get_cpu(uint32_t id)
+{
+	return &cpus[id];
+}
+
+static void smp_discover_cpu(uint32_t lapic_id)
+{
+	if(cpu_count >= CONFIG_MAX_CPUS)
+		panic("cpu_count >= CONFIG_MAX_CPUS");
+
+	cpu_t* cpu = &cpus[cpu_count];
+	cpu->id = cpu_count;
+	cpu->lapic_id = lapic_id;
+	cpu_count++;
+}
+
+static void smp_discover_cpus()
+{
+	auto* madt = acpi_get_tables().madt;
+	auto* raw = (const byte*)madt;
+	raw += sizeof(acpi::madt);
+
+	auto len = madt->length - sizeof(acpi::madt);
+	while(len)
+	{
+		auto* entry = (const acpi::madt_entry*)raw;
+
+		if(entry->entry_type == acpi::MADTEntryType::LAPIC)
+		{
+			auto* data = (const acpi::madt_lapic_entry*)entry;
+			if(data->apic_id)
+				smp_discover_cpu(data->apic_id);
+		}
+		
+		raw += entry->entry_length;
+	       	len -= entry->entry_length;
+	}	
+}
+
 void smp_start_bsp()
 {
-	disable_interrupts();
+	arch_disable_interrupts();
 	
 	cpu_t* bsp = cpus;
 	bsp->id = 0;
@@ -76,8 +121,8 @@ extern "C" void smp_start_ap(uint32_t lapic_id)
 	enable_sse();
 	enable_xsave();
 
-	lapic::enable();
-	apic_timer_enable();
+	lapic_enable();
+	lapic_timer_enable();
 
 	running_cpu_count++;
 
@@ -86,6 +131,10 @@ extern "C" void smp_start_ap(uint32_t lapic_id)
 
 void smp_init()
 {
+	ioapic_init();
+	pit_init();
+	lapic_init();	
+	
 	uint32_t name_regs[12];
 	char cpuname[12 * 4 + 1];
 	__get_cpuid(0x80000000, &name_regs[0], &name_regs[1], &name_regs[2], &name_regs[3]);
@@ -99,13 +148,12 @@ void smp_init()
 		cpuname[12 * 4] = '\0';
 		log::info("smp: {}", cpuname);
 	}
-	
-	log::info("smp: bringing up {} CPUs", cpu_count);
-	lapic::enable();
-	apic_timer_calibrate();
-	apic_timer_enable();
 
-	auto* pgt = smp_current_cpu()->get_pagetable();
+	smp_discover_cpus();
+
+	log::info("smp: bringing up {} CPUs", cpu_count);
+
+	auto* pgt = smp_get_cpu(smp_current_cpu())->pt;
 	mmu_map(pgt, trampoline_start, trampoline_start, PROT_READ | PROT_WRITE | PROT_EXEC, 0);
 	
 	void (*fptr)(uint32_t) = smp_start_ap;
@@ -125,13 +173,13 @@ void smp_init()
 
 	for(int i = 1; i < cpu_count; i++)
 	{
-		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_INIT_IPI | APIC_ICR_INIT_DEASSERT);
-		lapic::send_ipi(smp_get_cpu(i)->lapic_id, APIC_STARTUP_IPI | APIC_ICR_INIT_DEASSERT | (trampoline_start >> 12));
+		lapic_send_ipi(smp_get_cpu(i)->lapic_id, LAPIC_INIT_IPI | LAPIC_ICR_INIT_DEASSERT);
+		lapic_send_ipi(smp_get_cpu(i)->lapic_id, LAPIC_STARTUP_IPI | LAPIC_ICR_INIT_DEASSERT | (trampoline_start >> 12));
 	}
 
 	while(running_cpu_count < cpu_count)
 	{
-		asm volatile("pause");
+		arch_pause();
 	}
 
 	mmu_unmap(pgt, trampoline_start);
@@ -139,38 +187,50 @@ void smp_init()
 	sched_start_bsp();
 }
 
-void smp_discover_cpu(uint32_t lapic_id)
-{
-	if(cpu_count >= arch_max_cpus)
-		panic("cpu_count >= arch_max_cpus");
 
-	cpu_t* cpu = &cpus[cpu_count];
-	cpu->id = cpu_count;
-	cpu->lapic_id = lapic_id;
-	cpu_count++;
-}
-
-cpu_t* smp_get_cpu(uint32_t id)
-{
-	return &cpus[id];
-}
-
-cpu_t* smp_current_cpu()
+uint32_t smp_current_cpu()
 {
 	uint64_t value;
-	asm volatile("mov %%gs:0, %[val]" : [val] "=r"(value));
-	return smp_get_cpu(value);
+	asm volatile("movq %%gs:0, %[val]" : [val] "=r"(value));
+	return value;
+}
+
+task_t* smp_current_task()
+{
+	task_t* value;
+	asm volatile("movq %%gs:16, %[val]" : [val] "=r"(value));
+	return value;
 }
 
 void smp_stop_cpus()
 {
-	auto self = smp_current_cpu()->lapic_id;
+	auto self = smp_get_cpu(smp_current_cpu())->lapic_id;
 	for(int i = 0; i < cpu_count; i++)
 	{
 		auto lid = smp_get_cpu(i)->lapic_id;
 		if(lid == self)
 			continue;
 		
-		lapic::send_ipi(lid, APIC_NMI_IPI | APIC_ICR_INIT_DEASSERT);
+		lapic_send_ipi(lid, LAPIC_NMI_IPI | LAPIC_ICR_INIT_DEASSERT);
+	}
+}
+
+void smp_set_current_pagetable(page_table* table)
+{
+	auto* cpu = smp_get_cpu(smp_current_cpu());
+	cpu->pt = table;
+	asm volatile("movq %0, %%cr3" :: "r"(virtaddr_t(cpu->pt) - VM_DMAP_BASE));
+}
+
+extern "C" void cpu_switch_task(task_t* prev, task_t* next)
+{
+	auto* cpu = smp_get_cpu(smp_current_cpu());
+	cpu->tss.rsp0 = next->rsp0_top;
+	cpu->current_task = next;
+	
+	if(prev->current_vm_space != next->current_vm_space)
+	{
+		cpu->pt = next->current_vm_space->mmu_root;
+		asm volatile("movq %0, %%cr3" :: "r"(virtaddr_t(cpu->pt) - VM_DMAP_BASE));
 	}
 }

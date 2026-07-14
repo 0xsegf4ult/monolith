@@ -1,6 +1,6 @@
 #pragma once
 
-#include <arch/x86_64/timer.hpp>
+#include <sys/time.hpp>
 #include <kfmt.hpp>
 #include <types.hpp>
 
@@ -41,10 +41,10 @@ void debug(const char* fmt_string, Args&&... args)
 template <typename... Args>
 void info(const char* fmt_string, Args&&... args)
 {
-	auto tick = timer::get_ticks() * 100;
-	auto tick_wp = tick / 100000;
-	auto tick_fp = tick % 100000;
-	generic_log("\033[0m[{}.{:05}] ", tick_wp, tick_fp); 
+	auto tv = time_get_uptime();
+	uint64_t time = uint64_t(tv.tv_sec) * 1000000000ULL + tv.tv_nsec;
+
+	generic_log("\033[0m[{}.{:05}] ", time / 1000000000, (time % 1000000000) / 1000); 
 	generic_log(fmt_string, args...);
 	klog_internal_newline();
 }

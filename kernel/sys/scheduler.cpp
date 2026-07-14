@@ -1,18 +1,21 @@
 #include <sys/scheduler.hpp>
+#include <sys/smp.hpp>
 #include <sys/task.hpp>
-#include <arch/x86_64/context.hpp>
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
+
+#include <arch/generic.hpp>
+
 #include <fs/vfs.hpp>
+
 #include <mm/pmm.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
+
+#include <init.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
-#include <types.hpp>
-#include <init.hpp>
 #include <list.hpp>
 #include <panic.hpp>
+#include <types.hpp>
 
 struct sched_percpu_t
 {
@@ -27,23 +30,23 @@ static size_t num_cpus = 0;
 
 void idle_thread_bsp_entry(void* arg)
 {
-	enable_interrupts();
+	arch_enable_interrupts();
 	
 	kernel_main();
 
 	for(;;)
 	{
-		asm volatile("hlt");
+		arch_idle();
 	}
 }
 
 void idle_thread_ap_entry(void* arg)
 {
-	enable_interrupts();
+	arch_enable_interrupts();
 
 	for(;;)
 	{
-		asm volatile("hlt");
+		arch_idle();
 	}
 }
 
@@ -75,15 +78,15 @@ sched_percpu_t* sched_find_most_loaded_queue()
 
 void schedule()
 {
-	auto curcpu = smp_current_cpu()->id;
+	auto curcpu = smp_current_cpu();
 	auto& sdata = sched_pcpu_data[curcpu];
-	auto* cur_task = smp_current_cpu()->get_current_task();
+	auto* cur_task = smp_current_task();
 	bool cur_running = (atomic_load_explicit(&cur_task->status, memory_order_relaxed) == TASK_RUNNING);
 
 	if(list_empty(sdata.runqueue) && cur_running && cur_task != sdata.idle)
 		return;
 
-	disable_interrupts();
+	arch_disable_interrupts();
 	spinlock_acquire(sdata.lock);
 
 	if(cur_running)
@@ -166,13 +169,13 @@ void sched_start_bsp()
 void sched_start_ap()
 {
 	task_t boot_thr;
-	arch_context_switch(&boot_thr, sched_pcpu_data[smp_current_cpu()->id].idle);
+	arch_context_switch(&boot_thr, sched_pcpu_data[smp_current_cpu()].idle);
 	panic("sched: failed to start AP");
 }
 
 void sched_add_ready(task_t* task)
 {
-	auto& sdata = sched_pcpu_data[smp_current_cpu()->id];
+	auto& sdata = sched_pcpu_data[smp_current_cpu()];
 
 	uint64_t rflags;
 	spinlock_acquire_irqsave(sdata.lock, rflags);

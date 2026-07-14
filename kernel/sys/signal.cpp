@@ -5,8 +5,6 @@
 #include <sys/err.hpp>
 #include <types.hpp>
 #include <klog.hpp>
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
 
 bool signal_pending(task_t* task)
 {

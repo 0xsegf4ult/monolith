@@ -38,6 +38,12 @@ enum class syscall_id : uint64_t
 	SETSID,
 	GETPGID,
 	SETPGID,
+	SOCKET,
+	BIND,
+	RECVFROM,
+	SENDTO,
+	CLOCK_GETTIME,
+	CLOCK_NANOSLEEP
 };
 
 void sys_exit(int status);

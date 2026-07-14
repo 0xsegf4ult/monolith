@@ -60,14 +60,6 @@ struct vm_object
 	list_node_t list_node;
 };
 
-struct vm_mapping
-{
-	physaddr_t base;
-	uint32_t prot;
-	uint32_t flags;
-	bool present;
-};
-
 struct vm_space
 {
 	list_head_t objects;

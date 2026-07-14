@@ -1,6 +1,3 @@
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/smp.hpp>
-
 #include <fs/vfs.hpp>
 #include <fs/vnode.hpp>
 #include <fs/ventry.hpp>

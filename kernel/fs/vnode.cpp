@@ -3,6 +3,8 @@
 #include <types.hpp>
 #include <mm/slab.hpp>
 #include <sys/mutex.hpp>
+#include <sys/stat.hpp>
+#include <net/socket.hpp>
 
 namespace vfs
 {
@@ -26,6 +28,9 @@ vnode_t* vnode_new(mode_t mode)
 
 void vnode_free(vnode_t* node)
 {
+	if(S_ISSOCK(node->mode))
+		socket_put((socket_t*)node->data);
+
 	kfree(node);
 }
 

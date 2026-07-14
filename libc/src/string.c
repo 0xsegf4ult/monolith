@@ -235,6 +235,14 @@ const char* strerrorname_np(int errnum)
 		return "ENOTEMPTY";
 	case ELOOP:
 		return "ELOOP";
+	case ENOTSOCK:
+		return "ENOTSOCK";
+	case EAFNOSUPPORT:
+		return "EAFNOSUPPORT";
+	case EADDRINUSE:
+		return "EADDRINUSE";
+	case ENETUNREACH:
+		return "ENETUNREACH";
 	case ENOBUFS:
 		return "ENOBUFS";
 	case ENOTSUP:
@@ -328,6 +336,14 @@ const char* strerrordesc_np(int errnum)
 		return "Directory not empty";
 	case ELOOP:
 		return "Too many levels of symbolic links";
+	case ENOTSOCK:
+		return "Socket operation on non-socket";
+	case EAFNOSUPPORT:
+		return "Address family not supported";
+	case EADDRINUSE:
+		return "Address already in use";
+	case ENETUNREACH:
+		return "Network is unreachable";
 	case ENOBUFS:
 		return "No buffer space available";
 	case ENOTSUP:

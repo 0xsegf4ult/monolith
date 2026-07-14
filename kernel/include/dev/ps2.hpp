@@ -2,10 +2,5 @@
 
 struct tty_device;
 
-namespace ps2
-{
-
-void init();
-void set_tty(tty_device* tty);
-
-}
+void ps2_init();
+void ps2_set_tty(tty_device* tty);

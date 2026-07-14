@@ -35,21 +35,7 @@ static superblock_t* g_procfs = nullptr;
 
 int procfs_super_init(block_device_t* bdev, superblock_t** out_sb)
 {
-	if(g_procfs)
-		return -EBUSY;
-
-	auto* sb = (superblock_t*)kmalloc(sizeof(superblock_t));
-
-	auto* node = vnode_new(S_IFDIR | 0755);
-	node->iops = &procfs_iops;
-        node->fops = &procfs_fops;
-
-        auto* dentry = ventry_new("proc", node);
-	sb->data = (void*)dentry;
-
-	sb->bdev = nullptr;
-	g_procfs = sb;
-	*out_sb = sb;
+	*out_sb = g_procfs;
 	return 0;
 }
 
@@ -74,6 +60,17 @@ void procfs_init()
 	fs->sb_ops = &procfs_sb_ops;
 
 	register_fs(fs, "procfs");
+	
+	auto* sb = (superblock_t*)kmalloc(sizeof(superblock_t));
+	auto* node = vnode_new(S_IFDIR | 0755);
+	node->iops = &procfs_iops;
+        node->fops = &procfs_fops;
+
+        auto* dentry = ventry_new("proc", node);
+	sb->data = (void*)dentry;
+
+	sb->bdev = nullptr;
+	g_procfs = sb;
 }
 
 void procfs_mkdir(const char* path)

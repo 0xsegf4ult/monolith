@@ -34,6 +34,11 @@ enum SYSCALL_ID
 	SYS_GETPGID,
 	SYS_SETPGID,
 	SYS_SOCKET,
+	SYS_BIND,
+	SYS_RECVFROM,
+	SYS_SENDTO,
+	SYS_CLOCK_GETTIME,
+	SYS_CLOCK_NANOSLEEP
 };
 
 __attribute__((always_inline)) inline uint64_t _syscall(uint64_t id, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)

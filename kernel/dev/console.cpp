@@ -35,7 +35,7 @@ void console_init()
 	for(int i = 0; i < num_virt_consoles; i++)
 		vt_tty[i] = tty_create(i + 1, console_write_internal);
 
-	ps2::set_tty(vt_tty[cur_vt]);
+	ps2_set_tty(vt_tty[cur_vt]);
 
 	auto* console = chardev_alloc(dev_t{2, 0});
 	console->fops = &console_fops;

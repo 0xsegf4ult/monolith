@@ -7,14 +7,9 @@
 #include <kstd.hpp>
 #include <types.hpp>
 
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/mmu.hpp>
-#include <arch/x86_64/smp.hpp>
-
 #include <klog.hpp>
 
 #include <sys/err.hpp>
-#include <sys/task.hpp>
 #include <list.hpp>
 
 using namespace vfs;

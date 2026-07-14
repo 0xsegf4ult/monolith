@@ -1,21 +1,23 @@
 #include <arch/x86_64/interrupts.hpp>
-#include <arch/x86_64/apic.hpp>
+#include <arch/x86_64/lapic.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/gdt.hpp>
 #include <arch/x86_64/context.hpp>
 #include <arch/x86_64/serial.hpp>
-#include <arch/x86_64/smp.hpp>
 #include <arch/x86_64/mmu.hpp>
+#include <arch/generic.hpp>
+
 #include <mm/vmm.hpp>
 #include <klog.hpp>
 #include <kstd.hpp>
 #include <panic.hpp>
 #include <types.hpp>
+
 #include <sys/task.hpp>
 #include <sys/syscall.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/signal.hpp>
-#include <dev/tty.hpp>
+#include <sys/smp.hpp>
 
 extern "C" void isr_stubs();
 static idt_entry_t idt_entries[256];
@@ -72,7 +74,7 @@ static void handle_pagefault(cpu_context_t* ctx)
 	uint64_t cr2;
 	asm volatile("movq %%cr2, %0" : "=r"(cr2));
 	
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	
 	uint64_t pflags = 0;
 	if(ctx->error_code & PF_PRESENT)
@@ -84,12 +86,12 @@ static void handle_pagefault(cpu_context_t* ctx)
 	if(ctx->error_code & PF_FETCH)
 		pflags |= VM_FAULT_FETCH;
 
-	if(vm_page_fault(page_align_down(cr2), pflags))
+	if(vm_page_fault(align_down(cr2, ARCH_PAGE_SIZE), pflags))
 		return;
 		
 	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
-		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, cr2, ctx->rip, ctx->rsp, ctx->error_code);
+		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu(), cr2, ctx->rip, ctx->rsp, ctx->error_code);
 
 		send_signal(task, SIGSEGV);
 		return;
@@ -99,7 +101,7 @@ static void handle_pagefault(cpu_context_t* ctx)
 
 	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at memory {:#x} [{:b}]\n", cr2, ctx->error_code);
 	generic_log_nolock("task: {:#x}\n", task);
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
 	dump_registers(ctx, 0);
 	stacktrace(ctx->rbp, 0);
@@ -130,11 +132,11 @@ static void signal_handle(task_t* task)
 
 static void handle_gpf(cpu_context_t* ctx)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 
 	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
-		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu()->id, ctx->rip, ctx->rsp, ctx->error_code);
+		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu(), ctx->rip, ctx->rsp, ctx->error_code);
 		send_signal(task, SIGSEGV);
 		return ;
 	}
@@ -143,7 +145,7 @@ static void handle_gpf(cpu_context_t* ctx)
 
 	generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP {:#x} [{:b}]\n", ctx->rip, ctx->error_code);
 	generic_log_nolock("task: {:#x}\n", task);
-	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
+	generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 	dump_registers(ctx, 0);
 	stacktrace(ctx->rbp, 0);
 
@@ -172,9 +174,9 @@ extern "C" void interrupt_handler(cpu_context_t* ctx)
 	else
 		log::warn("unhandled interrupt {}", ctx->interrupt_id);
 
-	lapic::eoi();
+	lapic_eoi();
 		
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 	if(task && task->rsp && task->sig_pending)
 	{
 		signal_handle(task);
@@ -222,7 +224,7 @@ constexpr int exception_to_signal(uint64_t exception)
 
 extern "C" void exception_handler(cpu_context_t* ctx)
 {
-	auto* task = smp_current_cpu()->get_current_task();
+	auto* task = smp_current_task();
 
 	if(ctx->interrupt_id == InterruptID::PageFault)
 	{
@@ -251,7 +253,7 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 
 			generic_log_nolock("\n\033[31mkernel panic:\033[0m unhandled exception {:x}\n", ctx->interrupt_id);
 			
-			generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu()->id, task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
+			generic_log_nolock("CPU: {} PID: {} [{}] {}\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 			
 			dump_registers(ctx, 0);
 			stacktrace(ctx->rbp, 0);

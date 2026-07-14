@@ -1,18 +1,20 @@
 #include <sys/time.hpp>
+#include <sys/task.hpp>
 #include <types.hpp>
 #include <stdatomic.h>
 
 static time_t boot_time = 0;
-static time_t uptime = 0;
+static uint64_t uptime_nsec = 0;
 
 void time_set_boottime(time_t time)
 {
 	boot_time = time;
 }
 
-void time_uptime_increment()
+void time_uptime_add(uint64_t nsec)
 {
-	atomic_fetch_add_explicit(reinterpret_cast<_Atomic(int64_t)*>(&uptime), 1, memory_order_relaxed);
+	atomic_fetch_add_explicit(reinterpret_cast<_Atomic(uint64_t)*>(&uptime_nsec), nsec, memory_order_relaxed);
+	task_tick_sleepers(nsec);
 }
 
 time_t time_get_boottime()
@@ -20,12 +22,15 @@ time_t time_get_boottime()
 	return boot_time;
 }
 
-time_t time_get_uptime()
+timespec time_get_uptime()
 {
-	return atomic_load_explicit(reinterpret_cast<_Atomic(int64_t)*>(&uptime), memory_order_relaxed);
+	uint64_t nsecs = atomic_load_explicit(reinterpret_cast<_Atomic(uint64_t)*>(&uptime_nsec), memory_order_relaxed);
+	return {time_t(nsecs / 1000000000), uint32_t(nsecs % 1000000000)};
 }
 
-time_t time_get_current()
+timespec time_get_current()
 {
-	return time_get_boottime() + time_get_uptime();
+	auto uptime = time_get_uptime();
+	uptime.tv_sec += time_get_boottime();
+	return uptime;
 }

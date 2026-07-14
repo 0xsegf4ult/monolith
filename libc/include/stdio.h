@@ -4,18 +4,14 @@
 #include <stdarg.h>
 #include <stddef.h>
 
-#define stdin 0
-#define stdout 1
-
-#define SEEK_SET 0
-
 typedef struct
 {
 	int fd;
 } FILE;
 
+extern FILE* stdin;
+extern FILE* stdout;
 extern FILE* stderr;
-#define stderr stderr
 
 FILE* fopen(const char* path, const char* mode);
 int fflush(FILE* file);

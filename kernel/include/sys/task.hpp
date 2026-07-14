@@ -86,6 +86,7 @@ struct task_t
 	spinlock_t sig_lock;
 
 	wait_queue_node wait; 
+	uint64_t sleep_delta;
 
 	//FIXME: get rid of this
 	task_t* next;
@@ -113,3 +114,5 @@ constexpr bool is_session_leader(task_t* task)
 }
 
 void task_init();
+int task_sleep(const timespec* spec, timespec* remain);
+void task_tick_sleepers(uint64_t ns);

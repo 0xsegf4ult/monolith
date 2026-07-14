@@ -1,10 +1,8 @@
 #pragma once
 
+#include <arch/generic.hpp>
 #include <types.hpp>
 #include <stdatomic.h>
-
-extern "C" uint64_t disable_interrupts();
-extern "C" void restore_flags(uint64_t rflags);
 
 using atomic_uint16_t = _Atomic(uint16_t);
 
@@ -35,16 +33,16 @@ inline void spinlock_release(spinlock_t& spin)
 	atomic_fetch_add_explicit(&spin.now_serving, 1, memory_order_release);
 }
 
-inline void spinlock_acquire_irqsave(spinlock_t& spin, uint64_t& rflags)
+inline void spinlock_acquire_irqsave(spinlock_t& spin, uint64_t& flags)
 {
-	uint64_t old_rflags = disable_interrupts();
+	uint64_t old_flags = arch_disable_interrupts();
 	spinlock_acquire(spin);
-	rflags = old_rflags;
+	flags = old_flags;
 }
 
-inline void spinlock_release_irqsave(spinlock_t& spin, uint64_t& rflags)
+inline void spinlock_release_irqsave(spinlock_t& spin, uint64_t& flags)
 {
-	uint64_t old_rflags = rflags;
+	uint64_t old_flags = flags;
 	spinlock_release(spin);
-	restore_flags(old_rflags);
+	arch_restore_flags(old_flags);
 }

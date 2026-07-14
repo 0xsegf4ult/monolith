@@ -2,10 +2,6 @@
 #include <sys/task.hpp>
 #include <sys/err.hpp>
 
-#include <arch/x86_64/cpu.hpp>
-#include <arch/x86_64/mmu.hpp>
-#include <arch/x86_64/smp.hpp>
-
 #include <fs/vfs.hpp>
 #include <mm/slab.hpp>
 #include <mm/vmm.hpp>
@@ -75,8 +71,8 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 				protflags |= PROT_EXEC;
 			}
 
-			virtaddr_t map_vaddr = align_down(phdr->p_vaddr, MMU_PAGE_SIZE);
-			off_t map_offset = align_down(phdr->p_offset, MMU_PAGE_SIZE);
+			virtaddr_t map_vaddr = align_down(phdr->p_vaddr, ARCH_PAGE_SIZE);
+			off_t map_offset = align_down(phdr->p_offset, ARCH_PAGE_SIZE);
 			virtaddr_t align_rem = phdr->p_vaddr - map_vaddr;
 
 			if(phdr->p_filesz)
@@ -97,8 +93,8 @@ int load_executable(const char* path, task_t* task, vfs::ventry_t* exec_dir)
 				auto file_end_addr = phdr->p_vaddr + phdr->p_filesz;
 				auto mem_end_addr = phdr->p_vaddr + phdr->p_memsz;
 
-				auto anon_map_start = align_up(file_end_addr, MMU_PAGE_SIZE);
-				auto anon_map_end = align_up(mem_end_addr, MMU_PAGE_SIZE);
+				auto anon_map_start = align_up(file_end_addr, ARCH_PAGE_SIZE);
+				auto anon_map_end = align_up(mem_end_addr, ARCH_PAGE_SIZE);
 
 				vm_space_map(task->current_vm_space,
 				{

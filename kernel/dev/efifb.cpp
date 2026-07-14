@@ -2,33 +2,105 @@
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 
-#include <arch/x86_64/mmu.hpp>
-
 #include <fs/vfs.hpp>
 
 #include <mm/vmm.hpp>
 
+#include <sys/err.hpp>
+
 #include <types.hpp>
 #include <klog.hpp>
 #include <kstd.hpp>
-#include <sys/err.hpp>
 
 extern uint8_t font_data[];
 
 static efifb_framebuffer fb;
 
+ssize_t efifb_write(vfs::file_descriptor_t* filp, const byte* buffer, size_t length)
+{
+	auto* fb = (efifb_framebuffer*)(chardev_get(filp->inode->dev)->data);
+	if(fb->gfx_mode)
+	{
+		memcpy((void*)fb->address, buffer, length);
+	}
+	else
+	{
+		//FIXME: using static fb, only one can exist for now
+		efifb_write((const char*)buffer, length);
+	}
+	
+	return length;
+}	
+
+int efifb_ioctl(vfs::file_descriptor_t* filp, uint64_t op, uint64_t arg)
+{
+	auto* fb = (efifb_framebuffer*)(chardev_get(filp->inode->dev)->data);
+	if(!fb)
+		return -ENODEV;
+
+	switch(op)
+	{
+	case FB_IOC_GETINFO:
+	{
+		fbinfo_t info;
+		info.width = fb->width;
+		info.height = fb->height;
+		info.bpp = fb->bpp;
+		info.pitch = fb->pitch;
+
+		memcpy((void*)arg, &info, sizeof(fbinfo_t));
+
+		return 0;
+	}
+	case FB_IOC_SET_TEXTMODE:
+	{
+		fb->gfx_mode = false;
+		return 0;
+	}
+	case FB_IOC_SET_GFXMODE:
+	{
+		fb->gfx_mode = true;
+		return 0;
+	}
+	}
+
+	return -EINVAL;
+}
+
+static int efifb_mmap(vfs::file_descriptor_t* file, vm_object* vm)
+{
+	auto* fb = (efifb_framebuffer*)(chardev_get(file->inode->dev)->data);
+	if(!fb)
+		return -ENODEV;
+	
+	vm->flags |= VM_FLAG_DEVICE;
+	log::debug("mapped framebuffer at {:#x}", vm->base);
+	mmu_map_range(vm->space->mmu_root, fb->address - VM_DMAP_BASE, vm->base, vm->length, vm->prot | PROT_WRITECOMBINE, 0);
+	return 0;
+}
+
+static vfs::fs_file_ops efifb_fops
+{
+	.write = efifb_write,
+	.ioctl = efifb_ioctl,
+	.mmap = efifb_mmap
+};
+
 void efifb_init(efifb_framebuffer framebuffer)
 {
+	fb = framebuffer;
+	log::info("efifb: fb0: {}x{}", fb.width, fb.height);
+	
 	auto* dev = chardev_alloc(dev_t{6, 0});
 	dev->data = (void*)&fb;
+	dev->fops = &efifb_fops;
 
 	vfs::mknod("/dev/fb0", S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, dev_t{6, 0});	
 
-	fb = framebuffer;
-	log::info("efifb: fb0: {}x{}", fb.width, fb.height);
 	fb.wc = fb.width / 8;
 	fb.hc = fb.height / 16;
 	fb.bpp = (fb.bpp + 7) / 8;
+	fb.gfx_mode = false;
 
 	mmu_map_range(vm_get_kernel_space()->mmu_root, fb.address, fb.address + VM_DMAP_BASE, fb.height * fb.pitch, PROT_READ | PROT_WRITE | PROT_WRITECOMBINE, 0);
 	fb.address += VM_DMAP_BASE;
@@ -117,6 +189,9 @@ void efifb_putchar(char c)
 
 void efifb_write(const char* string, size_t length)
 {
+	if(fb.gfx_mode)
+		return;
+
 	for(size_t i = 0; i < length; i++)
 	{
 		if(!string[i])

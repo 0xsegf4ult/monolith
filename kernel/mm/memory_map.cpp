@@ -36,13 +36,13 @@ void* memory_map::reserve(size_t size)
 		{
 			if(num_regions == max_regions)
 				return nullptr;
-			log::info("memmap: update region [{:#x} - {:#x}] -> [{:#x} - {:#x}]", region->begin, region->end, page_align(region->begin + size), region->end);
-			region->begin = page_align(begin + size);
+			log::info("memmap: update region [{:#x} - {:#x}] -> [{:#x} - {:#x}]", region->begin, region->end, align_up(region->begin + size, ARCH_PAGE_SIZE), region->end);
+			region->begin = align_up(begin + size, ARCH_PAGE_SIZE);
 
 			mem_region* new_region = regions + num_regions;
 
 			new_region->begin = begin;
-			new_region->end = page_align(begin + size);
+			new_region->end = align_up(begin + size, ARCH_PAGE_SIZE);
 			new_region->type = mem_region::RegionType::Allocated;
 
 			log::info("memmap: region [{:#x} - {:#x}] -> allocated", new_region->begin, new_region->end);
@@ -99,7 +99,7 @@ memory_map parse_memmap(limine_memmap_entry** entries, size_t entry_count)
 			break;
 		}
 
-		log::info("memmap: [mem {:#x} - {:#x}] {}", region.begin, region.end, region_type_strings[static_cast<int>(region.type)]);
+		log::info("memmap: [mem {:#016x} - {:#016x}] {}", region.begin, region.end, region_type_strings[static_cast<int>(region.type)]);
 		mem_map.num_regions++;
 	}
 
