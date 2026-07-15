@@ -62,3 +62,7 @@ void stacktrace(uint64_t frame, uint32_t flags)
 	}
 }
 
+void arch_set_tls(virtaddr_t base)
+{
+	wrmsr(FS_BASE, base);
+}

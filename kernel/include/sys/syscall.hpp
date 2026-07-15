@@ -43,7 +43,8 @@ enum class syscall_id : uint64_t
 	RECVFROM,
 	SENDTO,
 	CLOCK_GETTIME,
-	CLOCK_NANOSLEEP
+	CLOCK_NANOSLEEP,
+	ARCH_PRCTL
 };
 
 void sys_exit(int status);

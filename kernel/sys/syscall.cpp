@@ -723,6 +723,18 @@ int sys_clock_nanosleep(clockid_t clockid, int flags, const timespec* t, timespe
 	return task_sleep(&sleep_spec, remain);
 }
 
+int sys_arch_prctl(int op, virtaddr_t addr)
+{
+	if(op != 1)
+		return -EINVAL;
+
+	auto* task = smp_current_task();
+	task->tls_base = addr;
+	arch_set_tls(addr);
+
+	return 0;
+}
+
 void syscall_handler(cpu_context_t* ctx)
 {
 	auto id = syscall_id(ctx->rax);
@@ -828,6 +840,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case CLOCK_NANOSLEEP:
 		ctx->rax = static_cast<uint64_t>(sys_clock_nanosleep((clockid_t)ctx->rdi, (int)ctx->rsi, (const timespec*)ctx->rdx, (timespec*)ctx->rcx));
+		break;
+	case ARCH_PRCTL:
+		ctx->rax = static_cast<uint64_t>(sys_arch_prctl((int)ctx->rdi, ctx->rsi));
 		break;
 	default:
 		log::error("unknown syscall {:x}", uint64_t(id));

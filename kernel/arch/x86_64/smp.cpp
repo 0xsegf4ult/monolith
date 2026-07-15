@@ -221,7 +221,8 @@ extern "C" void cpu_switch_task(task_t* prev, task_t* next)
 	auto* cpu = smp_get_cpu(smp_current_cpu());
 	cpu->tss.rsp0 = next->rsp0_top;
 	cpu->current_task = next;
-	
+	arch_set_tls(next->tls_base);
+
 	if(prev->current_vm_space != next->current_vm_space)
 	{
 		cpu->pt = next->current_vm_space->mmu_root;

@@ -84,6 +84,7 @@ struct task_t
 	sigset_t sig_pending;
 	sigset_t sig_blocked;
 	spinlock_t sig_lock;
+	virtaddr_t tls_base;
 
 	wait_queue_node wait; 
 
