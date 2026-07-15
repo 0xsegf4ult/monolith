@@ -3,8 +3,11 @@
 #include <arch/x86_64/cpu.hpp>
 #include <mm/vmm.hpp>
 #include <sys/timer.hpp>
+
+#include <config.hpp>
 #include <kstd.hpp>
 #include <klog.hpp>
+#include <list.hpp>
 #include <types.hpp>
 #include <panic.hpp>
 
@@ -69,10 +72,25 @@ static uint32_t lapic_read(uint32_t address)
 	return data;
 }
 
+static void lapic_timer_set_periodic(timer_device* timer)
+{
+	lapic_write(LAPIC_REG_LVT_TIMER, timer_irq | 0x20000);
+	lapic_write(LAPIC_REG_TIMER_DIVIDER, 0x3);
+	lapic_write(LAPIC_REG_TIMER_INITCNT, timer_interval);
+}
+
+static timer_device lapic_timer =
+{
+	.name = "lapic_timer",
+	.priority = 200,
+	.shift = 32,
+	.set_periodic = lapic_timer_set_periodic,
+	.list_node = {&lapic_timer.list_node, &lapic_timer.list_node}
+};
 
 static void lapic_timer_calibrate()
 {
-	lapic_write(LAPIC_REG_TIMER_DIVIDER, 0xb);
+	lapic_write(LAPIC_REG_TIMER_DIVIDER, 0x3);
 
 	lapic_write(LAPIC_REG_TIMER_INITCNT, 0xFFFFFFFF);
 	arch_enable_interrupts();
@@ -82,14 +100,24 @@ static void lapic_timer_calibrate()
 
 	auto ticks = 0xFFFFFFFF - lapic_read(LAPIC_REG_TIMER_CURRCNT);
 	timer_interval = ticks;
+	log::debug("lapic_timer: {:#x} ticks period", ticks); 
+	lapic_timer.mult = (uint64_t(ticks) << 32) / 10000000;
+}
+
+static void lapic_timer_irq()
+{
+	timer_interrupt();
 }
 
 void lapic_init()
 {
 	lapic_get_base();
 	lapic_enable();
-	lapic_timer_calibrate();
-	lapic_timer_enable();
+
+	lapic_timer_calibrate();	
+	timer_irq = allocate_irq();
+	install_irq_handler(timer_irq, lapic_timer_irq);
+	timer_device_register(lapic_timer);
 }
 
 void lapic_enable()
@@ -112,22 +140,4 @@ void lapic_send_ipi(uint32_t id, uint32_t ipi)
 	{
 		arch_pause();
 	}
-}
-
-static void lapic_timer_irq()
-{
-	timer_interrupt();
-}
-
-void lapic_timer_enable()
-{
-	if(!timer_irq)
-	{
-		timer_irq = allocate_irq();
-		install_irq_handler(timer_irq, lapic_timer_irq);
-	}
-
-	lapic_write(LAPIC_REG_LVT_TIMER, timer_irq | 0x20000);
-	lapic_write(LAPIC_REG_TIMER_DIVIDER, 0xb);
-	lapic_write(LAPIC_REG_TIMER_INITCNT, timer_interval);
 }

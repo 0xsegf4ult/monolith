@@ -5,9 +5,10 @@
 #include <sys/waitqueue.hpp>
 #include <types.hpp>
 
-constexpr size_t NCCS = 11;
+constexpr size_t NCCS = 32;
 using tcflag_t = uint32_t;
 using cc_t = unsigned char;
+using speed_t = uint32_t;
 
 enum tty_iflags : tcflag_t
 {
@@ -95,6 +96,8 @@ struct termios_t
 	tcflag_t c_lflag;
 	cc_t c_line;
 	cc_t c_cc[NCCS];
+	speed_t ibaud;
+	speed_t obaud;
 };
 
 struct winsize_t
@@ -107,11 +110,10 @@ struct winsize_t
 
 enum tty_io
 {
-	__TIO 		= 90,
-	TIOCSPGRP	= (__TIO << 8) + 1,
-	TCGETS		= (__TIO << 8) + 3,
-	TCSETS		= (__TIO << 8) + 4,
-	TIOCGWINSZ	= (__TIO << 8) + 8
+	TCGETS		= 0x5401,
+	TCSETS		= 0x5402,
+	TIOCSPGRP	= 0x5410,
+	TIOCGWINSZ	= 0x5413
 };
 
 typedef void (*tty_output_t)(const char*, size_t);

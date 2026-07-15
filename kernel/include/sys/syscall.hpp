@@ -6,7 +6,7 @@ enum mmap_flags
 {
 	MAP_SHARED = 0x1,
 	MAP_PRIVATE = 0x2,
-	MAP_ANONYMOUS = 0x8,
+	MAP_ANONYMOUS = 0x16,
 };
 
 enum class syscall_id : uint64_t

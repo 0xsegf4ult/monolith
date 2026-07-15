@@ -89,6 +89,8 @@ static void handle_pagefault(cpu_context_t* ctx)
 		
 	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
+		dump_registers(ctx, 0);
+		stacktrace(ctx->rbp, 0);
 		log::error("{}[{}]: segfault on cpu{} at {:x} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu(), cr2, ctx->rip, ctx->rsp, ctx->error_code);
 
 		send_signal(task, SIGSEGV);
@@ -124,6 +126,7 @@ static void signal_handle(task_t* task)
 
 		spinlock_release_irqsave(task->sig_lock, rflags);
 		sys_exit(0);
+		__builtin_unreachable();
 	}
 	spinlock_release_irqsave(task->sig_lock, rflags);
 }
@@ -134,6 +137,8 @@ static void handle_gpf(cpu_context_t* ctx)
 
 	if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 	{
+		dump_registers(ctx, 0);
+		stacktrace(ctx->rbp, 0);
 		log::error("{}[{}]: segfault on cpu{} ip {:x} sp {:x} error {}", task->name, task->pid, smp_current_cpu(), ctx->rip, ctx->rsp, ctx->error_code);
 		send_signal(task, SIGSEGV);
 		return ;
@@ -241,7 +246,10 @@ extern "C" void exception_handler(cpu_context_t* ctx)
 	{
 		if(task && task->rsp && ctx->rip <= 0x7fffffffffff)
 		{
+			dump_registers(ctx, 0);
+			stacktrace(ctx->rbp, 0);
 			auto sig = exception_to_signal(ctx->interrupt_id);
+			log::error("{}[{}]: deadlysignal {} (arch exc {}) on cpu{} ip {:x} sp {:x}", task->name, task->pid, sig, ctx->interrupt_id, smp_current_cpu(), ctx->rip, ctx->rsp);
 			if(sig)
 				send_signal(task, sig);
 		}

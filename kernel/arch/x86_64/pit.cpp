@@ -4,6 +4,7 @@
 #include <arch/x86_64/io.hpp>
 #include <arch/generic.hpp>
 
+#include <sys/task.hpp>
 #include <sys/time.hpp>
 #include <types.hpp>
 
@@ -19,8 +20,7 @@ namespace timer
 void irq_handler()
 {
 	ticks++;
-	if(ticks % 1000 == 0)
-		time_uptime_add(1000000);
+	time_uptime_add(1000000);
 }
 
 void pit_init()

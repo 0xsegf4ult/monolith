@@ -28,7 +28,7 @@ void slab_init()
 {
 	for(auto i = 0; i < km_cache_count; i++)
 	{
-		km_caches[i].obj_per_slab = (4096 - sizeof(slab)) / km_caches[i].block_size;
+		km_caches[i].obj_per_slab = (4096 - align_up(sizeof(slab), km_caches[i].block_size)) / km_caches[i].block_size;
 		spinlock_init(km_caches[i].lock);
 	}
 }
@@ -70,7 +70,7 @@ byte* slab_alloc(slab_cache& cache)
 	else
 		cache.slabs = new_slab;
 
-	new_slab->memory = reinterpret_cast<byte*>(new_slab) + sizeof(slab);
+	new_slab->memory = reinterpret_cast<byte*>(new_slab) + align_up(sizeof(slab), cache.block_size);
 	new_slab->cache = &cache;
 	new_slab->in_use = 1;
 	new_slab->free = 1;

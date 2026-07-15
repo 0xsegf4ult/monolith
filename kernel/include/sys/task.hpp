@@ -1,6 +1,6 @@
 #pragma once
 
-#include <arch/x86_64/context.hpp>
+#include <arch/generic.hpp>
 #include <sys/cred.hpp>
 #include <sys/spinlock.hpp>
 #include <sys/waitqueue.hpp>
@@ -86,7 +86,6 @@ struct task_t
 	spinlock_t sig_lock;
 
 	wait_queue_node wait; 
-	uint64_t sleep_delta;
 
 	//FIXME: get rid of this
 	task_t* next;

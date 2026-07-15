@@ -10,6 +10,7 @@
 #include <sys/mutex.hpp>
 #include <sys/cred.hpp>
 #include <sys/stat.hpp>
+#include <sys/time.hpp>
 #include <stdatomic.h>
 #include <sys/reflock.hpp>
 #include <list.hpp>
@@ -47,11 +48,20 @@ int unlink(const char* path);
 struct stat_t 
 {
 	dev_t st_dev;
+	uint64_t st_ino;
+	uint64_t st_nlink;
 	mode_t st_mode;
-	uint32_t st_nlink;
 	uid_t st_uid;
 	gid_t st_gid;
-	size_t st_size;
+	uint32_t padding;
+	dev_t st_rdev;
+	off_t st_size;
+	int64_t st_blksize;
+	int64_t st_blocks;
+	timespec st_atim;
+	timespec st_mtim;
+	timespec st_ctim;
+	int64_t _unused[3];
 };
 
 struct dirent_info

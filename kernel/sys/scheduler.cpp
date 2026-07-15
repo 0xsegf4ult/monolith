@@ -1,6 +1,7 @@
 #include <sys/scheduler.hpp>
 #include <sys/smp.hpp>
 #include <sys/task.hpp>
+#include <sys/timer.hpp>
 
 #include <arch/generic.hpp>
 
@@ -161,6 +162,8 @@ void sched_init(uint32_t cpu_count)
 
 void sched_start_bsp()
 {
+	timer_start();
+
 	task_t boot_thr;
 	arch_context_switch(&boot_thr, sched_pcpu_data[0].idle);
 	panic("sched: failed to start BSP");	
@@ -168,6 +171,8 @@ void sched_start_bsp()
 
 void sched_start_ap()
 {
+	timer_start();
+
 	task_t boot_thr;
 	arch_context_switch(&boot_thr, sched_pcpu_data[smp_current_cpu()].idle);
 	panic("sched: failed to start AP");

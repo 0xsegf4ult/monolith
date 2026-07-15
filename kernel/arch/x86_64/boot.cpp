@@ -1,7 +1,10 @@
 #include <arch/x86_64/acpi.hpp>
-#include <arch/x86_64/pic.hpp>
-#include <arch/x86_64/serial.hpp>
+#include <arch/x86_64/ioapic.hpp>
+#include <arch/x86_64/lapic.hpp>
 #include <arch/x86_64/mmu.hpp>
+#include <arch/x86_64/pic.hpp>
+#include <arch/x86_64/pit.hpp>
+#include <arch/x86_64/serial.hpp>
 
 #include <arch/generic.hpp>
 
@@ -159,7 +162,11 @@ extern "C" void init()
 	vmm_init_kpages(boot_info.memmap, boot_info.phys_kernel_start);
 
 	acpi_parse_rsdp((const acpi::rsdp_v1*)boot_info.rsdp_address);	
-
+	
+	ioapic_init();
+	pit_init();
+	lapic_init();	
+	
 	task_init();
 	smp_init();
 }

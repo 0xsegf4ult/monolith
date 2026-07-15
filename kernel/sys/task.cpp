@@ -30,7 +30,7 @@ static atomic_int next_pid = 1;
 list_head_t g_task_list = {&g_task_list, &g_task_list};
 spinlock_t g_task_list_lock;
 
-task_t* sleep_queue_head = nullptr;
+list_head_t sleep_queue_head;
 spinlock_t sleep_queue_lock;
 
 static task_t* init_task = nullptr;
@@ -342,9 +342,16 @@ void task_init()
 	list_node_init(g_task_list);
 	spinlock_init(g_task_list_lock);
 
-	sleep_queue_head = nullptr;
+	list_node_init(sleep_queue_head);
 	spinlock_init(sleep_queue_lock);
 }
+
+struct task_sleep_desc
+{
+	task_t* task;
+	uint64_t delta;
+	list_node_t list_node;
+};
 
 int task_sleep(const timespec* spec, timespec* remain)
 {
@@ -352,35 +359,43 @@ int task_sleep(const timespec* spec, timespec* remain)
 	uint64_t time_ns = spec->tv_sec * 1000000000 + spec->tv_nsec;
 	uint64_t time_acc = 0;
 
-	task_t* prev = nullptr;
-
+	task_sleep_desc sleep_desc
+	{
+		.task = task,
+		.delta = time_ns
+	};
+	list_node_init(sleep_desc.list_node);
+	
 	uint64_t rflags;
 	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
-	task_t* cur = sleep_queue_head;
-	
-	task->sleep_delta = time_ns;
 
-	while(cur && task->sleep_delta >= cur->sleep_delta)
+	task_sleep_desc* cur;
+	list_for_each_entry(cur, sleep_queue_head, list_node)
 	{
-		task->sleep_delta -= cur->sleep_delta;
-		prev = cur;
-		cur = cur->next;
+		if(sleep_desc.delta < cur->delta)
+			break;
+		
+		sleep_desc.delta -= cur->delta;
 	}
 
-	task->next = cur;
-
-	if(!prev)
-		sleep_queue_head = task;
+	if(list_empty(sleep_queue_head))
+		list_add(sleep_queue_head, sleep_desc.list_node);
 	else
-		prev->next = task;
+	{
+		cur->delta -= sleep_desc.delta; 
+		list_add_tail(sleep_desc.list_node, cur->list_node);
+	}
 
-	if(cur)
-		cur->sleep_delta -= task->sleep_delta;
 	spinlock_release_irqsave(sleep_queue_lock, rflags);
 
 	task_status exp_state = TASK_RUNNING;
 	atomic_compare_exchange_strong(&task->status, &exp_state, TASK_INTR_SLEEPING);
 	sched_yield();
+
+	log::debug("timer wakeup");
+	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
+	list_del(sleep_desc.list_node);
+	spinlock_release_irqsave(sleep_queue_lock, rflags);
 
 	// FIXME: blows up when stopped with ^C
 	// check here if interrupted
@@ -393,39 +408,43 @@ int task_sleep(const timespec* spec, timespec* remain)
 
 void task_tick_sleepers(uint64_t ns)
 {
+	//FIXME: hack
+	if(!init_task)
+		return;
+
 	uint64_t rflags;
 	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
-	task_t* cur = sleep_queue_head;
-	while(cur && ns)
+	
+	task_sleep_desc* tmp;
+	task_sleep_desc* cur;
+	list_for_each_entry_safe(cur, tmp, sleep_queue_head, list_node)
 	{
-		log::debug("tick sleepers {}ns", ns);
-		auto* next = cur->next;
-		if(cur->sleep_delta <= ns)
+		if(cur->delta <= ns)
 		{
-			ns -= cur->sleep_delta;
-			cur->sleep_delta = 0;
-			cur->next = nullptr;
+			ns -= cur->delta;
+			cur->delta = 0;
+
+			list_del(cur->list_node);
 
 			task_status exp_status = TASK_INTR_SLEEPING;
-			if(!atomic_compare_exchange_strong(&cur->status, &exp_status, TASK_RUNNING))
+			if(!atomic_compare_exchange_strong(&cur->task->status, &exp_status, TASK_RUNNING))
 			{
 				log::debug("failed to wake sleeping task");
-				goto skip_update;
+				break;
 			}
 
-			sched_add_ready(cur);
+			sched_add_ready(cur->task);
 		}
 		else
 		{
-			cur->sleep_delta -= ns;
+			cur->delta -= ns;
 			ns = 0;
-			goto skip_update;
+			break;
 		}
 
-		cur = next;
+		if(!ns)
+			break;
 	}
-
-	sleep_queue_head = cur;
-skip_update:
+	
 	spinlock_release_irqsave(sleep_queue_lock, rflags);
 }

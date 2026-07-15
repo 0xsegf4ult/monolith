@@ -5,17 +5,16 @@
 #include <arch/x86_64/acpi.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/gdt.hpp>
-#include <arch/x86_64/ioapic.hpp>
 #include <arch/x86_64/interrupts.hpp>
 #include <arch/x86_64/lapic.hpp>
 #include <arch/x86_64/mmu.hpp>
-#include <arch/x86_64/pit.hpp>
 
 #include <types.hpp>
 #include <klog.hpp>
 #include <kstd.hpp> 
 #include <panic.hpp>
 
+#include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
 #include <sys/scheduler.hpp>
@@ -122,7 +121,6 @@ extern "C" void smp_start_ap(uint32_t lapic_id)
 	enable_xsave();
 
 	lapic_enable();
-	lapic_timer_enable();
 
 	running_cpu_count++;
 
@@ -131,10 +129,6 @@ extern "C" void smp_start_ap(uint32_t lapic_id)
 
 void smp_init()
 {
-	ioapic_init();
-	pit_init();
-	lapic_init();	
-	
 	uint32_t name_regs[12];
 	char cpuname[12 * 4 + 1];
 	__get_cpuid(0x80000000, &name_regs[0], &name_regs[1], &name_regs[2], &name_regs[3]);

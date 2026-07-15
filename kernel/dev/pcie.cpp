@@ -151,7 +151,7 @@ bool pcie_device::enable_msix(msix_descriptor_t& out_descriptor)
 	auto table_offset = (msix_reg1 & ~(0b111));
 	auto table_size = msix_mctr & 0b11111111111;
 	out_descriptor.table_size = table_size;
-	log::debug("pcie {:02x}:{:02x}.{} MSI-X using BIR {}, table at {:#x} size {:#x}", bus, device, function, bir, table_offset, table_size);
+	log::info("pcie: {:02x}:{:02x}.{} MSI-X using BIR {}, table at {:#x} size {:#x}", bus, device, function, bir, table_offset, table_size);
 
 	auto bar_width = get_bar_width(bir);
 	physaddr_t tbl_base = bar_width == 64 ? read_bar(bir) : physaddr_t(read_bar32(bir));
