@@ -140,7 +140,7 @@ static bool ramfs_vm_fault(vm_object* object, virtaddr_t addr, uint32_t flags)
 	auto* space = object->space;
 	auto* data = (ramfs_data*)(object->file->inode->data);
 	ramfs_page* spage = list_first_entry(&data->pages, ramfs_page, list_node);
-	off_t offset = object->offset;
+	off_t offset = object->offset + (addr - object->base);
 
 	while(offset && spage && &spage->list_node != &data->pages)
 	{
@@ -155,7 +155,7 @@ static bool ramfs_vm_fault(vm_object* object, virtaddr_t addr, uint32_t flags)
 	{
 		log::debug("write to COW mapped file, reallocating");
 		auto new_page = pmm_allocate();
-		mmu_map(space->mmu_root, new_page + VM_DMAP_BASE, addr, object->prot, VM_FLAG_OWNER);
+		mmu_map(space->mmu_root, new_page, addr, object->prot, VM_FLAG_OWNER);
 		mmu_invalidate(space->mmu_root, addr, 0x1000);
 		memcpy((void*)addr, spage->data, 0x1000);
 		space->resident_file++;
