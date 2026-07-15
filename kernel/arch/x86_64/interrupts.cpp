@@ -38,9 +38,7 @@ void setup_idt()
 {
 	virtaddr_t isr_start = reinterpret_cast<virtaddr_t>(&isr_stubs);
 
-	for(int i = 0; i < 32; i++)
-		idt_entries[i] = idt_entry_t(isr_start + (i * 16), KERNEL_CS, IDT_TRAP_GATE, DPL_KERNEL);
-	for(int i = 32; i < 256; i++)
+	for(int i = 0; i < 256; i++)
 	{
 		auto dpl = DPL_KERNEL;
 
