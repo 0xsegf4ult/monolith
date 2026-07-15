@@ -3,6 +3,7 @@
 #include <arch/generic.hpp>
 
 #include <arch/x86_64/acpi.hpp>
+#include <arch/x86_64/context.hpp>
 #include <arch/x86_64/cpu.hpp>
 #include <arch/x86_64/gdt.hpp>
 #include <arch/x86_64/interrupts.hpp>
@@ -27,6 +28,7 @@ static size_t cpu_count = 1;
 extern "C" void enable_sse();
 extern "C" void enable_xsave();
 extern "C" char ap_trampoline_start; 
+alignas(64) static uint8_t default_xsave[512];
 
 constexpr physaddr_t trampoline_start = 0x1000;
 constexpr physaddr_t trampoline_cr3 = 0x1ff0;
@@ -97,6 +99,9 @@ void smp_start_bsp()
 
 	enable_sse();
 	enable_xsave();
+
+	asm volatile("fninit");
+	asm volatile("fxsave (%0)" :: "r"(default_xsave));
 }
 
 extern "C" void smp_start_ap(uint32_t lapic_id)
@@ -119,7 +124,8 @@ extern "C" void smp_start_ap(uint32_t lapic_id)
 	wrmsr(IA32_PAT_MSR, 0x0407050600070106);
 	enable_sse();
 	enable_xsave();
-
+	asm volatile("fninit");
+		
 	lapic_enable();
 
 	running_cpu_count++;
@@ -216,11 +222,37 @@ void smp_set_current_pagetable(page_table* table)
 	asm volatile("movq %0, %%cr3" :: "r"(virtaddr_t(cpu->pt) - VM_DMAP_BASE));
 }
 
+arch_context_t* arch_context_new()
+{
+	auto* ctx = (arch_context_t*)kmalloc(sizeof(arch_context_t));
+	memcpy(ctx->simd, &default_xsave, 512);
+	return ctx;
+}
+
+void arch_context_destroy(arch_context_t* ctx)
+{
+	kfree(ctx);
+}
+
+void arch_context_save(arch_context_t* ctx)
+{
+	asm volatile("fxsave (%0)" :: "r"(ctx->simd));
+}
+
+void arch_context_restore(arch_context_t* ctx)
+{
+	asm volatile("fxrstor (%0)" :: "r"(ctx->simd));
+}
+
 extern "C" void cpu_switch_task(task_t* prev, task_t* next)
 {
 	auto* cpu = smp_get_cpu(smp_current_cpu());
 	cpu->tss.rsp0 = next->rsp0_top;
 	cpu->current_task = next;
+
+	if(prev->context)
+		arch_context_save(prev->context);
+
 	arch_set_tls(next->tls_base);
 
 	if(prev->current_vm_space != next->current_vm_space)
@@ -228,4 +260,7 @@ extern "C" void cpu_switch_task(task_t* prev, task_t* next)
 		cpu->pt = next->current_vm_space->mmu_root;
 		asm volatile("movq %0, %%cr3" :: "r"(virtaddr_t(cpu->pt) - VM_DMAP_BASE));
 	}
+
+	if(next->context)
+		arch_context_restore(next->context);
 }

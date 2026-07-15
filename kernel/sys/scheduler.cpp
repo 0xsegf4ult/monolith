@@ -165,6 +165,9 @@ void sched_start_bsp()
 	timer_start();
 
 	task_t boot_thr;
+	boot_thr.context = nullptr;
+	boot_thr.current_vm_space = nullptr;
+
 	arch_context_switch(&boot_thr, sched_pcpu_data[0].idle);
 	panic("sched: failed to start BSP");	
 }
@@ -174,6 +177,9 @@ void sched_start_ap()
 	timer_start();
 
 	task_t boot_thr;
+	boot_thr.context = nullptr;
+	boot_thr.current_vm_space = nullptr;
+	
 	arch_context_switch(&boot_thr, sched_pcpu_data[smp_current_cpu()].idle);
 	panic("sched: failed to start AP");
 }

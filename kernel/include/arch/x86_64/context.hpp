@@ -30,3 +30,7 @@ struct __attribute__((packed)) cpu_context_t
 	uint64_t ss;
 };
 
+struct arch_context_t
+{
+	uint8_t simd[512];
+};

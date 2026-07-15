@@ -19,6 +19,10 @@ trampoline:
 .global enable_sse
 .type enable_sse, @function
 enable_sse:
+	movq %cr0, %rax
+	and $0xFFFB, %ax
+	movq %rax, %cr0
+
 	movq %cr4, %rax
 	bts $9, %rax # OSFXSR
 	bts $10, %rax # OSXMMEXCEPT

@@ -20,3 +20,11 @@ void stacktrace(uint64_t frame, uint32_t flags);
 
 extern "C" uint64_t arch_disable_interrupts();
 extern "C" void arch_restore_flags(uint64_t flags);
+void arch_set_tls(virtaddr_t base);
+
+struct arch_context_t;
+
+arch_context_t* arch_context_new();
+void arch_context_destroy(arch_context_t* ctx);
+void arch_context_save(arch_context_t* ctx);
+void arch_context_restore(arch_context_t* ctx);

@@ -164,9 +164,13 @@ task_t* task_new(const char* name, pid_t forcepid)
 	task->sig_pending = 0;
 	task->sig_blocked = 0;
 	spinlock_init(task->sig_lock);
+	task->tls_base = 0;
 
 	wait_queue_node_init(task->wait);
 	task->wait.task = task;
+
+
+	task->context = nullptr;
 
 	list_node_init(task->queue_node);
 	list_node_init(task->list_node);
@@ -208,6 +212,7 @@ task_t* process_userspace_new(const char* name, const char** argv)
 
 	user_stack_init(task);
 	user_copy_args(task, argv);
+	task->context = arch_context_new();
 
 	procfs_register_process(task);
 	return task;
@@ -277,6 +282,9 @@ void task_zombify(task_t* task)
 
 	if(task->owned_vm_space)
 		vm_space_destroy(task->owned_vm_space);
+
+	arch_context_destroy(task->context);
+	task->context = nullptr;
 
 	atomic_fetch_or(&task->flags, TASK_CAN_REAP);
 	atomic_store(&task->status, TASK_ZOMBIE);

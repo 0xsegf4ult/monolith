@@ -67,6 +67,8 @@ struct task_t
 	pid_t sid;
 	pid_t tgid;
 
+	arch_context_t* context;
+
 	task_t* _Atomic parent;
 	
 	list_head_t children;
