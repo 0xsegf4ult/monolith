@@ -60,7 +60,6 @@ struct task_t
 	virtaddr_t rsp0_top;
 	vm_space* owned_vm_space;
 	vm_space* current_vm_space;
-	virtaddr_t entry;
 	
 	pid_t pid;
 	pid_t pgid;
@@ -90,6 +89,11 @@ struct task_t
 
 	wait_queue_node wait; 
 
+	int argc;
+	int envc;
+	char** argv;
+	char** envp;
+
 	//FIXME: get rid of this
 	task_t* next;
 
@@ -103,7 +107,7 @@ extern spinlock_t g_task_list_lock;
 static_assert(__builtin_offsetof(task_t, rsp0) == 40, "asm context switch expects rsp0 at 40 bytes"); 
 task_t* task_new(const char* name);
 task_t* thread_kernel_new(const char* name, virtaddr_t entry);
-task_t* process_userspace_new(const char* name, const char** argv);
+task_t* process_userspace_new(const char* name, virtaddr_t entry);
 void task_zombify(task_t* proc);
 void task_destroy(task_t* proc);
 

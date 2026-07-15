@@ -80,6 +80,24 @@ struct Elf64_Shdr
 	Elf64_Xword sh_entsize;
 };
 
+enum Elf_AType
+{
+	AT_NULL,
+	AT_IGNORE,
+	AT_EXECFD,
+	AT_PHDR,
+	AT_PHENT,
+	AT_PHNUM,
+	AT_PAGESZ,
+	AT_BASE,
+	AT_ENTRY,
+	AT_NOTELF,
+	AT_UID,
+	AT_EUID,
+	AT_GID,
+	AT_EGID
+};
+
 enum Elf_PType
 {
 	PT_NULL,

@@ -55,7 +55,8 @@ target_sources(vmmonolith PRIVATE
 	net/ipv4/udp.cpp
 	net/netdev.cpp
 	net/socket.cpp
-	sys/executable.cpp
+	sys/binfmt/exec.cpp
+	sys/binfmt/elf.cpp
 	sys/mutex.cpp
 	sys/task.cpp
 	sys/time.cpp
@@ -64,7 +65,6 @@ target_sources(vmmonolith PRIVATE
 	sys/signal.cpp
 	sys/syscall.cpp
 	sys/waitqueue.cpp
-	elf.cpp
 	init.cpp
 	initramfs.cpp
 	klog.cpp

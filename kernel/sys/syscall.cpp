@@ -1,7 +1,7 @@
 #include <sys/syscall.hpp>
 #include <sys/cred.hpp>
 #include <sys/err.hpp>
-#include <sys/executable.hpp>
+#include <sys/exec.hpp>
 #include <sys/scheduler.hpp>
 #include <sys/signal.hpp>
 #include <sys/smp.hpp>
@@ -9,9 +9,12 @@
 #include <sys/task.hpp>
 #include <sys/time.hpp>
 
+#include <arch/x86_64/context.hpp>
+
 #include <fs/lookup.hpp>
 #include <fs/vfs.hpp>
 
+#include <mm/slab.hpp>
 #include <mm/vmm.hpp>
 
 #include <net/socket.hpp>
@@ -120,23 +123,82 @@ enum SPAWNFLAGS
 	SPAWN_SETPGID = 1
 };
 
-static int common_spawn(pid_t* out_pid, const char** argv, uint64_t flags, int at_fd)
+static int spawn_copy_args(task_t* proc, const char** argv, const char** envp)
 {
-	auto* parent = smp_current_task();
+	while(argv[proc->argc])
+	{
+		if(reinterpret_cast<virtaddr_t>(argv[proc->argc]) > 0x7fffffffffff)
+			return -EFAULT; 
 
-	auto* proc = process_userspace_new(argv[0], argv);
+		proc->argc++;
+	}
+
+	if(envp)
+	{
+		while(envp[proc->envc])
+		{
+			if(reinterpret_cast<virtaddr_t>(envp[proc->envc]) > 0x7fffffffffff)
+				return -EFAULT; 
+
+			proc->envc++;
+		}
+	}
+
+	proc->argv = (char**)kmalloc(sizeof(char*) * proc->argc);
+	if(!proc->argv)
+		return -ENOMEM;
+
+	if(envp)
+	{
+		proc->envp = (char**)kmalloc(sizeof(char*) * proc->envc);
+		if(!proc->envp)
+			return -ENOMEM;
+	}
+
+	for(int i = 0; i < proc->argc; i++)
+	{
+		auto len = string_length(argv[i]) + 1;
+		proc->argv[i] = (char*)kmalloc(sizeof(char) * len);
+		strncpy(proc->argv[i], argv[i], len);
+	}
+
+	for(int i = 0; i < proc->envc; i++)
+	{
+		auto len = string_length(envp[i]) + 1;
+		proc->envp[i] = (char*)kmalloc(sizeof(char) * len);
+		strncpy(proc->envp[i], envp[i], len);
+	}
+
+	return 0;
+}
+
+pid_t sys_spawn(const char** argv, const char** envp, uint64_t flags)
+{
+	if(!argv || !argv[0])
+		return -EINVAL;
+
+	if(reinterpret_cast<virtaddr_t>(argv) > 0x7fffffffffff)
+		return -EFAULT; 
+
+	if(reinterpret_cast<virtaddr_t>(envp) > 0x7fffffffffff)
+		return -EFAULT;
+
+	auto proc = process_userspace_new(argv[0], reinterpret_cast<virtaddr_t>(exec_task));
+	log::debug("spawned process {}", argv[0]);
+
+	auto* parent = smp_current_task();
 	atomic_store(&proc->parent, parent);
 
 	if(flags & SPAWN_SETPGID)
 		proc->pgid = proc->pid;
-	else	
+	else
 		proc->pgid = parent->pgid;
-	
+
 	proc->sid = parent->sid;
 
 	proc->cwd = parent->cwd;
 	ventry_ref(proc->cwd);
-	
+
 	proc->cred = parent->cred;
 	proc->tty = parent->tty;
 
@@ -151,44 +213,15 @@ static int common_spawn(pid_t* out_pid, const char** argv, uint64_t flags, int a
 			proc->open_files[i] = vfs::dup(parent->open_files[i]);
 	}
 
-	auto* exec_dir = at_fd >= 0 ? vfs::get_open_fd(at_fd).path : proc->cwd;
-	int exec_status = load_executable(argv[0], proc, exec_dir);
-       	if(exec_status < 0)
+	auto ret = spawn_copy_args(proc, argv, envp);
+	if(ret < 0)
 	{
-		task_zombify(proc);	
-		return exec_status;
-	}	
-
-	if(out_pid)
-		*out_pid = proc->pid;
+		task_zombify(proc);
+		return ret;
+	}
 
 	sched_add_ready(proc);
-	return 0;
-}
-
-int sys_spawn(pid_t* out_pid, const char** argv, uint64_t flags)
-{
-	if(!argv || !argv[0])
-		return -EINVAL;
-
-	if(reinterpret_cast<virtaddr_t>(out_pid) > 0x7fffffffffff)
-		return -EFAULT; 
-
-	auto res = common_spawn(out_pid, argv, flags, -1);
-	return res;
-}
-
-int sys_spawnat(int fd, pid_t* out_pid, const char** argv, uint64_t flags)
-{
-	auto* task = smp_current_task();
-	if(task->open_files[fd] < 0 || !argv || !argv[0])
-		return -EINVAL;
-	
-	if(reinterpret_cast<virtaddr_t>(out_pid) > 0x7fffffffffff)
-		return -EFAULT; 
-	
-	auto res = common_spawn(out_pid, argv, flags, task->open_files[fd]);
-	return res;
+	return proc->pid;
 }
 
 void sys_exit(int status)
@@ -223,12 +256,12 @@ void sys_exit(int status)
 	sched_yield();
 }
 
-pid_t sys_wait(int* status)
+pid_t sys_waitpid(pid_t pid, int* status, int options)
 {
 	auto* task = smp_current_task();
 	bool found_child = false;
 	int out_status = 0;
-	pid_t pid = 0;
+	pid_t ret_pid = 0;
 
 	task_status exp_state = TASK_RUNNING;
 	while(1)
@@ -259,7 +292,7 @@ pid_t sys_wait(int* status)
 					out_status = (child->return_status & 0xFF) | 0x100;
 
 				found_child = true;
-				pid = child->pid;
+				ret_pid = child->pid;
 
 				task_destroy(child);
 				break;
@@ -293,7 +326,7 @@ pid_t sys_wait(int* status)
 		*status = out_status;
 	}
 
-	return pid;
+	return ret_pid;
 }
 
 int sys_ioctl(int fd, uint64_t op, uint64_t arg)
@@ -758,16 +791,13 @@ void syscall_handler(cpu_context_t* ctx)
 		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rdi, (const byte*)ctx->rsi, (size_t)ctx->rdx));
 		break;
 	case SPAWN:
-		ctx->rax = static_cast<uint64_t>(sys_spawn((pid_t*)ctx->rdi, (const char**)ctx->rsi, ctx->rdx));
-		break;
-	case SPAWNAT:
-		ctx->rax = static_cast<uint64_t>(sys_spawnat((int)ctx->rdi, (pid_t*)ctx->rsi, (const char**)ctx->rdx, ctx->rcx));
+		ctx->rax = static_cast<uint64_t>(sys_spawn((const char**)ctx->rdi, (const char**)ctx->rsi, ctx->rdx));
 		break;
 	case EXIT:
 		sys_exit((int)ctx->rdi);
 		break;
-	case WAIT:
-		ctx->rax = static_cast<uint64_t>(sys_wait((int*)ctx->rdi));
+	case WAITPID:
+		ctx->rax = static_cast<uint64_t>(sys_waitpid((pid_t)ctx->rdi, (int*)ctx->rsi, (int)ctx->rdx));
 		break;
 	case IOCTL:
 		ctx->rax = static_cast<uint64_t>(sys_ioctl((int)ctx->rdi, ctx->rsi, ctx->rdx));
