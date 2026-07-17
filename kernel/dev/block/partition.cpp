@@ -13,7 +13,7 @@ ssize_t part_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	auto* bdev = blockdev_get(file->inode->dev);
 	auto* part = (partition_t*)bdev->data;
 	auto* disk_bdev = blockdev_get(part->parent->dev);
-	return disk_bdev->bops->pread_blocks(disk_bdev, buffer, length * part->parent->block_size, part->start_lba + file->read_pos * part->parent->block_size) * part->parent->block_size;
+	return disk_bdev->bops->pread_blocks(disk_bdev, buffer, length * part->parent->block_size, part->start_lba + file->pos * part->parent->block_size) * part->parent->block_size;
 }
 
 static vfs::fs_file_ops fops = 

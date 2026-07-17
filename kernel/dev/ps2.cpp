@@ -1,5 +1,7 @@
 #include <dev/ps2.hpp>
 #include <dev/tty.hpp>
+#include <dev/device.hpp>
+#include <dev/character.hpp>
 
 #include <arch/x86_64/ioapic.hpp>
 #include <arch/x86_64/io.hpp>
@@ -8,7 +10,15 @@
 #include <klog.hpp>
 #include <types.hpp>
 
+#include <fs/ops.hpp>
+#include <fs/vfs.hpp>
+
+#include <sys/err.hpp>
 #include <sys/scheduler.hpp>
+#include <sys/task.hpp>
+#include <sys/smp.hpp>
+
+#include <kstd.hpp>
 
 enum kbd_modifier_key : uint32_t
 {
@@ -19,8 +29,8 @@ enum kbd_modifier_key : uint32_t
 
 struct key_event
 {
-	uint8_t code;
-	uint8_t mod;
+	char key;
+	bool state;
 };
 
 enum kbd_state
@@ -29,8 +39,12 @@ enum kbd_state
 	KBD_STATE_PREFIX
 };
 
-kbd_state state = KBD_STATE_NORMAL;
-tty_device* cur_tty = nullptr;
+static kbd_state state = KBD_STATE_NORMAL;
+static tty_device* cur_tty = nullptr;
+static task_t* owner = nullptr;
+static key_event ringbuffer[256];
+static int ring_head = 0;
+static int ring_tail = 0;
 
 constexpr char scancode_row_1[] =
 {
@@ -250,7 +264,7 @@ static void interrupt_handler()
 	bool ctrl = keyboard0_mod & KBD_MOD_CTRL;
 	bool alt = keyboard0_mod & KBD_MOD_ALT;
 
-	if(cur_tty && !release_flag)
+	if(!owner && cur_tty && !release_flag)
 	{
 		const char* reg_tbl = shift ? &shifted_scancodes[0] : &regular_scancodes[0];
 		if(scancode == 0x2e && ctrl)
@@ -274,7 +288,61 @@ static void interrupt_handler()
 		else if(scancode == 0x39)
 			tty_consume(cur_tty, ' ');*/
 	}
+	
+	if(owner)
+	{
+		const char* reg_tbl = shift ? &shifted_scancodes[0] : &regular_scancodes[0];
+		if(scancode <= 0x39)
+		{
+			if((ring_tail + 1) % 256 == ring_head)
+				return;
+		
+			if(reg_tbl[scancode])
+				ringbuffer[ring_tail] = {reg_tbl[scancode], !release_flag};
+			else if(scancode == 0x1d)
+				ringbuffer[ring_tail] = {0x1d, !release_flag};
+
+			ring_tail = (ring_tail + 1) % 256;
+		}
+	}
 }
+
+int kbd_open(vfs::vnode_t* node, int flags)
+{
+	if(owner)
+		return -EBUSY;
+
+	owner = smp_current_task();
+	return 0;
+}
+
+int kbd_close(int fd)
+{
+	owner = nullptr;
+	return 0;
+}
+
+// hacky 'nonblocking' read
+ssize_t kbd_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+{
+	if(smp_current_task() != owner)
+		return -EBUSY;
+
+	if(ring_head == ring_tail)
+		return 0;
+
+	memcpy(buffer, &ringbuffer[ring_head], sizeof(key_event));
+	ring_head = (ring_head + 1) % 256;
+
+	return 2;
+}
+
+static vfs::fs_file_ops kbd_fops =
+{
+	.open = kbd_open,
+	.close = kbd_close,
+	.read = kbd_read
+};
 
 void ps2_init()
 {
@@ -298,6 +366,11 @@ void ps2_init()
 	initcode = io::inb(0x60);
 
 	log::info("ps2: detected keyboard");
+
+	auto* dev = chardev_alloc(dev_t{10, 0});
+	dev->fops = &kbd_fops;
+
+	auto dev_node = vfs::mknod("/dev/keyboard", S_IFCHR | S_IRUSR | S_IWUSR, dev_t{10, 0});
 
 	auto irq = allocate_irq();
 	ioapic_write_redirection_entry(0x1, irq);

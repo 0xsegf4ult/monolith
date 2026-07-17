@@ -1,0 +1,11 @@
+[host_machine]
+system = 'monolith'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+[binaries]
+c = 'x86_64-monolith-gcc'
+cpp = 'x86_64-monolith-g++'
+ar = 'x86_64-monolith-ar'
+strip = 'x86_64-monolith-strip'
+ld = 'x86_64-monolith-ld'

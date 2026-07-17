@@ -357,11 +357,6 @@ int task_sleep(const timespec* spec, timespec* remain)
 	atomic_compare_exchange_strong(&task->status, &exp_state, TASK_INTR_SLEEPING);
 	sched_yield();
 
-	log::debug("timer wakeup");
-	spinlock_acquire_irqsave(sleep_queue_lock, rflags);
-	list_del(sleep_desc.list_node);
-	spinlock_release_irqsave(sleep_queue_lock, rflags);
-
 	// FIXME: blows up when stopped with ^C
 	// check here if interrupted
 	// unlink self from sleep list
@@ -389,15 +384,14 @@ void task_tick_sleepers(uint64_t ns)
 			ns -= cur->delta;
 			cur->delta = 0;
 
-			list_del(cur->list_node);
-
 			task_status exp_status = TASK_INTR_SLEEPING;
 			if(!atomic_compare_exchange_strong(&cur->task->status, &exp_status, TASK_RUNNING))
 			{
-				log::debug("failed to wake sleeping task");
+				log::debug("failed to wake sleeping task {}", get_status_name(exp_status));
 				break;
 			}
-
+			
+			list_del(cur->list_node);
 			sched_add_ready(cur->task);
 		}
 		else

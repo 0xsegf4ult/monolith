@@ -2,6 +2,8 @@
 #include <dev/device.hpp>
 #include <dev/character.hpp>
 
+#include <arch/x86_64/serial.hpp>
+
 #include <fs/vfs.hpp>
 
 #include <mm/vmm.hpp>
@@ -189,13 +191,16 @@ void efifb_putchar(char c)
 
 void efifb_write(const char* string, size_t length)
 {
-	if(fb.gfx_mode)
-		return;
-
 	for(size_t i = 0; i < length; i++)
 	{
 		if(!string[i])
 			break;
+
+		if(fb.gfx_mode)
+		{
+			early_serial_putchar(string[i]);
+			continue;
+		}
 
 		efifb_putchar(string[i]);
 	}

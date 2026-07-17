@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/spawn.h>
 
 int main(int argc, char* argv[])
 {
@@ -24,7 +25,7 @@ int main(int argc, char* argv[])
 		return 1;
 
 	const char* s_argv[3] = {"/bin/login", "root", NULL};
-	spawn(NULL, s_argv, 0);
+	spawn(s_argv, NULL, 0);
 	wait(NULL);
 	return 0;
 }

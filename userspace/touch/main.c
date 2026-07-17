@@ -11,7 +11,6 @@ int main(int argc, const char** argv)
 		return 0;
 	}
 
-
 	int fd = open(argv[1], O_CREAT);
 	if(fd < 0)
 	{

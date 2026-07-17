@@ -20,8 +20,7 @@ namespace vfs
 
 struct file_descriptor_t
 {
-	size_t read_pos;
-	size_t write_pos;
+	off_t pos;
 	vnode_t* inode;
 	ventry_t* path;
 	int fs_id;
@@ -90,6 +89,13 @@ enum OPEN_FLAGS
 	O_ACCMODE = O_RDONLY | O_WRONLY | O_RDWR
 };
 
+enum SEEK_FLAGS
+{
+	SEEK_SET = 0,
+	SEEK_CUR = 1,
+	SEEK_END = 2
+};
+
 int open(vnode_t* node, int flags, ventry_t* path);
 int open(const char* path, int flags = 0);
 int openat(ventry_t* dir, const char* path, int flags = 0);
@@ -97,7 +103,7 @@ int openat(int fd, const char* path, int flags = 0);
 int close(int fd);
 ssize_t read(int fd, byte* buffer, size_t len);
 ssize_t write(int fd, const byte* buffer, size_t len);
-ssize_t seek(int fd, ssize_t offset, int flags = 0);
+off_t seek(int fd, off_t offset, int flags = 0);
 int ioctl(int fd, uint64_t op, uint64_t arg = 0);
 int stat(const char* path, stat_t* output);
 int fstat(int fd, stat_t* output); 

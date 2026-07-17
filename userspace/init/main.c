@@ -1,27 +1,19 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/wait.h>
+#include <sys/spawn.h>
 #include <unistd.h>
 
 int main()
 {
 	if(getpid() != 1)
 	{
-		printf("init: must be run as PID 1");
+		fprintf(stderr, "init: must be run as PID 1\n");
 		return 0;
 	}
-
-	if(open("/dev/null", 0) < 0)
-		return 1;
-
-	if(open("/dev/console", 0) < 0)
-		return 1;
-
-	if(open("/dev/console", 0) < 0)
-		return 1;
-
-	printf("  monolith x86_64 0.01.2 is starting up\n\n");
-        printf("* /proc is already mounted\n\n");
+	
+	fprintf(stderr, "  monolith x86_64 0.01.2 is starting up\n\n");
+        fprintf(stderr, "* /proc is already mounted\n");
 
 	const char* argv[3] = {"/bin/getty", "/dev/tty1", NULL};
 	bool respawn = true;
@@ -31,7 +23,11 @@ int main()
 		if(respawn)
 		{
 			respawn = false;
-			spawn(&gpid, argv, 0);
+			fprintf(stderr, "* Starting %s on %s...", argv[0], argv[1]);
+			gpid = spawn(argv, NULL, 0);
+			if(gpid < 0)
+				fprintf(stderr, "...[FAILED]");
+			fprintf(stderr, "\n");
 		}
 
 		pid_t wpid = wait(NULL);

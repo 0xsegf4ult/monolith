@@ -118,6 +118,15 @@ ssize_t sys_write(int fd, const byte* buffer, size_t length)
 	return vfs::write(task->open_files[fd], buffer, length);
 }
 
+off_t sys_seek(int fd, off_t offset, int flags)
+{
+	auto* task = smp_current_task();
+	if(fd < 0 || task->open_files[fd] < 0)
+		return -EBADF;
+
+	return vfs::seek(task->open_files[fd], offset, flags);
+}
+
 enum SPAWNFLAGS
 {
 	SPAWN_SETPGID = 1
@@ -184,7 +193,6 @@ pid_t sys_spawn(const char** argv, const char** envp, uint64_t flags)
 		return -EFAULT;
 
 	auto proc = process_userspace_new(argv[0], reinterpret_cast<virtaddr_t>(exec_task));
-	log::debug("spawned process {}", argv[0]);
 
 	auto* parent = smp_current_task();
 	atomic_store(&proc->parent, parent);
@@ -287,9 +295,9 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 				spinlock_release(child->child_list_lock);
 
 				if(child->return_signal)
-					out_status = (child->return_signal & 0xFF) | 0x200;
+					out_status = (child->return_signal & 0x7F);
 				else
-					out_status = (child->return_status & 0xFF) | 0x100;
+					out_status = (child->return_status & 0xFF) << 8;
 
 				found_child = true;
 				ret_pid = child->pid;
@@ -731,7 +739,8 @@ int sys_clock_gettime(clockid_t clockid, timespec* tv)
 	if(!tv || reinterpret_cast<virtaddr_t>(tv) > 0x7fffffffffff)
                 return -EFAULT;
 
-	*tv = time_get_current();
+	auto cur = time_get_current();
+	memcpy(tv, &cur, sizeof(timespec));
 	return 0;
 }	
 
@@ -789,6 +798,9 @@ void syscall_handler(cpu_context_t* ctx)
 		break;
 	case WRITE:
 		ctx->rax = static_cast<uint64_t>(sys_write((int)ctx->rdi, (const byte*)ctx->rsi, (size_t)ctx->rdx));
+		break;
+	case SEEK:
+		ctx->rax = static_cast<uint64_t>(sys_seek((int)ctx->rdi, (off_t)ctx->rsi, (int)ctx->rdx));
 		break;
 	case SPAWN:
 		ctx->rax = static_cast<uint64_t>(sys_spawn((const char**)ctx->rdi, (const char**)ctx->rsi, ctx->rdx));

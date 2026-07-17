@@ -25,7 +25,7 @@ time_t time_get_boottime()
 timespec time_get_uptime()
 {
 	uint64_t nsecs = atomic_load_explicit(reinterpret_cast<_Atomic(uint64_t)*>(&uptime_nsec), memory_order_relaxed);
-	return {time_t(nsecs / 1000000000), uint32_t(nsecs % 1000000000)};
+	return {time_t(nsecs / 1000000000), int64_t(nsecs % 1000000000)};
 }
 
 timespec time_get_current()

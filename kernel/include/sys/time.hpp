@@ -6,13 +6,15 @@ using clockid_t = int;
 
 enum clock_ids : clockid_t
 {
-	CLOCK_REALTIME = 1
+	CLOCK_REALTIME = 0,
+	CLOCK_MONOTONIC = 1,
+	CLOCK_BOOTTIME = 7
 };
 
 struct timespec
 {
 	time_t tv_sec;
-	uint32_t tv_nsec;
+	int64_t tv_nsec;
 };
 
 void time_set_boottime(time_t time);

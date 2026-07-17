@@ -157,7 +157,7 @@ ssize_t nvme_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	if(!ns)
 		return -ENOENT;
 
-	auto lba = file->read_pos / ns->block_size;
+	auto lba = file->pos / ns->block_size;
        	auto blocks = length / ns->block_size;	
 
 	return nvme_read(ns, lba, blocks, buffer) * ns->block_size;

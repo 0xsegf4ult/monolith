@@ -1,16 +1,17 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/spawn.h>
 #include <termios.h>
 #include <unistd.h>
 
 static char input_buf[256];
 static char buffer[4096];
 static size_t b_count;
-static int bindir;
 
 void execute()
 {
@@ -40,7 +41,7 @@ void execute()
 		int st_r = stat(buffer, &ex_stat);
 		if(st_r < 0)
 		{
-			printf("\nsh: %s: %s\n", buffer, strerrordesc_np(-st_r));
+			printf("\nsh: %s: %s\n", buffer, strerror(errno));
 			return;
 		}
 
@@ -55,17 +56,19 @@ void execute()
 			printf("\n");
 			pid_t s_pid;
 			pid_t save_pgid = getpgid(0);
-			int s_res = spawn(&s_pid, argv, SPAWN_SETPGID);
-			if(s_res < 0)
+			s_pid = spawn(argv, NULL, SPAWN_SETPGID);
+			if(s_pid < 0)
 			{
-				printf("sh: %s: %s\n", argv[0], strerrordesc_np(-s_res));
+				printf("sh: %s: %s\n", argv[0], strerror(errno));
+				return;
 			}
+
 			tcsetpgrp(STDIN_FILENO, s_pid);
 			int p_status;
 			wait(&p_status);
 			tcsetpgrp(STDIN_FILENO, save_pgid);
 			if(WIFSIGNALED(p_status))
-				printf("%s\n", sigdescr_np(WTERMSIG(p_status)));
+				printf("%s\n", strsignal(WTERMSIG(p_status)));
 			return;
 		}
 	}
@@ -75,14 +78,14 @@ void execute()
 		{
 			int r = chdir(argv[1]);
 			if(r < 0)
-				printf("\nsh: cd: %s: %s", argv[1], strerrordesc_np(-r));
+				printf("\nsh: cd: %s: %s", argv[1], strerror(errno));
 		}
 
 		printf("\n");
 		return;
 	}
 	else if(b_count == 5 && (strncmp(buffer, "exit", 5) == 0)) 
-		exit(0);		
+		exit(0);	/*	
 	else
 	{
 		auto ex_fd = openat(bindir, buffer, 0);
@@ -110,7 +113,7 @@ void execute()
 				return;
 			}
 		}
-	}
+	}*/
 
 	printf("\nsh: %s: command not found\n", buffer);
 }
@@ -118,19 +121,18 @@ void execute()
 int main()
 {
 	struct termios tm;
-	tcgetattr(0, &tm);
+	tcgetattr(STDIN_FILENO, &tm);
 	tm.c_lflag &= ~ECHO;
-	tcsetattr(0, &tm);
-
-	bindir = open("/bin", 0);
+	tcsetattr(STDIN_FILENO, 0, &tm);
 
 	printf("[root@monolith]# ");
+	fflush(stdout);
 
 	b_count = 0;
 	int running = 1;
 	while(running)
 	{
-		ssize_t count = read(0, input_buf, 256);
+		ssize_t count = read(STDIN_FILENO, input_buf, 256);
 
 		for(ssize_t i = 0; i < count; i++)
 		{
@@ -158,13 +160,13 @@ int main()
 
 				b_count = 0;
 				printf("[root@monolith]# ");
+				fflush(stdout);
 				break;
 			}
 
-			write(0, &data, 1);
+			write(STDOUT_FILENO, &data, 1);
 		}
 	}
 
-	close(bindir);
 	return 0;
 }

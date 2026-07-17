@@ -193,8 +193,7 @@ int open(vnode_t* node, int flags, ventry_t* path)
 		if(context->open_files[i].refcount == 0)
 		{
 			fd = i;
-			context->open_files[i].read_pos = 0;
-			context->open_files[i].write_pos = 0;
+			context->open_files[i].pos = 0;
 			context->open_files[i].inode = node;
 			context->open_files[i].path = path;
 			context->open_files[i].fs_id = fs_id;
@@ -320,8 +319,7 @@ int close(int fd)
 		return cres;
 
 	vnode_put(node);
-	context->open_files[fd].read_pos = 0;
-	context->open_files[fd].write_pos = 0;
+	context->open_files[fd].pos = 0;
 	context->open_files[fd].inode = nullptr;
 
 	if(context->open_files[fd].path)
@@ -332,18 +330,28 @@ int close(int fd)
 	return 0;
 }
 
-ssize_t seek(int fd, ssize_t offset, int flags)
+off_t seek(int fd, off_t offset, int flags)
 {
-	if(context->open_files[fd].inode == nullptr)
-		return -EBADF;
+	auto* file = &context->open_files[fd];
 
-	if(offset < 0)
-		offset = 0;
+	auto mode = file->inode->mode;
+	if(S_ISFIFO(mode) || S_ISSOCK(mode))
+		return -ESPIPE;
 
-	context->open_files[fd].read_pos = offset;
-	context->open_files[fd].write_pos = offset;
+	switch(flags)
+	{
+	case SEEK_SET:
+		file->pos = offset;
+		break;
+	case SEEK_CUR:
+		file->pos += offset;
+		break;
+	case SEEK_END:
+		file->pos = offset + file->inode->size;
+		break;
+	}
 
-	return offset;
+	return file->pos;
 }
 
 int ioctl(int fd, uint64_t op, uint64_t arg)

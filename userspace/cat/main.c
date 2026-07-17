@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,16 +20,16 @@ int main(int argc, const char** argv)
 		fd = open(argv[1], 0);
 		if(fd < 0)
 		{
-			printf("cat: %s: %s", argv[1], strerrordesc_np(-fd));
-			return -1;
+			printf("cat: %s: %s", argv[1], strerror(errno));
+			return 1;
 		}
 
 		struct stat stat_info;
 		int st_r = fstat(fd, &stat_info);
 		if(st_r < 0)
 		{
-			printf("cat: %s: %s", argv[1], strerrordesc_np(-st_r));
-			return -1;
+			printf("cat: %s: %s", argv[1], strerror(errno));
+			return 1;
 		}
 
 		if(S_ISDIR(stat_info.st_mode))
@@ -41,7 +42,7 @@ int main(int argc, const char** argv)
 	ssize_t bytes_read = read(fd, buffer, 0x1000);
 	if(bytes_read < 0)
 	{
-		printf("cat: %s: %s", argc < 2 ? "stdin" : argv[1], strerrordesc_np(-bytes_read));
+		printf("cat: %s: %s", argc < 2 ? "stdin" : argv[1], strerror(errno));
 		goto cleanup;
 	}
 	write(0, buffer, 0x1000);

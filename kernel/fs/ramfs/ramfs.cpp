@@ -38,9 +38,9 @@ ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 	}
 	
 	ramfs_page* spage = list_first_entry(&data->pages, ramfs_page, list_node);
-	if(file->read_pos)
+	if(file->pos)
 	{
-		auto rp = file->read_pos;
+		auto rp = file->pos;
 		while(rp >= 4096)
 		{
 			if(!spage || &spage->list_node == &data->pages)
@@ -54,14 +54,14 @@ ssize_t ramfs_read(file_descriptor_t* file, byte* buffer, size_t length)
 	auto orig_l = length;
 	while(length && spage)
 	{
-		auto page_offset = file->read_pos % 4096;
+		auto page_offset = file->pos % 4096;
 		auto amount = 4096 - page_offset;
 		if(length < amount)
 			amount = length;
 
 		memcpy(buffer, spage->data + page_offset, amount);
 		buffer += amount;
-		file->read_pos += amount;
+		file->pos += amount;
 		length -= amount;
 		spage = list_next_entry(spage, list_node);
 	}
@@ -73,7 +73,7 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 {
 	mutex_lock(file->inode->lock);
 	auto fsize = file->inode->size;
-	auto wr_len = file->write_pos + length;
+	auto wr_len = file->pos + length;
 
 	if(wr_len > fsize)
 	{
@@ -106,9 +106,9 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 
 	ramfs_data* data = (ramfs_data*)file->inode->data;
 	ramfs_page* spage = list_first_entry(&data->pages, ramfs_page, list_node);
-	if(file->write_pos)
+	if(file->pos)
 	{
-		auto wp = file->write_pos;
+		auto wp = file->pos;
 		while(wp >= 4096)
 		{
 			spage = list_next_entry(spage, list_node);
@@ -119,13 +119,16 @@ ssize_t ramfs_write(file_descriptor_t* file, const byte* buffer, size_t length)
 	auto orig_l = length;
 	while(length && spage)
 	{
-		auto page_offset = file->write_pos % 4096;
+		auto page_offset = file->pos % 4096;
 		auto amount = 4096 - page_offset;
 		if(length < amount)
 			amount = length;
 
 		memcpy(spage->data + page_offset, buffer, amount); 
-		file->write_pos += amount;
+		if(page_offset + amount < 4096)
+			memset(spage->data + page_offset + amount, 0, 4096 - (page_offset + amount));
+
+		file->pos += amount;
 		buffer += amount;
 		length -= amount;
 		spage = list_next_entry(spage, list_node);
@@ -153,11 +156,11 @@ static bool ramfs_vm_fault(vm_object* object, virtaddr_t addr, uint32_t flags)
 	
 	if(object->prot & PROT_WRITE && (flags & VM_FAULT_WRITE))
 	{
-		log::debug("write to COW mapped file, reallocating");
 		auto new_page = pmm_allocate();
 		mmu_map(space->mmu_root, new_page, addr, object->prot, VM_FLAG_OWNER);
 		mmu_invalidate(space->mmu_root, addr, 0x1000);
 		memcpy((void*)addr, spage->data, 0x1000);
+
 		space->resident_file++;
 
 		return true;
@@ -167,6 +170,10 @@ static bool ramfs_vm_fault(vm_object* object, virtaddr_t addr, uint32_t flags)
 		uint32_t prot = object->prot & (~PROT_WRITE);
 		mmu_map(space->mmu_root, (physaddr_t)spage->data - VM_DMAP_BASE, addr, prot, 0);
 		return true;
+	}
+	else
+	{
+		log::debug("unhandled VM fault on {:#x} mapped to {} + {:#x}", addr, object->file->path->name, object->offset + (addr - object->base));
 	}
 
 	return false;

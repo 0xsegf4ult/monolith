@@ -16,6 +16,7 @@ enum class syscall_id : uint64_t
 	CLOSE,
 	READ,
 	WRITE,
+	SEEK,
 	SPAWN,
 	EXIT,
 	WAITPID,

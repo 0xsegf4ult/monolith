@@ -79,10 +79,13 @@ virtaddr_t elf_exec(int binfd, task_t* task)
 
 		if(phdr->p_memsz > phdr->p_filesz)
 		{
-			auto file_end_addr = phdr->p_vaddr + phdr->p_filesz;
-			auto mem_end_addr = phdr->p_vaddr + phdr->p_memsz;
+			auto file_end_addr = map_vaddr + align_rem + phdr->p_filesz;
+			auto mem_end_addr = map_vaddr + align_rem + phdr->p_memsz;
 
 			auto anon_map_start = align_up(file_end_addr, ARCH_PAGE_SIZE);
+
+			memset((void*)file_end_addr, 0, anon_map_start - file_end_addr);
+
 			auto anon_map_end = align_up(mem_end_addr, ARCH_PAGE_SIZE);
 
 			vm_space_map(task->current_vm_space,
@@ -96,15 +99,12 @@ virtaddr_t elf_exec(int binfd, task_t* task)
 		phdr++;
 	}
 	
-	//log::debug("setting up ELF SYSVABI stack from {:#x}", task->rsp);
 
 	auto* argv_pointers = (uintptr_t*)kmalloc(sizeof(uintptr_t) * task->argc);
 	auto* envp_pointers = (uintptr_t*)kmalloc(sizeof(uintptr_t) * task->envc);
 
-	//log::debug("envp[{}]: ", task->envc);
 	for(int i = 0; i < task->envc; i++)
 	{
-	//	log::debug("copying string {}", task->envp[i]);
 		auto str_len = string_length(task->envp[i]);
 		for(ssize_t j = str_len; j >= 0; j--)
 		{
@@ -115,10 +115,8 @@ virtaddr_t elf_exec(int binfd, task_t* task)
 		envp_pointers[i] = task->rsp;
 	}
 
-	//log::debug("argv[{}]: ", task->argc);
 	for(int i = 0; i < task->argc; i++)
 	{
-		//log::debug("copying string {}", task->argv[i]);
 		auto str_len = string_length(task->argv[i]);
 		for(ssize_t j = str_len; j >= 0; j--)
 		{
@@ -128,11 +126,9 @@ virtaddr_t elf_exec(int binfd, task_t* task)
 		argv_pointers[i] = task->rsp;
 	}
 
-//	log::debug("stack after strings {:#x} -> {:#x}", task->rsp, align_down(task->rsp, 16));
 	task->rsp = align_down(task->rsp, 16);
 
 	auto align_check = task->rsp - (11 * 2 * sizeof(uintptr_t)) - ((task->envc + 1) * sizeof(uintptr_t)) - ((task->argc + 1) * sizeof(uintptr_t)) - sizeof(uintptr_t);
-//	log::debug("entry_stack would be {:#x}", align_check);
 	if(align_check % 16)
 	{
 		task->rsp -= sizeof(uintptr_t);
@@ -215,7 +211,6 @@ virtaddr_t elf_exec(int binfd, task_t* task)
         // argc
         task->rsp -= sizeof(uintptr_t);
         *(int*)task->rsp = task->argc;
-//	log::debug("entry_stack now is {:#x}", task->rsp);
 
 	kfree(envp_pointers);
 	kfree(argv_pointers);
