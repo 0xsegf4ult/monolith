@@ -1,74 +1,17 @@
-add_executable(vmmonolith)
+set(KERNEL_CFLAGS -ffreestanding -nostdlib -nodefaultlibs)
+set(KERNEL_LDFLAGS -nostdlib -nodefaultlibs)
+set(KERNEL_SOURCES
+	libk/string.c
+       	libk/vsprintf.c
+	klog.c
+	panic.c
+)
 
-target_compile_options(vmmonolith PRIVATE -target x86_64-none-elf -ffreestanding -fno-rtti -fno-exceptions -mcmodel=kernel -mno-red-zone -mgeneral-regs-only -nostdlib -nostdlib++ -nodefaultlibs -fPIC)
-target_link_options(vmmonolith PRIVATE -T ${CMAKE_CURRENT_LIST_DIR}/arch/x86_64/linker.ld -fuse-ld=lld -nostdlib -nostdlib++ -nodefaultlibs)
-target_include_directories(vmmonolith PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_sources(vmmonolith PRIVATE
-	arch/x86_64/acpi.cpp
-	arch/x86_64/arch.S
-	arch/x86_64/boot.cpp
-	arch/x86_64/context.S
-	arch/x86_64/context.cpp
-	arch/x86_64/gdt.cpp
-	arch/x86_64/interrupts.cpp
-	arch/x86_64/isr_stubs.S
-	arch/x86_64/ioapic.cpp
-	arch/x86_64/lapic.cpp
-	arch/x86_64/mmu.cpp
-	arch/x86_64/pit.cpp
-	arch/x86_64/serial.cpp
-	arch/x86_64/smp.cpp
-	arch/x86_64/smpboot.S
-	dev/block/block.cpp
-	dev/block/disk.cpp
-	dev/block/partition.cpp
-	dev/character.cpp
-	dev/console.cpp
-	dev/efifb.cpp
-	dev/efifb_font.cpp
-	dev/net/e1000/e1000.cpp
-	dev/nvme/nvme.cpp
-	dev/pcie.cpp
-	dev/ps2.cpp
-	dev/pseudo.cpp
-	dev/rtc.cpp
-	dev/tty.cpp
-	fs/fat/fatfs.cpp
-	fs/procfs/procfs.cpp
-	fs/ramfs/ramfs.cpp
-	fs/generic.cpp
-	fs/filesystem.cpp
-	fs/lookup.cpp
-	fs/super.cpp
-	fs/vfs.cpp
-	fs/ventry.cpp
-	fs/vnode.cpp
-	mm/memory_map.cpp
-	mm/pmm.cpp
-	mm/slab.cpp
-	mm/vmm.cpp
-	net/arp.cpp
-	net/ether.cpp
-	net/ipv4/ipv4.cpp
-	net/ipv4/raw.cpp
-	net/ipv4/route.cpp
-	net/ipv4/udp.cpp
-	net/netdev.cpp
-	net/socket.cpp
-	sys/binfmt/exec.cpp
-	sys/binfmt/elf.cpp
-	sys/mutex.cpp
-	sys/task.cpp
-	sys/time.cpp
-	sys/timer.cpp
-	sys/scheduler.cpp
-	sys/signal.cpp
-	sys/syscall.cpp
-	sys/waitqueue.cpp
-	init.cpp
-	initramfs.cpp
-	klog.cpp
-	kstd.cpp
-	panic.cpp
-	stackchk.cpp)
-set_target_properties(vmmonolith PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/boot")
+add_subdirectory("arch/${BUILD_ARCH}")
+
+add_executable(kernel)
+target_compile_options(kernel PRIVATE ${KERNEL_CFLAGS})
+target_link_options(kernel PRIVATE ${KERNEL_LDFLAGS})
+target_include_directories(kernel PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include "${CMAKE_CURRENT_LIST_DIR}/include/arch/${BUILD_ARCH}")
+target_sources(kernel PRIVATE ${KERNEL_SOURCES})
+set_target_properties(kernel PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/sysroot/boot")

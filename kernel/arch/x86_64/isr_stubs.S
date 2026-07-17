@@ -1,3 +1,5 @@
+.code64
+
 .macro push_all_registers
         pushq %rax
         pushq %rbx
@@ -38,13 +40,13 @@
         .align 16
         pushq $0
         pushq $\intr
-        jmp __common_exception
+        jmp __common_interrupt
 .endm
 
 .macro interrupt_err intr
         .align 16
         pushq $\intr
-        jmp __common_exception
+        jmp __common_interrupt
 .endm
 
 .macro isr_insert intr
@@ -56,29 +58,6 @@
 .endm
 
 .section .text
-
-.extern exception_handler
-__common_exception:
-	cmpq $0x8, 24(%rsp)
-	je ex_ring0_enter
-	swapgs
-ex_ring0_enter:
-	push_all_registers
-
-	cld
-
-	movq %rsp, %rdi
-	movq %rsp, %rbp
-	call exception_handler
-
-	pop_all_registers
-
-	cmpq $0x8, 24(%rsp)
-	je ex_ring0_exit
-	swapgs
-ex_ring0_exit:
-	addq $16, %rsp
-	iretq
 
 .extern interrupt_handler
 __common_interrupt:
@@ -101,6 +80,7 @@ irq_ring0_enter:
 irq_ring0_exit:
 	addq $16, %rsp
 	iretq
+	int3
 
 .global isr_stubs
 .align 16

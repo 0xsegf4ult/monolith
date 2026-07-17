@@ -43,24 +43,3 @@ enable_xsave:
 	bts $1, %eax # XCR0_SSE
 	xsetbv
 	ret
-
-.global arch_disable_interrupts
-.type arch_disable_interrupts, @function
-arch_disable_interrupts:
-	pushq %rbp
-	movq %rsp, %rbp
-	pushfq
-	popq %rax
-	cli
-	popq %rbp
-	ret
-
-.global arch_restore_flags
-.type arch_restore_flags, @function
-arch_restore_flags:
-	pushq %rbp
-	movq %rsp, %rbp
-	pushq %rdi
-	popfq
-	popq %rbp
-	ret

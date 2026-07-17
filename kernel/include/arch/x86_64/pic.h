@@ -1,0 +1,37 @@
+#pragma once
+
+#include <stdint.h>
+#include <io.h>
+
+enum PIC_PORT : uint16_t
+{
+	PIC_COMMAND_MASTER = 0x20,
+	PIC_DATA_MASTER = 0x21,
+	PIC_COMMAND_SLAVE = 0xa0,
+	PIC_DATA_SLAVE = 0xa1
+};
+
+enum PIC_CMD : uint8_t
+{
+	PIC_ICW1 = 0x11,
+	PIC_ICW2_MASTER = 0x20,
+	PIC_ICW2_SLAVE = 0x28,
+	PIC_ICW3_MASTER = 0x2,
+	PIC_ICW3_SLAVE = 0x4,
+	PIC_ICW4_8086 = 0x1
+};
+
+static inline void pic_disable()
+{
+	outb(PIC_ICW1, PIC_COMMAND_MASTER);
+	outb(PIC_ICW1, PIC_COMMAND_SLAVE);
+	outb(PIC_ICW2_MASTER, PIC_DATA_MASTER);
+	outb(PIC_ICW2_SLAVE, PIC_DATA_SLAVE);
+	outb(PIC_ICW3_MASTER, PIC_DATA_MASTER);
+	outb(PIC_ICW3_SLAVE, PIC_DATA_SLAVE);
+	outb(PIC_ICW4_8086, PIC_DATA_MASTER);
+	outb(PIC_ICW4_8086, PIC_DATA_SLAVE);
+
+	outb(0xFF, PIC_DATA_MASTER);
+	outb(0xFF, PIC_DATA_SLAVE);
+}

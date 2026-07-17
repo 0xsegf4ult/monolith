@@ -1,0 +1,2 @@
+# <fs> <dir> <type>
+/dev/nvme0n1p1 /boot fatfs
