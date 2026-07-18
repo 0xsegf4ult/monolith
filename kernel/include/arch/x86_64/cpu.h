@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <gdt.h>
 
-typedef struct task_t task_t;
-typedef struct page_table page_table;
+struct task;
+struct page_table;
 
 enum MSR_REGISTERS : uint64_t
 {
@@ -20,12 +20,14 @@ typedef struct cpu
 	uint32_t id;
 	uint32_t lapic_id;
 
-	page_table* cur_pgt;
-	task_t* current_task;
+	struct page_table* cur_pgt;
+	struct task* current_task;
 
 	alignas(16) gdt_t gdt;
 	tss_t tss;
 } cpu_t;
+
+void cpu_set_pagetable(struct page_table* pgt);
 
 static inline uint64_t rdmsr(uint64_t msr)
 {
@@ -41,8 +43,13 @@ static inline void wrmsr(uint64_t msr, uint64_t value)
 	asm volatile("wrmsr" :: "c"(msr), "a"(low), "d"(high) : "memory");
 }
 
-static inline void native_halt_cpu()
+static inline void native_cpu_halt()
 {
 	for(;;)
 		asm volatile("cli; hlt");
+}
+
+static inline void native_cpu_relax()
+{
+	asm volatile("pause" ::: "memory");
 }

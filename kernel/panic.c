@@ -16,7 +16,7 @@ void panic_prepare()
 
 void panic_complete()
 {
-	native_halt_cpu();
+	native_cpu_halt();
 }
 
 static char panic_buf[1024];

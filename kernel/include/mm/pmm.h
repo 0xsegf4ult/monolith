@@ -1,15 +1,10 @@
 #pragma once
 
-#include <types.hpp>
-
-namespace mm
-{
+#include <types.h>
 
 struct memory_map;
 
-}
-
-void pmm_initialize(mm::memory_map& memmap);
+void pmm_init(struct memory_map* memmap);
 
 physaddr_t pmm_allocate();
 void pmm_free(physaddr_t addr);

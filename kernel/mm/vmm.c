@@ -1,79 +1,80 @@
-#include <mm/vmm.hpp>
-#include <mm/vm_space.hpp>
-#include <mm/memory_map.hpp>
-#include <mm/slab.hpp>
-#include <mm/pmm.hpp>
+#include <mm/vmm.h>
+#include <mm/vm_space.h>
+#include <mm/memory_map.h>
+#include <mm/slab.h>
+#include <mm/pmm.h>
+/*
+#include <fs/vfs.h>
+#include <fs/procfs/procfs.h>
+*/
 
-#include <fs/vfs.hpp>
-#include <fs/procfs/procfs.hpp>
+#include <libk/list.h>
+#include <libk/string.h>
 
-#include <sys/smp.hpp>
-#include <sys/task.hpp>
+#include <sys/smp.h>
+#include <sys/task.h>
 
+#include <cpu.h>
 
-#include <klog.hpp>
-#include <kstd.hpp>
-#include <list.hpp>
-#include <types.hpp>
-#include <panic.hpp>
+#include <config.h>
+#include <klog.h>
+#include <types.h>
+#include <panic.h>
 
-static vm_space* kernel_address_space = nullptr;
+static struct vm_space* kernel_address_space = nullptr;
 static physaddr_t zero_cowmem;
 
-extern "C"
-{
-	byte _text_start;
-	byte _text_end;
-	byte _rodata_start;
-	byte _rodata_end;
-	byte _data_start;
-	byte _bss_end;
-}
+extern byte _text_start;
+extern byte _text_end;
+extern byte _rodata_start;
+extern byte _rodata_end;
+extern byte _data_start;
+extern byte _bss_end;
 
-void vmm_init_kpages(mm::memory_map& memmap, physaddr_t kload_addr)
+void vmm_init_kpages(struct memory_map* memmap, physaddr_t kload_addr)
 {	
-	kernel_address_space = (vm_space*)kmalloc(sizeof(vm_space));
-	list_node_init(kernel_address_space->objects);
+	kernel_address_space = (struct vm_space*)kmalloc(sizeof(struct vm_space));
+	list_node_init(&kernel_address_space->objects);
 	kernel_address_space->start_address = VM_VMALLOC_BASE;
 	kernel_address_space->end_address = VM_KERNEL_BASE;
 
 	kernel_address_space->mmu_root = mmu_new_pgdir();
-	mutex_init(kernel_address_space->lock);
+	mutex_init(&kernel_address_space->lock);
 
 	kernel_address_space->mapped_anon = 0;
 	kernel_address_space->mapped_file = 0;
 	kernel_address_space->resident_anon = 0;
 	kernel_address_space->resident_file = 0;
 
-	auto text_start = align_down(reinterpret_cast<virtaddr_t>(&_text_start), ARCH_PAGE_SIZE);
-	auto text_length = align_up(reinterpret_cast<virtaddr_t>(&_text_end) - reinterpret_cast<virtaddr_t>(&_text_start), ARCH_PAGE_SIZE);
-	auto rodata_start = align_down(reinterpret_cast<virtaddr_t>(&_rodata_start), ARCH_PAGE_SIZE);
-	auto rodata_length = align_up(reinterpret_cast<virtaddr_t>(&_rodata_end) - reinterpret_cast<virtaddr_t>(&_rodata_start), ARCH_PAGE_SIZE);
-	auto databss_start = align_down(reinterpret_cast<virtaddr_t>(&_data_start), ARCH_PAGE_SIZE);
-	auto databss_length = align_up(reinterpret_cast<virtaddr_t>(&_bss_end) - reinterpret_cast<virtaddr_t>(&_data_start), ARCH_PAGE_SIZE);
+	auto text_start = align_down((virtaddr_t)&_text_start, CONFIG_PAGE_SIZE);
+	auto text_length = align_up((virtaddr_t)&_text_end - (virtaddr_t)&_text_start, CONFIG_PAGE_SIZE);
+	auto rodata_start = align_down((virtaddr_t)&_rodata_start, CONFIG_PAGE_SIZE);
+	auto rodata_length = align_up((virtaddr_t)&_rodata_end - (virtaddr_t)&_rodata_start, CONFIG_PAGE_SIZE);
+	auto databss_start = align_down((virtaddr_t)&_data_start, CONFIG_PAGE_SIZE);
+	auto databss_length = align_up((virtaddr_t)&_bss_end - (virtaddr_t)&_data_start, CONFIG_PAGE_SIZE);
 
 	mmu_map_range(kernel_address_space->mmu_root, text_start - VM_KERNEL_BASE + kload_addr, text_start, text_length, PROT_EXEC | PROT_READ, 0);
 	mmu_map_range(kernel_address_space->mmu_root, rodata_start - VM_KERNEL_BASE + kload_addr, rodata_start, rodata_length, PROT_READ, 0);
 	mmu_map_range(kernel_address_space->mmu_root, databss_start - VM_KERNEL_BASE + kload_addr, databss_start, databss_length, PROT_READ | PROT_WRITE, 0);
 
-	for(size_t i = 0; i < memmap.num_regions; i++)
+	for(size_t i = 0; i < memmap->num_regions; i++)
 	{
-		const auto& region = memmap.regions[i];
+		mem_region_t* region =& memmap->regions[i];
 
-		if(region.type != mm::mem_region::RegionType::Usable && region.type != mm::mem_region::RegionType::Allocated && region.type != mm::mem_region::RegionType::ACPI_Table)
+		if(region->type != MEM_REGION_USABLE && region->type != MEM_REGION_ALLOCATED && region->type != MEM_REGION_ACPI_TABLES)
 			continue;
 
-		auto begin = align_down(region.begin, ARCH_PAGE_SIZE);
-		auto length = align_up(region.end, ARCH_PAGE_SIZE) - begin;
+		virtaddr_t begin = align_down(region->begin, CONFIG_PAGE_SIZE);
+		virtaddr_t length = align_up(region->end, CONFIG_PAGE_SIZE) - begin;
 		mmu_map_range(kernel_address_space->mmu_root, begin, begin + VM_DMAP_BASE, length, PROT_READ | PROT_WRITE, 0);
 	}
 
-	smp_set_current_pagetable(kernel_address_space->mmu_root);
+	cpu_set_pagetable(kernel_address_space->mmu_root);
 
 	zero_cowmem = pmm_allocate();
-	memset((void*)(zero_cowmem + VM_DMAP_BASE), 0, ARCH_PAGE_SIZE);
+	memset((void*)(zero_cowmem + VM_DMAP_BASE), 0, CONFIG_PAGE_SIZE);
 }
-
+/*
 static ssize_t vmstat_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 {
 	format_to(string_span{(char*)buffer, length}, "free_pages: {}\nused_pages: {}", pmm_free_pages_count(), pmm_used_pages_count());
@@ -89,10 +90,10 @@ void vmm_late_init()
 {
 	procfs_create("vmstat", &vmstat_fops);
 }
-
-static bool space_check_range(vm_space* space, vm_object* range)
+*/
+static bool space_check_range(struct vm_space* space, struct vm_object* range)
 {
-	vm_object* cur;
+	struct vm_object* cur;
 
 	if(range->base < space->start_address)
 		return false;
@@ -100,14 +101,14 @@ static bool space_check_range(vm_space* space, vm_object* range)
 	if(range->base + range->length >= space->end_address)
 		return false;
 
-	mutex_lock(space->lock);
-	list_for_each_entry(cur, space->objects, list_node)
+	mutex_lock(&space->lock);
+	list_for_each_entry(cur, &space->objects, list_node)
 	{
 		if(cur->base <= range->base)
 		{
 			if(cur->base + cur->length > range->base)
 			{
-				mutex_unlock(space->lock);
+				mutex_unlock(&space->lock);
 				return false;
 			}
 		}
@@ -115,7 +116,7 @@ static bool space_check_range(vm_space* space, vm_object* range)
 		{
 			if(cur->base < range->base + range->length)
 			{
-				mutex_unlock(space->lock);
+				mutex_unlock(&space->lock);
 				return false;
 			}
 
@@ -123,30 +124,30 @@ static bool space_check_range(vm_space* space, vm_object* range)
 		}
 	}
 
-	if(list_empty(space->objects))
-		list_add(space->objects, range->list_node);
+	if(list_empty(&space->objects))
+		list_add(&space->objects, &range->list_node);
 	else
-		list_add_tail(cur->list_node, range->list_node);
+		list_add_tail(&cur->list_node, &range->list_node);
 
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 	return true;
 }
 
-static bool space_find_free_range(vm_space* space, vm_object* range)
+static bool space_find_free_range(struct vm_space* space, struct vm_object* range)
 {
-	mutex_lock(space->lock);
+	mutex_lock(&space->lock);
 
 	virtaddr_t alloc_base = 0;
-	vm_object* prev = nullptr;
+	struct vm_object* prev = nullptr;
 
-	if(list_empty(space->objects))
+	if(list_empty(&space->objects))
 	{
 		alloc_base = space->start_address;
 	}
 	else
 	{
-		vm_object* cur;
-		list_for_each_entry(cur, space->objects, list_node)
+		struct vm_object* cur;
+		list_for_each_entry(cur, &space->objects, list_node)
 		{
 			auto prev_end = prev ? prev->base + prev->length : space->start_address;
 			if(prev_end + range->length <= cur->base)
@@ -164,21 +165,21 @@ static bool space_find_free_range(vm_space* space, vm_object* range)
 
 	if(!alloc_base)
 	{
-		mutex_unlock(space->lock);
+		mutex_unlock(&space->lock);
 		return false;
 	}
 
 	range->base = alloc_base;
 	if(!prev)
-		list_add(space->objects, range->list_node);
+		list_add(&space->objects, &range->list_node);
 	else
-		list_add(prev->list_node, range->list_node);	
+		list_add(&prev->list_node, &range->list_node);	
 
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 	return true;
 }
 
-static void vm_free_range(vm_space* space, vm_object* range)
+static void vm_free_range(struct vm_space* space, struct vm_object* range)
 {
 	size_t len = range->length;
 	size_t addr = range->base;
@@ -189,7 +190,7 @@ static void vm_free_range(vm_space* space, vm_object* range)
 			// delete private copies of COW pages
 			if(range->prot & PROT_WRITE)
 			{
-				auto mapping = vm_space_get_mapping(space, addr);
+				vm_mapping mapping = vm_space_get_mapping(space, addr);
 				if(mapping.base && mapping.flags & VM_FLAG_OWNER)
 				{
 					pmm_free(mapping.base);
@@ -200,7 +201,7 @@ static void vm_free_range(vm_space* space, vm_object* range)
 		}
 		else if(!(range->flags & VM_FLAG_DEVICE))
 		{
-			auto mapping = vm_space_get_mapping(space, addr);
+			vm_mapping mapping = vm_space_get_mapping(space, addr);
 			if(mapping.base && mapping.base != zero_cowmem && mapping.flags & VM_FLAG_OWNER)
 			{
 				pmm_free(mapping.base);
@@ -209,16 +210,16 @@ static void vm_free_range(vm_space* space, vm_object* range)
 		
 		mmu_unmap(space->mmu_root, addr);
 
-		addr += ARCH_PAGE_SIZE;
-		len -= (len < ARCH_PAGE_SIZE) ? len : ARCH_PAGE_SIZE;
+		addr += CONFIG_PAGE_SIZE;
+		len -= (len < CONFIG_PAGE_SIZE) ? len : CONFIG_PAGE_SIZE;
 	}
 	mmu_invalidate(space->mmu_root, range->base, range->length);
 	kfree(range);
 }
 
-virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
+virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 {
-	size_t length = align_up(info.length, ARCH_PAGE_SIZE);
+	size_t length = align_up(info.length, CONFIG_PAGE_SIZE);
 	
 	const bool is_device = info.flags & VM_FLAG_DEVICE;
 	const bool is_file = info.flags & VM_FLAG_FILE;
@@ -235,7 +236,7 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 	
 	uint32_t prot = info.prot;
 	uint32_t vmflags = info.flags;
-	const bool prefault = vmflags & VM_FLAG_ALLOCATED; 
+	const bool prefault = vmflags & VM_FLAG_ALLOCATE; 
 	const bool read_access = prot & PROT_READ;
 	const bool write_access = prot & PROT_WRITE;
 	
@@ -243,25 +244,25 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 	if(cow)
 		vmflags |= VM_FLAG_COW;
 	
-	vm_object* range = (vm_object*)kmalloc(sizeof(vm_object));
-	range->base = align_down(info.virt_base, ARCH_PAGE_SIZE);
+	struct vm_object* range = (struct vm_object*)kmalloc(sizeof(struct vm_object));
+	range->base = align_down(info.virt_base, CONFIG_PAGE_SIZE);
 	range->length = length;
 	range->prot = info.prot;
 	range->flags = vmflags;
-	
+	/*
 	if(is_file)
 	{
-		range->file = &vfs::get_open_fd(info.fd);
+		range->file = vfs_get_open_fd(info.fd);
 		range->file->refcount++;
 		range->offset = info.offset;
 	}
-	else
+	else*/
 	{
 		range->file = nullptr;
 	}
 
 	range->space = space;
-	list_node_init(range->list_node);
+	list_node_init(&range->list_node);
 
 	bool valid = false;
 
@@ -280,11 +281,11 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 		return 0;
 	}
 
-	mutex_lock(space->lock);
+	mutex_lock(&space->lock);
 	if(is_file)
 	{
 		space->mapped_file += (length / 0x1000);
-		range->file->inode->fops->mmap(range->file, range);
+		//range->file->inode->fops->mmap(range->file, range);
 	}
 	else
 	{
@@ -295,7 +296,7 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 		if(cow)	
 			prot &= (~PROT_WRITE);
 
-		physaddr_t phys = is_device ? align_down(info.phys_base, ARCH_PAGE_SIZE) : zero_cowmem;
+		physaddr_t phys = is_device ? align_down(info.phys_base, CONFIG_PAGE_SIZE) : zero_cowmem;
 		uint32_t mmuflags = 0;
 		virtaddr_t alloc_base = range->base;
 		while(length)
@@ -316,80 +317,80 @@ virtaddr_t vm_space_map(vm_space* space, const vm_mapping_info& info)
 				mmu_map(space->mmu_root, phys, alloc_base, prot, mmuflags);
 			
 			if(is_device)
-				phys += ARCH_PAGE_SIZE;
+				phys += CONFIG_PAGE_SIZE;
 			
 			space->mapped_anon++;
 
-			alloc_base += ARCH_PAGE_SIZE;
-			length -= (length < ARCH_PAGE_SIZE) ? length : ARCH_PAGE_SIZE;
+			alloc_base += CONFIG_PAGE_SIZE;
+			length -= (length < CONFIG_PAGE_SIZE) ? length : CONFIG_PAGE_SIZE;
 		}
 	}
 
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 	return range->base;
 }
 
-void vm_space_unmap(vm_space* space, virtaddr_t addr, size_t length)
+void vm_space_unmap(struct vm_space* space, virtaddr_t addr, size_t length)
 {
-	mutex_lock(space->lock);
-	vm_object* tmp;
-	vm_object* cur;
+	mutex_lock(&space->lock);
+	struct vm_object* tmp;
+	struct vm_object* cur;
 
-	list_for_each_entry_safe(cur, tmp, space->objects, list_node)
+	list_for_each_entry_safe(cur, tmp, &space->objects, list_node)
 	{
 		if(cur->base == addr)
 		{
 			if(length && length != cur->length)
-				log::warn("vm_space_unmap: partial unmap unsupported!");
+				klog("vm_space_unmap: partial unmap unsupported!\n");
 
-			list_del(cur->list_node);
+			list_del(&cur->list_node);
 
 			vm_free_range(space, cur);
 			goto finish;
 		}
 	}
 
-	log::warn("vm_space_unmap: invalid range");
+	klog("vm_space_unmap: invalid range\n");
 finish:
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 }
 
-vm_object* vm_space_get_range(vm_space* space, virtaddr_t base)
+struct vm_object* vm_space_get_range(struct vm_space* space, virtaddr_t base)
 {
-	vm_object* cur;
-	mutex_lock(space->lock);
-	list_for_each_entry(cur, space->objects, list_node)
+	struct vm_object* cur;
+	mutex_lock(&space->lock);
+	list_for_each_entry(cur, &space->objects, list_node)
 	{
 		if(cur->base <= base && cur->base + cur->length > base)
 		{
-			mutex_unlock(space->lock);
+			mutex_unlock(&space->lock);
 			return cur;
 		}
 	}
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 	return nullptr;
 }
 
-vm_mapping vm_space_get_mapping(vm_space* space, virtaddr_t base)
+vm_mapping vm_space_get_mapping(struct vm_space* space, virtaddr_t base)
 {
 	return mmu_get_phys(space->mmu_root, base);
 }
 
-vm_space* vm_get_kernel_space()
+struct vm_space* vm_get_kernel_space()
 {
 	return kernel_address_space;
 }
 
-vm_space* vm_userspace_new()
+struct vm_space* vm_userspace_new()
 {
-	auto* space = (vm_space*)kmalloc(sizeof(vm_space));
-	list_node_init(space->objects);
+	struct vm_space* space = (struct vm_space*)kmalloc(sizeof(struct vm_space));
+	list_node_init(&space->objects);
 	space->start_address = VM_USERSPACE_BASE;
 	space->end_address = VM_USERSPACE_END;
 	
 	space->mmu_root = mmu_new_pgdir();
 	mmu_clone(kernel_address_space->mmu_root, space->mmu_root, PROT_NONE);
-	mutex_init(space->lock);
+	mutex_init(&space->lock);
 
 	space->mapped_anon = 0;
 	space->mapped_file = 0;
@@ -399,19 +400,19 @@ vm_space* vm_userspace_new()
 	return space;
 }
 
-void vm_space_destroy(vm_space* space)
+void vm_space_destroy(struct vm_space* space)
 {
-	mutex_lock(space->lock);
+	mutex_lock(&space->lock);
 	
-	vm_object* tmp;
-	vm_object* cur;
-	list_for_each_entry_safe(cur, tmp, space->objects, list_node)
+	struct vm_object* tmp;
+	struct vm_object* cur;
+	list_for_each_entry_safe(cur, tmp, &space->objects, list_node)
 	{
 		vm_free_range(space, cur);
 	}	
 
 	mmu_destroy(space->mmu_root);
-	mutex_unlock(space->lock);
+	mutex_unlock(&space->lock);
 	kfree(space);
 }
 
@@ -420,12 +421,12 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	if(addr < VM_USERSPACE_BASE || addr > VM_USERSPACE_END)
 		return false;
 
-	auto* task = smp_current_task();
+	struct task* task = smp_current_task();
 	if(!task)
 		return false;
 
-	vm_space* space = task->current_vm_space;
-	vm_object* range = vm_space_get_range(space, addr);
+	struct vm_space* space = task->current_vm_space;
+	struct vm_object* range = vm_space_get_range(space, addr);
 	if(!range)
 		return false;
 
@@ -436,7 +437,7 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	if((flags & VM_FAULT_FETCH) && !(range->prot & PROT_EXEC))
 		return false;
 
-	auto mapping = vm_space_get_mapping(space, addr);
+	vm_mapping mapping = vm_space_get_mapping(space, addr);
 
 	bool present = flags & VM_FAULT_PRESENT;
 	if(present)
@@ -450,19 +451,19 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 
 			if(mapping.base == zero_cowmem) 
 			{
-				memset((void*)(new_phys + VM_DMAP_BASE), 0, ARCH_PAGE_SIZE);
+				memset((void*)(new_phys + VM_DMAP_BASE), 0, CONFIG_PAGE_SIZE);
 			}
 		       	else
 			{
-				memcpy((void*)(new_phys + VM_DMAP_BASE), (void*)(mapping.base + VM_DMAP_BASE), ARCH_PAGE_SIZE);
+				memcpy((void*)(new_phys + VM_DMAP_BASE), (void*)(mapping.base + VM_DMAP_BASE), CONFIG_PAGE_SIZE);
 				//FIXME: need some mechanism to release orphaned COW pages	
 			}
 
-			mutex_lock(space->lock);
+			mutex_lock(&space->lock);
 			mmu_map(space->mmu_root, new_phys, addr, range->prot | PROT_WRITE, range->flags | VM_FLAG_OWNER);
-			mmu_invalidate(space->mmu_root, addr, ARCH_PAGE_SIZE);
+			mmu_invalidate(space->mmu_root, addr, CONFIG_PAGE_SIZE);
 			space->resident_anon++;
-			mutex_unlock(space->lock);
+			mutex_unlock(&space->lock);
 			return true;	
 		}
 
@@ -472,11 +473,11 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	{
 		if(range->flags & VM_FLAG_FILE)
 		{
-			if(range->vm_ops && range->vm_ops->fault)
+		/*	if(range->vm_ops && range->vm_ops->fault)
 			{
 				if(range->vm_ops->fault(range, addr, flags))
 					return true;
-			}
+			}*/
 		}
 
 		return false;

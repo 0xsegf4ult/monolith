@@ -1,28 +1,26 @@
 #pragma once
 
-#include <types.hpp>
+#include <types.h>
 
-namespace acpi
-{
-
-struct __attribute__((packed)) rsdp_v1
+typedef struct __attribute__((packed))
 {
         char signature[8];
         uint8_t checksum;
         char oemid[6];
         uint8_t revision;
         uint32_t rsdt_address;
-};
+} rsdp_v1;
 
-struct __attribute__((packed)) rsdp_v2 : public rsdp_v1
+typedef struct __attribute__((packed))
 {
+	rsdp_v1 rsdp;
         uint32_t length;
         uint64_t xsdt_address;
         uint8_t extended_checksum;
         uint8_t reserved[3];
-};
+} rsdp_v2;
 
-struct __attribute__((packed)) sdt_header
+typedef struct __attribute__((packed)) 
 {
         char signature[4];
         uint32_t length;
@@ -33,95 +31,104 @@ struct __attribute__((packed)) sdt_header
         uint32_t oem_revision;
         uint32_t creator_id;
         uint32_t creator_version;
-};
+} sdt_header;
 
-struct __attribute__((packed)) madt  : public sdt_header
+typedef struct __attribute__((packed))
 {
+	sdt_header header;
         uint32_t lapic_address;
         uint32_t flags;
+} madt;
+
+enum madt_entry_type : uint8_t
+{
+        MADT_LAPIC,
+        MADT_IOAPIC,
+        MADT_IOAPIC_ISO,
+        MADT_IOAPIC_NMI_SOURCE,
+        MADT_LAPIC_NMI,
+        MADT_LAPIC_AO,
+        MADT_LOCAL_X2APIC = 9
 };
 
-enum class MADTEntryType : uint8_t
+typedef struct __attribute__((packed))
 {
-        LAPIC,
-        IOAPIC,
-        IOAPIC_ISO,
-        IOAPIC_NMI_SOURCE,
-        LAPIC_NMI,
-        LAPIC_AO,
-        LOCAL_X2APIC = 9
-};
+        uint8_t type;
+        uint8_t length;
+} madt_entry;
 
-struct __attribute__((packed)) madt_entry
+typedef struct __attribute__((packed))
 {
-        MADTEntryType entry_type;
-        uint8_t entry_length;
-};
-
-struct __attribute__((packed)) madt_lapic_entry : public madt_entry
-{
+	madt_entry header;
         uint8_t acpi_cpuid;
         uint8_t apic_id;
         uint32_t flags;
-};
+} madt_lapic_entry;
 
-struct __attribute__((packed)) madt_ioapic_entry : public madt_entry
+typedef struct __attribute__((packed))
 {
+	madt_entry header;
         uint8_t ioapic_id;
         uint8_t reserved;
         uint32_t ioapic_address;
         uint32_t gsi_base;
-};
+} madt_ioapic_entry;
 
-struct __attribute__((packed)) madt_ioapic_iso_entry : public madt_entry
+typedef struct __attribute__((packed))
 {
+	madt_entry header;
         uint8_t bus_source;
         uint8_t irq_source;
         uint32_t gsi;
         uint16_t flags;
-};
+} madt_ioapic_iso_entry;
 
-struct __attribute__((packed)) madt_ioapic_nmi_source_entry : public madt_entry
+typedef struct __attribute__((packed))
 {
+	madt_entry header;
         uint8_t nmi_source;
         uint8_t reserved;
         uint16_t flags;
         uint32_t gsi;
-};
+} madt_ioapic_nmi_source_entry;
 
-struct __attribute__((packed)) madt_lapic_nmi_entry : public madt_entry
+typedef struct __attribute__((packed))
 {
+	madt_entry header;
         uint8_t acpi_cpuid;
         uint16_t flags;
         uint8_t lint;
-};
+} madt_lapic_nmi_entry;
 
-struct __attribute__((packed)) madt_lapic_override_entry : public madt_entry
+typedef struct __attribute__((packed))
 {
+	madt_entry header;
         uint16_t reserved;
         uint64_t lapic_address64;
-};
+} madt_lapic_override_entry;
 
-struct __attribute__((packed)) madt_x2apic_entry : public madt_entry
+typedef struct __attribute__((packed)) 
 {
+	madt_entry header;
         uint16_t reserved;
         uint32_t x2apic_id;
         uint32_t flags;
         uint32_t acpi_cpuid;
-};
+} madt_x2apic_entry;
 
-struct __attribute__((packed)) acpi_gas
+typedef struct __attribute__((packed))
 {
         uint8_t address_space;
         uint8_t bit_width;
         uint8_t bit_offset;
         uint8_t access_size;
         uint64_t address;
-};
+} acpi_gas;
 
-struct __attribute__((packed)) fadt : public sdt_header
+typedef struct __attribute__((packed))
 {
-        uint32_t firmware_ctrl;
+        sdt_header header;
+	uint32_t firmware_ctrl;
         uint32_t dsdt;
 
         uint8_t reserved;
@@ -180,24 +187,27 @@ struct __attribute__((packed)) fadt : public sdt_header
         acpi_gas x_pm_timer_block;
         acpi_gas x_gpe0_block;
         acpi_gas x_gpe1_block;
-};
+} fadt;
 
-struct __attribute__((packed)) mcfg_ecam
+typedef struct __attribute__((packed))
 {
+	sdt_header header;
 	uint64_t base_address;
 	uint16_t segment_group;
 	uint8_t start_bus;
 	uint8_t end_bus;
 	char reserved[4];
-};
+} mcfg_ecam;
 
-struct __attribute__((packed)) mcfg : public sdt_header
+typedef struct __attribute__((packed)) 
 {
+	sdt_header header;
 	char reserved[8];
-};
+} mcfg;
 
-struct __attribute__((packed)) hpet : public sdt_header
+typedef struct __attribute__((packed))
 {
+	sdt_header header;
 	uint8_t hw_rev_id;
 	uint8_t comparator_count : 5;
 	uint8_t counter_size : 1;
@@ -208,19 +218,17 @@ struct __attribute__((packed)) hpet : public sdt_header
 	uint8_t hpet_number;
 	uint16_t minimum_tick;
 	uint8_t page_protection;
-};
+} hpet;
 
-}
-
-struct acpi_tables
+typedef struct 
 {
-	const acpi::rsdp_v2* xsdp;
-	const acpi::sdt_header* xsdt;
-	const acpi::fadt* fadt;
-	const acpi::madt* madt;
-	const acpi::mcfg* mcfg;
-	const acpi::hpet* hpet;
-};
+	const rsdp_v2* xsdp;
+	const sdt_header* xsdt;
+	const fadt* fadt;
+	const madt* madt;
+	const mcfg* mcfg;
+	const hpet* hpet;
+} acpi_tables;
 
-void acpi_parse_rsdp(const acpi::rsdp_v1* rsdp);
-acpi_tables& acpi_get_tables();
+void acpi_parse_rsdp(const rsdp_v1* rsdp);
+acpi_tables* acpi_get_tables();

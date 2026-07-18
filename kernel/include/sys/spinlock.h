@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cpu.h>
 #include <irq.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -21,7 +22,7 @@ static inline void spinlock_acquire(spinlock_t* spin)
 	uint16_t ticket = atomic_fetch_add_explicit(&spin->next_ticket, 1, memory_order_relaxed);
 	while(atomic_load_explicit(&spin->now_serving, memory_order_relaxed) != ticket)
 	{
-		asm volatile("pause");
+		native_cpu_relax();
 	}
 	atomic_thread_fence(memory_order_acquire);
 }
