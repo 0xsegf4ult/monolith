@@ -13,12 +13,12 @@
 #include <mm/slab.h>
 #include <mm/vmm.h>
 
+#include <sched/task.h>
+#include <sys/smp.h>
+
 #include <init.h>
 #include <klog.h>
 #include <panic.h>
-#include <sys/smp.h>
-
-#include <sys/timer.h>
 
 #define LIMINE_API_REVISION 3
 #include <limine.h>
@@ -99,5 +99,7 @@ void init()
 	pit_init();
 	lapic_init();
 
+	task_init();
+	smp_init();
 	panic("could not start scheduler");
 }

@@ -11,8 +11,8 @@
 #include <libk/list.h>
 #include <libk/string.h>
 
+#include <sched/task.h>
 #include <sys/smp.h>
-#include <sys/task.h>
 
 #include <cpu.h>
 

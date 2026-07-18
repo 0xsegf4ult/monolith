@@ -1,8 +1,8 @@
 #pragma once
 
-struct task;
-
 #include <sys/spinlock.h>
+
+struct task;
 
 typedef struct mutex
 {

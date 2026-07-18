@@ -7,6 +7,8 @@ set(KERNEL_SOURCES
 	mm/vmm.c
 	libk/string.c
 	libk/vsprintf.c
+	sched/scheduler.c
+	sched/task.c
 	sys/clock.c
 	sys/irq.c
 	sys/mutex.c
@@ -14,6 +16,7 @@ set(KERNEL_SOURCES
 	init.c
 	klog.c
 	panic.c
+	stackchk.c
 )
 
 add_subdirectory("arch/${BUILD_ARCH}")

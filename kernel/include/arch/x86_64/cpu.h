@@ -1,7 +1,8 @@
 #pragma once
 
-#include <stdint.h>
-#include <gdt.h>
+#include <arch/x86_64/gdt.h>
+#include <irq.h>
+#include <types.h>
 
 struct task;
 struct page_table;
@@ -49,7 +50,29 @@ static inline void native_cpu_halt()
 		asm volatile("cli; hlt");
 }
 
+static inline void native_cpu_idle()
+{
+	asm volatile("cli");
+}
+
 static inline void native_cpu_relax()
 {
 	asm volatile("pause" ::: "memory");
 }
+
+void native_set_tls(virtaddr_t base);
+extern void native_context_switch(struct task* prev, struct task* next);
+extern void native_switch_to_usermode(virtaddr_t stack, virtaddr_t entry);
+
+struct cpu_context
+{
+	uint8_t simd[512];
+};
+
+struct cpu_context* cpu_context_new();
+void cpu_context_destroy(struct cpu_context* ctx);
+void cpu_context_save(struct cpu_context* ctx);
+void cpu_context_restore(struct cpu_context* ctx);
+
+void dump_registers(interrupt_frame* frame);
+void stacktrace(virtaddr_t frame);

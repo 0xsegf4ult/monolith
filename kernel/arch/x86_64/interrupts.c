@@ -2,8 +2,8 @@
 #include <arch/x86_64/cpu.h>
 #include <arch/x86_64/mmu.h>
 #include <mm/vmm.h>
+#include <sched/task.h>
 #include <sys/irq.h>
-#include <sys/task.h>
 #include <sys/timer.h>
 #include <sys/smp.h>
 #include <config.h>
@@ -33,6 +33,8 @@ void page_fault_handler(interrupt_frame* frame)
 
 	if(task && task->rsp && frame->rip <=  0x7fffffffffff)
         {
+		dump_registers(frame);
+		stacktrace(frame->rbp);
 		klog("%s[%d]: segfault on cpu%u at %p ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), fault_addr, frame->rip, frame->rsp, frame->error_code);
 		return;
 	}
@@ -41,6 +43,9 @@ void page_fault_handler(interrupt_frame* frame)
 
 	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at %p %u\n", fault_addr, frame->error_code);
 	klog_nolock("CPU: %d PID: %d [%s] %s\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
+
+	dump_registers(frame);
+	stacktrace(frame->rbp);
 
 	panic_complete();
 }
@@ -51,6 +56,8 @@ void gpf_handler(interrupt_frame* frame)
 
 	if(task && task->rsp && frame->rip <= 0x7fffffffffff)
         {
+		dump_registers(frame);
+		stacktrace(frame->rbp);
 		klog("%s[%d]: segfault on cpu%u ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), frame->rip, frame->rsp, frame->error_code);
 		return;
 	}
@@ -60,6 +67,9 @@ void gpf_handler(interrupt_frame* frame)
 	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP %p [%d]\n", frame->rip, frame->error_code);
 	klog_nolock("CPU: %d PID: %d [%s] %s\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
+	dump_registers(frame);
+	stacktrace(frame->rbp);
+	
 	panic_complete();
 }
 
@@ -76,6 +86,8 @@ void exception_handler(interrupt_frame* frame)
 		struct task* task = smp_current_task();
 		if(task && task->rsp && frame->rip <= 0x7fffffffffff)
         	{
+			dump_registers(frame);
+			stacktrace(frame->rbp);
 			klog("%s[%d]: deadlysignal %x (vector %x) on cpu%d ip %p sp %p\n", task->name, task->pid, 0, frame->vector, smp_current_cpu(), frame->rip, frame->rsp);
 			return;
 		}
@@ -85,6 +97,9 @@ void exception_handler(interrupt_frame* frame)
 		klog_nolock("\n\033[31mkernel panic:\033[0m unhandled exception %x\n", frame->vector);
 		klog_nolock("CPU: %d PID: %d [%s] %s\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
+		dump_registers(frame);
+		stacktrace(frame->rbp);
+		
 		panic_complete();
 	}
 }

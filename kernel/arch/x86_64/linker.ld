@@ -35,11 +35,6 @@ SECTIONS
 
 	.rodata :
 	{
-		start_ctors = .;
-		*(.ctors)
-		*(.init_array)
-		end_ctors = .;
-
 		_rodata_start = .;
 		*(.rodata .rodata.*)
 		_rodata_end = .;

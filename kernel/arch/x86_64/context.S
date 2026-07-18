@@ -1,9 +1,9 @@
 .section .text
-.global arch_context_switch
-.type arch_context_switch, @function
+.global native_context_switch
+.type native_context_switch, @function
 
 .extern cpu_switch_task;
-arch_context_switch:
+native_context_switch:
 	pushq %rbp # System V ABI preserved registers
 	pushq %rbx 
 	pushq %r12
@@ -11,7 +11,7 @@ arch_context_switch:
 	pushq %r14
 	pushq %r15
 
-	movq %rsp, 40(%rdi) # next (task_t->rsp0)
+	movq %rsp, 40(%rdi) # next (task->rsp0)
 	movq 40(%rsi), %rsp # last 
 
 	popq %r15
@@ -23,10 +23,10 @@ arch_context_switch:
 
 	jmp cpu_switch_task
 
-.global arch_switch_to_usermode
-.type arch_switch_to_usermode, @function
+.global native_switch_to_usermode
+.type native_switch_to_usermode, @function
 
-arch_switch_to_usermode:
+native_switch_to_usermode:
 	pushq $0x23 # USER_DS | DPL_USER 
 	pushq %rdi # rsp
 	pushq $0x202 # RFLAGS IF | RF

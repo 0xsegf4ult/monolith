@@ -5,8 +5,6 @@
 #include <types.h>
 #include <stdatomic.h>
 
-struct vm_space;
-
 typedef enum task_status_type : uint32_t
 {
 	TASK_RUNNING,
@@ -38,6 +36,9 @@ static inline const char* get_status_name(task_status status)
         }
 }
 
+struct vm_space;
+struct cpu_context;
+
 struct task
 {
 	char name[32];
@@ -47,13 +48,34 @@ struct task
 	virtaddr_t rsp0;
 	virtaddr_t rsp;
 	virtaddr_t rsp0_top;
-	struct vm_space* owner_vm_space;
+	struct vm_space* owned_vm_space;
 	struct vm_space* current_vm_space;
+	struct cpu_context* context;
+	virtaddr_t tls_base;
 
 	pid_t pid;
 	pid_t tgid;
 	pid_t pgid;
 	pid_t sid;
 
+	_Atomic struct task* parent;
+
+	list_head_t children;
+	list_head_t sibling;
+	spinlock_t child_list_lock;
+
+	int return_status;
+
 	struct task* next;
+
+	list_node_t queue_node;
+	list_node_t list_node;
 };
+static_assert(offsetof(struct task, rsp0) == 40, "asm context switch expects rsp0 at 40 bytes");
+
+extern list_head_t g_task_list;
+extern spinlock_t g_task_list_lock;
+
+struct task* task_new(const char* name, pid_t forcepid);
+struct task* thread_kernel_new(const char* name, virtaddr_t entry);
+void task_init();

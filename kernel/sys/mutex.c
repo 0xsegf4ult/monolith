@@ -1,7 +1,8 @@
 #include <sys/mutex.h>
 #include <sys/spinlock.h>
 #include <sys/smp.h>
-#include <sys/task.h>
+#include <sched/task.h>
+#include <sched/scheduler.h>
 #include <types.h>
 #include <panic.h>
 
@@ -34,8 +35,8 @@ void mutex_lock(mutex_t* mutex)
 				panic("mutex lock in invalid state %s", get_status_name(exp_state));
 
 		}
-
-		// yield
+		
+		sched_yield();
 	}
 	else
 	{
@@ -67,7 +68,7 @@ retry_awake:
 			panic("mutex_unlock: task in waitqueue not sleeping %s", get_status_name(exp_state));
 		}
 
-		// wake up
+		sched_add_ready(task);
 	}
 
 	spinlock_release_irqsave(&mutex->spinlock, flags);
