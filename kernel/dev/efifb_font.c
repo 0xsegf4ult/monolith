@@ -1,6 +1,6 @@
-#include <types.hpp>
+#include <types.h>
 
-extern "C" const uint8_t font_data[] = {
+const uint8_t font_data[] = {
 	/* 0 0x00 '^@' */
 	0x00, /* 00000000 */
 	0x00, /* 00000000 */

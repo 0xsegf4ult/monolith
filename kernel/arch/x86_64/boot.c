@@ -8,13 +8,16 @@
 #include <arch/x86_64/pit.h>
 #include <arch/x86_64/serial.h>
 
+#include <dev/efifb.h>
+
 #include <mm/memory_map.h>
 #include <mm/pmm.h>
 #include <mm/slab.h>
 #include <mm/vmm.h>
 
-#include <sched/task.h>
 #include <sys/smp.h>
+
+#include <libk/string.h>
 
 #include <init.h>
 #include <klog.h>
@@ -55,8 +58,62 @@ static volatile struct limine_rsdp_request rsdp_request =
 	.id = LIMINE_RSDP_REQUEST
 };
 
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_framebuffer_request framebuffer_request =
+{
+	.id = LIMINE_FRAMEBUFFER_REQUEST
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_module_request module_request =
+{
+	.id = LIMINE_MODULE_REQUEST
+};
+
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
+
+static void parse_framebuffer_info()
+{
+	size_t max_fb = 0;
+	if(!framebuffer_request.response)
+		return;
+
+	for(size_t i = 0; i < framebuffer_request.response->framebuffer_count; i++)
+	{
+		struct limine_framebuffer* fb = framebuffer_request.response->framebuffers[i];
+		size_t fsize = fb->width * fb->height * fb->bpp;
+		if(fsize > max_fb)
+		{
+			max_fb = fsize;
+			boot_info.fb.address = (virtaddr_t)fb->address - VM_DMAP_BASE;
+			boot_info.fb.width = fb->width;
+			boot_info.fb.height = fb->height;
+			boot_info.fb.pitch = fb->pitch;
+			boot_info.fb.bpp = fb->bpp;
+		}
+	}
+}
+
+static void find_initramfs()
+{
+	if(!module_request.response || module_request.response->module_count < 1)
+		panic("Could not find initramfs: no modules passed from bootloader");
+
+	for(uint32_t i = 0; i < module_request.response->module_count; i++)
+	{
+		struct limine_file* mod = module_request.response->modules[i];
+		if(strncmp(mod->string, "initramfs", 9) == 0)
+		{
+			boot_info.initramfs_address = (virtaddr_t)mod->address;
+			boot_info.initramfs_size = mod->size;
+			break;
+		}
+	}
+
+	if(!boot_info.initramfs_address || !boot_info.initramfs_size)
+		panic("failed to load initramfs");
+}
 
 static void parse_bootloader_info()
 {	
@@ -74,6 +131,9 @@ static void parse_bootloader_info()
 		panic("EFI RSDP address invalid");
 
 	boot_info.rsdp_address = (virtaddr_t)(rsdp_request.response->address) + VM_DMAP_BASE;
+
+	parse_framebuffer_info();
+	find_initramfs();
 }
 
 void init()
@@ -99,7 +159,6 @@ void init()
 	pit_init();
 	lapic_init();
 
-	task_init();
 	smp_init();
 	panic("could not start scheduler");
 }

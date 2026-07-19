@@ -1,36 +1,36 @@
-#include <fs/lookup.hpp>
-#include <fs/ventry.hpp>
-#include <fs/vnode.hpp>
-#include <fs/super.hpp>
-#include <fs/vfs.hpp>
+#include <fs/lookup.h>
+#include <fs/stat.h>
+#include <fs/super.h>
+#include <fs/ventry.h>
+#include <fs/vnode.h>
+#include <fs/vfs.h>
 
-#include <mm/slab.hpp>
+#include <mm/slab.h>
 
-#include <sys/err.hpp>
-#include <sys/mutex.hpp>
-#include <sys/reflock.hpp>
-#include <sys/smp.hpp>
-#include <sys/task.hpp>
+#include <sched/task.h>
+#include <sys/mutex.h>
+#include <sys/reflock.h>
+#include <sys/smp.h>
 
-#include <kstd.hpp>
-#include <klog.hpp>
+#include <libk/list.h>
+#include <libk/string.h>
 
-namespace vfs
+#include <errno.h>
+#include <klog.h>
+
+static struct ventry* traverse_mount(struct ventry* source)
 {
-
-ventry_t* traverse_mount(ventry_t* source)
-{
-	ventry_t* mount_traverse = nullptr;
-	auto traverse_status = source->mount->fs->sb_ops->root(source->mount->sb, &mount_traverse);
+	struct ventry* mount_traverse = nullptr;
+	int traverse_status = source->mount->fs->sb_ops->root(source->mount->sb, &mount_traverse);
 	if(traverse_status < 0)
 		return nullptr;
 
 	return mount_traverse;
 }
 
-int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
+int vfs_lookup_at(struct ventry* parent, const char* path, struct ventry** result, int flags)
 {                
-        auto* cache_entry = dcache_get(parent, path);
+        struct ventry* cache_entry = dcache_get(parent, path);
         if(cache_entry)
         {
                 if(flags & LOOKUP_PARENT)
@@ -38,10 +38,10 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                 else
                         *result = cache_entry;
 
-		ventry_t* res = *result;
-		if(res != vfs::get()->root_node && res->mount)	
+		struct ventry* res = *result;
+		if(res != vfs_context()->root_node && res->mount)	
 		{
-			auto mtrav = traverse_mount(res);
+			struct ventry* mtrav = traverse_mount(res);
 			if(!mtrav)
 				return -ENOENT;
 			*result = mtrav;
@@ -50,22 +50,21 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                 return 0;
         }
                         
-        auto len = string_length(path);
+        size_t len = strlen(path);
 
         char* cbuffer = (char*)kmalloc(len + 1);
         strncpy(cbuffer, path, len + 1);
 
-        for(int i = 0; i < len; i++)
+        for(size_t i = 0; i < len; i++)
         {
                 if(cbuffer[i] == '/')
                         cbuffer[i] = '\0';
         }
 
-        ventry_t* current = parent;
-        ventry_t* c_parent = nullptr;
+        struct ventry* current = parent;
         const char* basename = nullptr;
 
-        for(int i = 0; i < len; i++)
+        for(size_t i = 0; i < len; i++)
         {
                 if(cbuffer[i] == '\0')
                         continue;
@@ -83,11 +82,11 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                 basename = &path[i];
 
                 char* component = &cbuffer[i];
-                size_t clen = string_length(component);
+                size_t clen = strlen(component);
                 bool is_last = (i + clen) == len;
                 if(!is_last)
                 {
-                        int j;
+                        size_t j;
                         for(j = i + clen; j < len && component[j] == '\0'; ++j) {}
                         is_last = (j == len);
                 }
@@ -98,28 +97,25 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                         break;
                 }
 
-                ventry_t* next;
+                struct ventry* next;
 
                 if(clen == 1 && component[0] == '.')
                         next = current;
                 else if(clen == 2 && component[0] == '.' && component[1] == '.')
                 {
-                        if(i + clen >= len)
-                                c_parent = current;
-
                         next = current->parent;
 
                         if(!current->parent)
                         {
-				mount_t* mp;
-                                list_head_t& mplist = vfs::get()->mounts;
+				struct mount* mp;
+                                list_head_t* mplist = &vfs_context()->mounts;
 				list_for_each_entry(mp, mplist, list_node)
                                 {
-                                        ventry_t* mount_root = nullptr;
-                                        auto tstat = mp->fs->sb_ops->root(mp->sb, &mount_root);
+                                        struct ventry* mount_root = nullptr;
+                                        int tstat = mp->fs->sb_ops->root(mp->sb, &mount_root);
                                         if(tstat >= 0 && mount_root == current)
                                         {
-                                                next = (mp->mountpoint == vfs::get()->root_node) ? vfs::get()->root_node : mp->mountpoint->parent;
+                                                next = (mp->mountpoint == vfs_context()->root_node) ? vfs_context()->root_node : mp->mountpoint->parent;
                                                 break;
                                         }
                                 }
@@ -127,9 +123,9 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                 }
  		else
                 {
-                        if(current != vfs::get()->root_node && current->mount)
+                        if(current != vfs_context()->root_node && current->mount)
                         {
-                                ventry_t* mount_traverse = traverse_mount(current);
+                                struct ventry* mount_traverse = traverse_mount(current);
                                 if(!mount_traverse)
                                 {
                                         ventry_put(current);
@@ -141,7 +137,7 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
                                 ventry_ref(current);
                         }
 
-        		auto* cache_entry = dcache_get(current, component);
+        		struct ventry* cache_entry = dcache_get(current, component);
         		if(cache_entry)
 			{
 				next = cache_entry;
@@ -166,9 +162,9 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
         }
 
         kfree(cbuffer);
-        if(current && current != vfs::get()->root_node && current->mount)
+        if(current && current != vfs_context()->root_node && current->mount)
         {
-                ventry_t* mount_traverse = traverse_mount(current);
+                struct ventry* mount_traverse = traverse_mount(current);
 		if(!mount_traverse)
                         return -ENOENT;
                         
@@ -182,12 +178,10 @@ int lookup_at(ventry_t* parent, const char* path, ventry_t** result, int flags)
         return 0;
 }
 
-int lookup(const char* path, ventry_t** result, int flags)
+int vfs_lookup(const char* path, struct ventry** result, int flags)
 {
         if(path[0] == '/')
-                return lookup_at(get_root_dentry(), path + 1, result, flags);
+                return vfs_lookup_at(vfs_context()->root_node, path + 1, result, flags);
         else
-                return lookup_at(smp_current_task()->cwd, path, result, flags);
-}
-
+                return vfs_lookup_at(smp_current_task()->cwd, path, result, flags);
 }

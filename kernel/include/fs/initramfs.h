@@ -1,5 +1,5 @@
 #pragma once
 
-#include <types.hpp>
+#include <types.h>
 
 void initramfs_unpack(byte* data, size_t length);

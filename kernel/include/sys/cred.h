@@ -1,11 +1,8 @@
 #pragma once
 
-#include <types.hpp>
+#include <types.h>
 
-using uid_t = int32_t;
-using gid_t = int32_t;
-
-struct cred_t
+typedef struct cred
 {
 	uid_t uid;
 	uid_t euid;
@@ -13,7 +10,6 @@ struct cred_t
 	gid_t gid;
 	gid_t egid;
 	gid_t sgid;
-};
+} cred_t;
 
 constexpr uid_t cred_superuser = 0;
-

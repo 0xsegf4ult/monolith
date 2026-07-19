@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sys/spinlock.h>
+#include <sys/cred.h>
 #include <libk/list.h>
 #include <types.h>
 #include <stdatomic.h>
@@ -38,6 +39,8 @@ static inline const char* get_status_name(task_status status)
 
 struct vm_space;
 struct cpu_context;
+struct tty_device;
+struct ventry;
 
 struct task
 {
@@ -64,7 +67,22 @@ struct task
 	list_head_t sibling;
 	spinlock_t child_list_lock;
 
+	cred_t cred;
+	struct ventry* cwd;
+	struct tty_device* tty;
+	int open_files[32];
+	
 	int return_status;
+	int return_signal;
+
+	sigset_t sig_pending;
+	sigset_t sig_blocked;
+	spinlock_t sig_lock;
+
+	int argc;
+	int envc;
+	char** argv;
+	char** envp;
 
 	struct task* next;
 
@@ -78,4 +96,3 @@ extern spinlock_t g_task_list_lock;
 
 struct task* task_new(const char* name, pid_t forcepid);
 struct task* thread_kernel_new(const char* name, virtaddr_t entry);
-void task_init();

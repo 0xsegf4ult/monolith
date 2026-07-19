@@ -1,6 +1,6 @@
 #pragma once
 
-enum SYS_ERROR : int
+enum errno_type : int
 {
 	EPERM = 1,
 	ENOENT,

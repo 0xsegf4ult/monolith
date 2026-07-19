@@ -8,7 +8,7 @@
 #include <stdatomic.h>
 
 list_head_t g_task_list = {&g_task_list, &g_task_list};
-spinlock_t g_task_list_lock;
+spinlock_t g_task_list_lock = {0};
 
 static _Atomic pid_t next_pid = 1;
 static struct task* init_task = nullptr;
@@ -28,6 +28,12 @@ static void kernel_stack_init(struct task* task, virtaddr_t entry)
 
 	task->rsp0 = (virtaddr_t)stack_ptr;
 	task->rsp0_top = task->rsp0;
+}
+
+static void fd_table_init(struct task* task)
+{
+	for(int i = 0; i < 32; i++)
+		task->open_files[i] = -1;
 }
 
 struct task* task_new(const char* name, pid_t forcepid)
@@ -66,7 +72,27 @@ struct task* task_new(const char* name, pid_t forcepid)
 	list_node_init(&task->sibling);
 	spinlock_init(&task->child_list_lock);
 
+	task->cred.uid = 0;
+	task->cred.euid = 0;
+	task->cred.suid = 0;
+	task->cred.gid = 0;
+	task->cred.egid = 0;
+	task->cred.sgid = 0;
+
+	task->cwd = nullptr;
+	task->tty = nullptr;
+
 	task->return_status = 0;
+	task->return_signal = 0;
+
+	task->sig_pending = 0;
+	task->sig_blocked = 0;
+	spinlock_init(&task->sig_lock);
+
+	task->argc = 0;
+	task->envc = 0;
+	task->argv = nullptr;
+	task->envp = nullptr;
 
 	list_node_init(&task->queue_node);
 	list_node_init(&task->list_node);
@@ -89,12 +115,7 @@ struct task* thread_kernel_new(const char* name, virtaddr_t entry)
 	struct task* task = task_new(name, 0);
 	task->current_vm_space = vm_get_kernel_space();
 	kernel_stack_init(task, entry);
+	fd_table_init(task);
 
 	return task;
-}
-
-void task_init()
-{
-	list_node_init(&g_task_list);
-	spinlock_init(&g_task_list_lock);
 }

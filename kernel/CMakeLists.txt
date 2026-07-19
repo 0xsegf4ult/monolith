@@ -1,6 +1,19 @@
 set(KERNEL_CFLAGS -ffreestanding -nostdlib -nodefaultlibs)
 set(KERNEL_LDFLAGS -nostdlib -nodefaultlibs)
 set(KERNEL_SOURCES
+	dev/console.c
+	dev/efifb_font.c
+	dev/efifb.c
+	fs/procfs/procfs.c
+	fs/ramfs/ramfs.c
+	fs/filesystem.c
+	fs/generic.c
+	fs/initramfs.c
+	fs/lookup.c
+	fs/super.c
+	fs/ventry.c
+	fs/vfs.c
+	fs/vnode.c
 	mm/memory_map.c
 	mm/pmm.c
 	mm/slab.c
@@ -10,6 +23,7 @@ set(KERNEL_SOURCES
 	sched/scheduler.c
 	sched/task.c
 	sys/clock.c
+	sys/device.c
 	sys/irq.c
 	sys/mutex.c
 	sys/timer.c
