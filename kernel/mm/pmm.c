@@ -7,6 +7,7 @@
 #include <types.h>
 #include <panic.h>
 
+
 static uint64_t* pmm_bitmap = nullptr;
 static size_t pmm_bitmap_length = 0;
 static size_t physmem_available = 0;
@@ -41,7 +42,7 @@ static void pmm_mark_range_free(physaddr_t begin, physaddr_t end)
 
 void pmm_init(memory_map_t* memmap)
 {
-	const auto required_bits = align_up(memmap->memory_top / 8, CONFIG_PAGE_SIZE) / CONFIG_PAGE_SIZE;
+	const auto required_bits = align_up(memmap->memory_top, CONFIG_PAGE_SIZE) / CONFIG_PAGE_SIZE;
 	const auto required_u64 = (required_bits + 63) / 64;
 	pmm_bitmap_length = required_u64;
 
@@ -85,7 +86,7 @@ physaddr_t pmm_allocate()
 	}
 
 	spinlock_release_irqsave(&lock, flags);
-	panic("out of physical memory");
+	panic("out of physical memory %d kB used / %d kB free", physmem_used * 4, physmem_available * 4);
 	return ~(0ull);
 }
 

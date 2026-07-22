@@ -1,6 +1,7 @@
 #include <sys/clock.h>
 #include <libk/list.h>
 #include <cpu.h>
+#include <errno.h>
 #include <klog.h>
 #include <types.h>
 
@@ -43,4 +44,9 @@ void clock_wait(uint64_t nanos)
 	{
 		native_cpu_relax();
 	}
+}
+
+int sys_clock_gettime(clockid_t clock, struct timespec* tv)
+{
+	return -ENOSYS;
 }

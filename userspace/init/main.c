@@ -15,7 +15,7 @@ int main()
 	fprintf(stderr, "  monolith x86_64 0.01.2 is starting up\n\n");
         fprintf(stderr, "* /proc is already mounted\n");
 
-	const char* argv[3] = {"/bin/getty", "/dev/tty1", NULL};
+	const char* argv[3] = {"/usr/bin/getty", "/dev/tty1", NULL};
 	bool respawn = true;
 	pid_t gpid = 0;
 	for(;;)

@@ -1,5 +1,7 @@
 #include <dev/console.h>
 #include <dev/efifb.h>
+#include <dev/ps2.h>
+#include <dev/tty.h>
 
 #include <fs/ops.h>
 #include <fs/stat.h>
@@ -31,11 +33,10 @@ static struct file_ops console_fops =
 
 void console_init()
 {
-/*	for(int i = 0; i < num_virt_consoles; i++)
+	for(int i = 0; i < num_virt_consoles; i++)
 		vt_tty[i] = tty_create(i + 1, console_write_internal);
 
 	ps2_set_tty(vt_tty[cur_vt]);
-*/
 
 	dev_t id = make_dev(2, 0);
 	struct char_device* console = chardev_new(id);

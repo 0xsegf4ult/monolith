@@ -1,8 +1,12 @@
+#include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+
 
 static char buffer[1024];
 
@@ -36,16 +40,16 @@ int main(int argc, char* argv[])
 
 	if(fd < 0)
 	{
-		printf("ls: cannot access %s: %s", optind < argc ? argv[optind] : ".", strerrordesc_np(-fd));
-		return -1;
+		printf("ls: cannot access %s: %s", optind < argc ? argv[optind] : ".", strerror(errno));
+		return 1;
 	}
 
-	ssize_t read_count = getdents(fd, buffer, 1024);
+	ssize_t read_count = posix_getdents(fd, buffer, 1024, 0);
 	close(fd);
 	if(read_count < 0)
 	{
-		printf("ls: %s: %s", optind <  argc ? argv[optind] : ".", strerrordesc_np(-read_count));
-		return -1;
+		printf("ls: %s: %s", optind <  argc ? argv[optind] : ".", strerror(errno));
+		return 1;
 	}
 
 	if(read_count == 0)
@@ -55,8 +59,9 @@ int main(int argc, char* argv[])
 	int first = 1;
 	while(bpos < read_count)
 	{
-		dirent_info* d = (dirent_info*)(buffer + bpos);
-		const char* name = (const char*)d + sizeof(dirent_info);
+		struct posix_dent* d = (struct posix_dent*)(buffer + bpos);
+
+		const char* name = d->d_name;
 
 		if(name[0] != '.' || show_hidden > 0)
 		{
@@ -66,7 +71,7 @@ int main(int argc, char* argv[])
 					printf("\n");
 
 				char pbuf[64];
-				sprintf(pbuf, "%s/%s", optind < argc ? argv[optind] : ".", (const char*)d + sizeof(dirent_info));
+				sprintf(pbuf, "%s/%s", optind < argc ? argv[optind] : ".", name);
 				struct stat f_stat;
 				int st_r = stat(pbuf, &f_stat);
 
@@ -93,17 +98,17 @@ int main(int argc, char* argv[])
 					mode & S_IWOTH ? 'w' : '-',
 					mode & S_IXOTH ? 'x' : '-',
 					f_stat.st_nlink,
-					f_stat.st_size, (const char*)d + sizeof(dirent_info));
+					f_stat.st_size, name);
 			}
 			else
 			{
-				printf(first ? "%s" : " %s", (const char*)d + sizeof(dirent_info));
+				printf(first ? "%s" : " %s", name);
 			}
 
 			first = 0;
 		}
 
-		bpos += d->length;
+		bpos += d->d_reclen;
 	}
 
 	printf("\n");

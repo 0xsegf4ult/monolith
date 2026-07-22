@@ -261,14 +261,14 @@ void cpu_context_restore(struct cpu_context* ctx)
 	asm volatile("fxrstor (%0)" :: "r"(ctx->simd) : "memory");
 }
 
-void dump_registers(interrupt_frame* frame)
+void dump_registers(struct interrupt_frame* frame)
 {
         klog_nolock("RAX: %x RBX: %x RCX: %x\n", frame->rax, frame->rbx, frame->rcx);
         klog_nolock("RDX: %x RSI: %x RDI: %x\n",  frame->rdx, frame->rsi, frame->rdi);
         klog_nolock("RBP: %x R08: %x R09: %x\n", frame->rbp, frame->r8, frame->r9);
         klog_nolock("R10: %x R11: %x R12: %x\n", frame->r10, frame->r11, frame->r12);
         klog_nolock("R13: %x R14: %x R15: %x\n", frame->r13, frame->r14, frame->r15);
-        klog_nolock("RIP: %x:%x\nRSP: %x:%x\nRFLAGS: %x\n", frame->cs, frame->rip, frame->ss, frame->rsp, frame->rflags);
+        klog_nolock("RIP: %p:%p\nRSP: %p:%p\nRFLAGS: %x\n", frame->cs, frame->rip, frame->ss, frame->rsp, frame->rflags);
 }
 
 static bool valid_frame(virtaddr_t addr)

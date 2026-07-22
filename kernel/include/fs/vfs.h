@@ -11,10 +11,13 @@
 
 struct stat;
 
-struct dirent_info
+struct posix_dent
 {
-        uint16_t length;
-        uint8_t type;
+	ino_t d_ino;
+	off_t d_off;
+	uint16_t d_reclen;
+	uint8_t d_type;
+	char d_name[1024];
 };
 
 enum OPEN_FLAGS
@@ -43,6 +46,9 @@ enum SEEK_FLAGS
         SEEK_CUR = 1,
         SEEK_END = 2
 };
+
+constexpr size_t PATH_MAX = 256;
+constexpr int AT_FDCWD = -100;
 
 struct file_descriptor
 {

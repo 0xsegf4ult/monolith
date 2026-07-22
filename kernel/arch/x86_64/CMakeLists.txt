@@ -17,4 +17,5 @@ set(KERNEL_SOURCES ${KERNEL_SOURCES}
 	arch/x86_64/pit.c
 	arch/x86_64/simd.S
 	arch/x86_64/smpboot.S
+	arch/x86_64/syscall.c
 	PARENT_SCOPE)

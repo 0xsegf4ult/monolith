@@ -1,8 +1,10 @@
 #include <arch/x86_64/irq.h>
 #include <arch/x86_64/cpu.h>
 #include <arch/x86_64/mmu.h>
+#include <arch/x86_64/syscall.h>
 #include <mm/vmm.h>
 #include <sched/task.h>
+#include <sched/signal.h>
 #include <sys/irq.h>
 #include <sys/timer.h>
 #include <sys/smp.h>
@@ -11,7 +13,7 @@
 #include <klog.h>
 #include <panic.h>
 
-void page_fault_handler(interrupt_frame* frame)
+void page_fault_handler(struct interrupt_frame* frame)
 {
 	uint64_t fault_addr;
 	asm volatile("movq %%cr2, %0" : "=r"(fault_addr));
@@ -36,6 +38,7 @@ void page_fault_handler(interrupt_frame* frame)
 		dump_registers(frame);
 		stacktrace(frame->rbp);
 		klog("%s[%d]: segfault on cpu%u at %p ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), fault_addr, frame->rip, frame->rsp, frame->error_code);
+		send_signal(task, SIGSEGV);
 		return;
 	}
 
@@ -50,7 +53,7 @@ void page_fault_handler(interrupt_frame* frame)
 	panic_complete();
 }
 
-void gpf_handler(interrupt_frame* frame)
+void gpf_handler(struct interrupt_frame* frame)
 {
 	struct task* task = smp_current_task();
 
@@ -59,6 +62,7 @@ void gpf_handler(interrupt_frame* frame)
 		dump_registers(frame);
 		stacktrace(frame->rbp);
 		klog("%s[%d]: segfault on cpu%u ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), frame->rip, frame->rsp, frame->error_code);
+		send_signal(task, SIGSEGV);
 		return;
 	}
 
@@ -73,7 +77,38 @@ void gpf_handler(interrupt_frame* frame)
 	panic_complete();
 }
 
-void exception_handler(interrupt_frame* frame)
+static uint32_t exception_to_signal(uint64_t vector)
+{
+	switch(vector)
+	{
+	case INTERRUPT_VECTOR_DIVISION_ERROR:
+	case INTERRUPT_VECTOR_DEVICE_UNAVAILABLE:
+	case INTERRUPT_VECTOR_FPU_EXCEPTION:
+	case INTERRUPT_VECTOR_SIMD_EXCEPTION:
+		return SIGFPE;
+	case INTERRUPT_VECTOR_DEBUG:
+	case INTERRUPT_VECTOR_BREAKPOINT:
+		return SIGTRAP;
+	case INTERRUPT_VECTOR_INVALID_OPCODE:
+		return SIGILL;
+	case INTERRUPT_VECTOR_SEGMENT_NOT_PRESENT:
+	case INTERRUPT_VECTOR_STACK_SEGMENT_FAULT:
+	case INTERRUPT_VECTOR_ALIGNMENT_CHECK:
+	case INTERRUPT_VECTOR_MACHINE_CHECK:
+		return SIGBUS;
+	case INTERRUPT_VECTOR_OVERFLOW:
+	case INTERRUPT_VECTOR_BOUNDS_EXCEEDED:
+	case INTERRUPT_VECTOR_INVALID_TSS:
+	case INTERRUPT_VECTOR_GPF:
+	case INTERRUPT_VECTOR_PAGE_FAULT:
+		return SIGSEGV;
+	case INTERRUPT_VECTOR_DOUBLE_FAULT:
+	default:
+		return SIGABRT;
+	}
+}
+
+void exception_handler(struct interrupt_frame* frame)
 {
 	if(frame->vector == INTERRUPT_VECTOR_PAGE_FAULT)
 		page_fault_handler(frame);
@@ -86,9 +121,12 @@ void exception_handler(interrupt_frame* frame)
 		struct task* task = smp_current_task();
 		if(task && task->rsp && frame->rip <= 0x7fffffffffff)
         	{
+			uint32_t sig = exception_to_signal(frame->vector);
+
 			dump_registers(frame);
 			stacktrace(frame->rbp);
-			klog("%s[%d]: deadlysignal %x (vector %x) on cpu%d ip %p sp %p\n", task->name, task->pid, 0, frame->vector, smp_current_cpu(), frame->rip, frame->rsp);
+			klog("%s[%d]: deadlysignal %x (vector %x) on cpu%d ip %p sp %p\n", task->name, task->pid, sig, frame->vector, smp_current_cpu(), frame->rip, frame->rsp);
+			send_signal(task, sig);
 			return;
 		}
 
@@ -104,11 +142,7 @@ void exception_handler(interrupt_frame* frame)
 	}
 }
 
-void syscall_handler(interrupt_frame* frame)
-{
-}
-
-void interrupt_handler(interrupt_frame* frame)
+void interrupt_handler(struct interrupt_frame* frame)
 {
 	if(frame->vector < INTERRUPT_VECTOR_EXCEPTION_END)
 		exception_handler(frame);
@@ -121,4 +155,6 @@ void interrupt_handler(interrupt_frame* frame)
 	else if(frame->vector == INTERRUPT_VECTOR_SPURIOUS)
 	{
 	}
+
+	signal_try_handle();
 }

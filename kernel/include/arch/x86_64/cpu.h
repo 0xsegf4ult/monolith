@@ -1,7 +1,6 @@
 #pragma once
 
 #include <arch/x86_64/gdt.h>
-#include <irq.h>
 #include <types.h>
 
 struct task;
@@ -52,12 +51,17 @@ static inline void native_cpu_halt()
 
 static inline void native_cpu_idle()
 {
-	asm volatile("cli");
+	asm volatile("hlt");
 }
 
 static inline void native_cpu_relax()
 {
 	asm volatile("pause" ::: "memory");
+}
+
+static inline void native_memory_barrier()
+{
+	asm volatile("mfence" ::: "memory");
 }
 
 void native_set_tls(virtaddr_t base);
@@ -74,5 +78,6 @@ void cpu_context_destroy(struct cpu_context* ctx);
 void cpu_context_save(struct cpu_context* ctx);
 void cpu_context_restore(struct cpu_context* ctx);
 
-void dump_registers(interrupt_frame* frame);
+struct interrupt_frame;
+void dump_registers(struct interrupt_frame* frame);
 void stacktrace(virtaddr_t frame);

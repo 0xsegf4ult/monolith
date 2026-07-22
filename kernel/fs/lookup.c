@@ -16,7 +16,6 @@
 #include <libk/string.h>
 
 #include <errno.h>
-#include <klog.h>
 
 static struct ventry* traverse_mount(struct ventry* source)
 {
@@ -30,7 +29,7 @@ static struct ventry* traverse_mount(struct ventry* source)
 
 int vfs_lookup_at(struct ventry* parent, const char* path, struct ventry** result, int flags)
 {                
-        struct ventry* cache_entry = dcache_get(parent, path);
+	struct ventry* cache_entry = dcache_get(parent, path);
         if(cache_entry)
         {
                 if(flags & LOOKUP_PARENT)
@@ -84,10 +83,12 @@ int vfs_lookup_at(struct ventry* parent, const char* path, struct ventry** resul
                 char* component = &cbuffer[i];
                 size_t clen = strlen(component);
                 bool is_last = (i + clen) == len;
-                if(!is_last)
+	  	if(!is_last)
                 {
                         size_t j;
-                        for(j = i + clen; j < len && component[j] == '\0'; ++j) {}
+                        for(j = i + clen; j < len && cbuffer[j] == '\0'; ++j) 
+			{
+			}
                         is_last = (j == len);
                 }
 
@@ -136,8 +137,8 @@ int vfs_lookup_at(struct ventry* parent, const char* path, struct ventry** resul
                                 current = mount_traverse;
                                 ventry_ref(current);
                         }
-
-        		struct ventry* cache_entry = dcache_get(current, component);
+        		
+			struct ventry* cache_entry = dcache_get(current, component);
         		if(cache_entry)
 			{
 				next = cache_entry;
@@ -171,9 +172,10 @@ int vfs_lookup_at(struct ventry* parent, const char* path, struct ventry** resul
 		current = mount_traverse;
         }
 
-        *result = current;
         if(!current)
                 return -ENOENT;
+        
+	*result = current;
 
         return 0;
 }

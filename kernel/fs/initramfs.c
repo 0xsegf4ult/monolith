@@ -57,7 +57,7 @@ void initramfs_unpack(byte* data, size_t length)
 		if(namel == 0)
 			break;
 
-		sprintf(path, "/{}", record->name);
+		sprintf(path, "/%s", record->name);
 		if(path[namel] == '/')
 			path[namel] = '\0';
 

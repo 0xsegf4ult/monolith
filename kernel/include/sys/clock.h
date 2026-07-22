@@ -1,7 +1,7 @@
 #pragma once
 
 #include <libk/list.h>
-#include <stdint.h>
+#include <types.h>
 
 typedef struct clock_source_type clocksource_t;
 
@@ -20,3 +20,5 @@ struct clock_source_type
 void clocksource_register(clocksource_t* source);
 uint64_t clock_uptime();
 void clock_wait(uint64_t nanos);
+
+int sys_clock_gettime(clockid_t clock, struct timespec* tv);

@@ -3,13 +3,13 @@
 #include <mm/memory_map.h>
 #include <mm/slab.h>
 #include <mm/pmm.h>
-/*
+
 #include <fs/vfs.h>
 #include <fs/procfs/procfs.h>
-*/
 
 #include <libk/list.h>
 #include <libk/string.h>
+#include <libk/vsprintf.h>
 
 #include <sched/task.h>
 #include <sys/smp.h>
@@ -74,23 +74,23 @@ void vmm_init_kpages(struct memory_map* memmap, physaddr_t kload_addr)
 	zero_cowmem = pmm_allocate();
 	memset((void*)(zero_cowmem + VM_DMAP_BASE), 0, CONFIG_PAGE_SIZE);
 }
-/*
-static ssize_t vmstat_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+
+static ssize_t vmstat_read(struct file_descriptor* file, byte* buffer, size_t length)
 {
-	format_to(string_span{(char*)buffer, length}, "free_pages: {}\nused_pages: {}", pmm_free_pages_count(), pmm_used_pages_count());
-	return length;
+	ssize_t written = sprintf(buffer, "free_pages: %u\nused_pages: %u", pmm_free_pages_count(), pmm_used_pages_count());
+	return written;
 }
 
-static vfs::fs_file_ops vmstat_fops = 
+static struct file_ops vmstat_fops = 
 {
 	.read = vmstat_read
 };
 
 void vmm_late_init()
 {
-	procfs_create("vmstat", &vmstat_fops);
+	procfs_create("vmstat", &vmstat_fops, nullptr);
 }
-*/
+
 static bool space_check_range(struct vm_space* space, struct vm_object* range)
 {
 	struct vm_object* cur;
@@ -220,7 +220,7 @@ static void vm_free_range(struct vm_space* space, struct vm_object* range)
 virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 {
 	size_t length = align_up(info.length, CONFIG_PAGE_SIZE);
-	
+
 	const bool is_device = info.flags & VM_FLAG_DEVICE;
 	const bool is_file = info.flags & VM_FLAG_FILE;
 	if(is_device)
@@ -249,14 +249,14 @@ virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 	range->length = length;
 	range->prot = info.prot;
 	range->flags = vmflags;
-	/*
+	
 	if(is_file)
 	{
-		range->file = vfs_get_open_fd(info.fd);
-		range->file->refcount++;
+		range->file = vfs_get_fd(info.fd);
+		atomic_fetch_add(&range->file->refcount, 1u);
 		range->offset = info.offset;
 	}
-	else*/
+	else
 	{
 		range->file = nullptr;
 	}
@@ -285,7 +285,7 @@ virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 	if(is_file)
 	{
 		space->mapped_file += (length / 0x1000);
-		//range->file->inode->fops->mmap(range->file, range);
+		range->file->inode->fops->mmap(range->file, range);
 	}
 	else
 	{
@@ -473,13 +473,22 @@ bool vm_page_fault(virtaddr_t addr, uint32_t flags)
 	{
 		if(range->flags & VM_FLAG_FILE)
 		{
-		/*	if(range->vm_ops && range->vm_ops->fault)
+			if(range->vm_ops && range->vm_ops->fault)
 			{
 				if(range->vm_ops->fault(range, addr, flags))
 					return true;
-			}*/
+			}
 		}
 
 		return false;
 	}
+}
+
+bool vm_validate_ptr(const void* ptr, size_t size)
+{
+	//FIXME: actually check
+	if((virtaddr_t)ptr < VM_USERSPACE_BASE || (virtaddr_t)ptr > VM_USERSPACE_END)
+		return false;
+
+	return true;
 }

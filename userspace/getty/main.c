@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
 	if(open(argv[1], 0) < 0)
 		return 1;
 
-	const char* s_argv[3] = {"/bin/login", "root", NULL};
+	const char* s_argv[3] = {"/usr/bin/login", "root", NULL};
 	spawn(s_argv, NULL, 0);
 	wait(NULL);
 	return 0;

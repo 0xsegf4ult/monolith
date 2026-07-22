@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -13,8 +14,8 @@ int main(int argc, const char** argv)
 	int status = mkdir(argv[1], 0777);
 	if(status < 0)
 	{
-		printf("mkdir: cannot create directory %s: %s", argv[1], strerrordesc_np(-status));
-		return status;
+		printf("mkdir: cannot create directory %s: %s", argv[1], strerror(errno));
+		return 1;
 	}
 
 	return 0;

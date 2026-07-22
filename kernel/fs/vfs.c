@@ -7,12 +7,16 @@
 
 #include <mm/slab.h>
 
+#include <sched/task.h>
+#include <sys/smp.h>
+
 #include <libk/list.h>
 #include <libk/string.h>
 
 #include <errno.h>
 #include <types.h>
 #include <panic.h>
+
 
 static struct vfs_context context = {};
 
@@ -208,7 +212,7 @@ int vfs_open(const char* path, int flags)
 			int c_res = vfs_create(path, 0666);
 			if(c_res < 0)
 				return c_res;
-		
+
 			status = vfs_lookup(path, &query, 0);
 		}
 		else
@@ -232,9 +236,11 @@ int vfs_open(const char* path, int flags)
 
 int vfs_openat(int fd, const char* path, int flags)
 {
-	struct ventry* dir = context.open_files[fd].path;
-	if(flags)
-		return -EINVAL;
+	struct ventry* dir;
+       	if(fd == AT_FDCWD)
+		dir = smp_current_task()->cwd;
+	else 
+		dir = context.open_files[fd].path;
 
 	struct ventry* query = nullptr;
 	int status = vfs_lookup_at(dir, path, &query, 0);

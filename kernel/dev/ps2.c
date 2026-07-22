@@ -1,24 +1,23 @@
-#include <dev/ps2.hpp>
-#include <dev/tty.hpp>
-#include <dev/device.hpp>
-#include <dev/character.hpp>
+#include <dev/ps2.h>
+#include <dev/tty.h>
 
-#include <arch/x86_64/ioapic.hpp>
-#include <arch/x86_64/io.hpp>
-#include <arch/x86_64/interrupts.hpp>
+#include <fs/ops.h>
+#include <fs/stat.h>
+#include <fs/vfs.h>
 
-#include <klog.hpp>
-#include <types.hpp>
+#include <sched/scheduler.h>
+#include <sched/task.h>
+#include <sys/device.h>
+#include <sys/irq.h>
+#include <sys/smp.h>
 
-#include <fs/ops.hpp>
-#include <fs/vfs.hpp>
+#include <libk/string.h>
 
-#include <sys/err.hpp>
-#include <sys/scheduler.hpp>
-#include <sys/task.hpp>
-#include <sys/smp.hpp>
+#include <io.h>
 
-#include <kstd.hpp>
+#include <ernno.h>
+#include <klog.h>
+#include <types.h>
 
 enum kbd_modifier_key : uint32_t
 {
@@ -33,83 +32,18 @@ struct key_event
 	bool state;
 };
 
-enum kbd_state
+typedef enum
 {
 	KBD_STATE_NORMAL,
 	KBD_STATE_PREFIX
-};
+} kbd_state;
 
 static kbd_state state = KBD_STATE_NORMAL;
-static tty_device* cur_tty = nullptr;
-static task_t* owner = nullptr;
-static key_event ringbuffer[256];
+static struct tty_device* cur_tty = nullptr;
+static struct task* owner = nullptr;
+static struct key_event ringbuffer[256];
 static int ring_head = 0;
 static int ring_tail = 0;
-
-constexpr char scancode_row_1[] =
-{
-	'1',
-	'2',
-	'3',
-	'4',
-	'5',
-	'6',
-	'7',
-	'8',
-	'9',
-	'0',
-	'-',
-	'=',
-	'\b'
-};
-
-constexpr char scancode_row_2[] =
-{
-	'q',
-	'w',
-	'e',
-	'r',
-	't',
-	'y',
-	'u',
-	'i',
-	'o',
-	'p',
-	'[',
-	']',
-	'\n'
-};
-
-constexpr char scancode_row_3[] =
-{
-	'a',
-	's',
-	'd',
-	'f',
-	'g',
-	'h',
-	'j',
-	'k',
-	'l',
-	';',
-	'\'',
-	'`'
-};
-
-constexpr char scancode_row_4[] =
-{
-	'\\',
-	'z',
-	'x',
-	'c',
-	'v',
-	'b',
-	'n',
-	'm',
-	',',
-	'.',
-	'/'
-};
 
 constexpr char regular_scancodes[] =
 {
@@ -239,7 +173,7 @@ static uint32_t keyboard0_mod = 0;
 
 static void interrupt_handler()
 {
-	auto scancode = io::inb(0x60);
+	auto scancode = inb(0x60);
 
 	bool release_flag = scancode & 0x80;
 	scancode = scancode & 0x7f;
@@ -275,18 +209,6 @@ static void interrupt_handler()
 
 		if(scancode <= 0x39 && reg_tbl[scancode])
 			tty_consume(cur_tty, reg_tbl[scancode]);
-
-
-		/*
-			tty_consume(cur_tty, scancode_row_1[scancode - 0x02]);
-		else if(scancode >= 0x10 && scancode <= 0x1c)
-			tty_consume(cur_tty, scancode_row_2[scancode - 0x10]);
-		else if(scancode >= 0x1e && scancode <= 0x29)
-			tty_consume(cur_tty, scancode_row_3[scancode - 0x1e]);
-		else if(scancode >= 0x2b && scancode <= 0x35)
-			tty_consume(cur_tty, scancode_row_4[scancode - 0x2b]);
-		else if(scancode == 0x39)
-			tty_consume(cur_tty, ' ');*/
 	}
 	
 	if(owner)
@@ -298,16 +220,22 @@ static void interrupt_handler()
 				return;
 		
 			if(reg_tbl[scancode])
-				ringbuffer[ring_tail] = {reg_tbl[scancode], !release_flag};
+			{
+				ringbuffer[ring_tail].key = reg_tbl[scancode]; 
+				ringbuffer[ring_tail].state = !release_flag;
+			}
 			else if(scancode == 0x1d)
-				ringbuffer[ring_tail] = {0x1d, !release_flag};
+			{
+				ringbuffer[ring_tail].key = 0x1d;
+				ringbuffer[ring_tail].state = !release_flag;
+			}
 
 			ring_tail = (ring_tail + 1) % 256;
 		}
 	}
 }
 
-int kbd_open(vfs::vnode_t* node, int flags)
+int kbd_open(struct vnode* node, int flags)
 {
 	if(owner)
 		return -EBUSY;
@@ -323,7 +251,7 @@ int kbd_close(int fd)
 }
 
 // hacky 'nonblocking' read
-ssize_t kbd_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
+ssize_t kbd_read(struct file_descriptor* file, byte* buffer, size_t length)
 {
 	if(smp_current_task() != owner)
 		return -EBUSY;
@@ -331,53 +259,53 @@ ssize_t kbd_read(vfs::file_descriptor_t* file, byte* buffer, size_t length)
 	if(ring_head == ring_tail)
 		return 0;
 
-	memcpy(buffer, &ringbuffer[ring_head], sizeof(key_event));
+	memcpy(buffer, &ringbuffer[ring_head], sizeof(struct key_event));
 	ring_head = (ring_head + 1) % 256;
 
 	return 2;
 }
 
-static vfs::fs_file_ops kbd_fops =
+static struct file_ops kbd_fops =
 {
 	.open = kbd_open,
 	.close = kbd_close,
 	.read = kbd_read
 };
 
+constexpr hwirq_t ISA_IRQ_PS2 = 1;
+
 void ps2_init()
 {
-	log::info("ps2: initializing controller");
+	klog("ps2: initializing controller\n");
 
-	io::outb(0xad, 0x64);
-	io::outb(0xa7, 0x64);
+	outb(0xad, 0x64);
+	outb(0xa7, 0x64);
 
-	io::outb(0x20, 0x64);
-	uint8_t config = io::inb(0x60);
+	outb(0x20, 0x64);
+	uint8_t config = inb(0x60);
 
-	while(io::inb(0x64) & 1)
+	while(inb(0x64) & 1)
 	{
-		auto code = io::inb(0x60);
+		uint8_t code = inb(0x60);
 	}
 
-	io::outb(0xae, 0x64);
+	outb(0xae, 0x64);
 	
-	io::outb(0xff, 0x60);
-	auto initcode = io::inb(0x60);
-	initcode = io::inb(0x60);
+	outb(0xff, 0x60);
+	uint8_t initcode = inb(0x60);
+	initcode = inb(0x60);
 
-	log::info("ps2: detected keyboard");
+	klog("ps2: detected keyboard\n");
 
-	auto* dev = chardev_alloc(dev_t{10, 0});
+	dev_t id = make_dev(10, 0);
+	struct char_device* dev = chardev_new(id);
 	dev->fops = &kbd_fops;
 
-	auto dev_node = vfs::mknod("/dev/keyboard", S_IFCHR | S_IRUSR | S_IWUSR, dev_t{10, 0});
-
-	auto irq = allocate_irq();
-	ioapic_write_redirection_entry(0x1, irq);
-	install_irq_handler(irq, interrupt_handler);
+	vfs_mknod("/dev/keyboard", S_IFCHR | S_IRUSR | S_IWUSR, id);
+	irq_register(ISA_IRQ_PS2, interrupt_handler);
 }
 
-void ps2_set_tty(tty_device* tty)
+void ps2_set_tty(struct tty_device* tty)
 {
 	cur_tty = tty;
 }

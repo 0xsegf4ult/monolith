@@ -16,8 +16,6 @@
 #include <errno.h>
 #include <types.h>
 
-#include <klog.h>
-
 struct ventry* generic_fs_lookup(struct ventry* parent, const char* path)
 {
 	struct ventry* current;
@@ -64,7 +62,7 @@ int generic_fs_create(struct ventry* parent, const char* path, mode_t mode)
 }
 
 int generic_fs_mkdir(struct ventry* parent, const char* path, mode_t mode)
-{ 
+{
 	struct vnode* inode = vnode_new(S_IFDIR | mode);
         inode->iops = parent->node->iops;
 	inode->fops = parent->node->fops;
@@ -133,22 +131,26 @@ ssize_t generic_fs_getdents(struct file_descriptor* file, byte* buffer, size_t l
 
 	if(write_head < buffer + length)
 	{
-                struct dirent_info* dirent = (struct dirent_info*)write_head;
-		dirent->length = sizeof(struct dirent_info) + 2;
-		dirent->type = 0;
+                struct posix_dent* dirent = (struct posix_dent*)write_head;
+		dirent->d_reclen = offsetof(struct posix_dent, d_name) + 2;
+		dirent->d_ino = 0;
+		dirent->d_off = 0;
+		dirent->d_type = 0;
 
-		write_head += sizeof(struct dirent_info);
+		write_head += offsetof(struct posix_dent, d_name);
 		memcpy(write_head, ".", 2);
 		write_head += 2;
 	}
 
 	if(write_head < buffer + length)
 	{
-		struct dirent_info* dirent = (struct dirent_info*)write_head;
-		dirent->length = sizeof(struct dirent_info) + 3;
-		dirent->type = 0;
+		struct posix_dent* dirent = (struct posix_dent*)write_head;
+		dirent->d_reclen = offsetof(struct posix_dent, d_name) + 3;
+		dirent->d_ino = 0;
+		dirent->d_off = 0;
+		dirent->d_type = 0;
 
-		write_head += sizeof(struct dirent_info);
+		write_head += offsetof(struct posix_dent, d_name);
 		memcpy(write_head, "..", 3);
 		write_head += 3;
 	}
@@ -162,13 +164,15 @@ ssize_t generic_fs_getdents(struct file_descriptor* file, byte* buffer, size_t l
         
 		ventry_ref(current);
 		reflock_acquire(&current->ref);
-		struct dirent_info* dirent = (struct dirent_info*)write_head;
+		struct posix_dent* dirent = (struct posix_dent*)write_head;
 
                 size_t name_len = strlen(current->name) + 1;
-                dirent->length = sizeof(struct dirent_info) + name_len;
-                dirent->type = 0;
+                dirent->d_reclen = offsetof(struct posix_dent, d_name) + name_len;
+                dirent->d_ino = 0;
+		dirent->d_off = 0;
+		dirent->d_type = 0;
 
-                write_head += sizeof(struct dirent_info);
+                write_head += offsetof(struct posix_dent, d_name);
                 memcpy(write_head, current->name, name_len);
                 write_head += name_len;
 

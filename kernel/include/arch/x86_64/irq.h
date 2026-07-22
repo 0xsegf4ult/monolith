@@ -38,7 +38,7 @@ enum interrupt_vector_t
 	INTERRUPT_VECTOR_SPURIOUS		= 0xFF
 };
 
-typedef struct
+struct interrupt_frame
 {
 	uint64_t r15;
         uint64_t r14;
@@ -64,7 +64,7 @@ typedef struct
 	uint64_t rflags;
 	uint64_t rsp;
 	uint64_t ss;
-} interrupt_frame;
+};
 
 static inline void local_irq_disable()
 {

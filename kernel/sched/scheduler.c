@@ -14,6 +14,8 @@
 #include <panic.h>
 #include <types.h>
 
+#include <klog.h>
+
 typedef struct
 {
 	struct task* idle;
@@ -94,14 +96,9 @@ void schedule()
 	local_irq_disable();
 	spinlock_acquire(&sdata->lock);
 
-	if(cur_running && cur_task != sdata->idle)
-	{
-		list_add_tail(&sdata->runqueue, &cur_task->queue_node);
-		atomic_fetch_add_explicit(&sdata->queue_entry_count, 1, memory_order_release);
-	}
-
 	struct task* last = cur_task;
 	struct task* next = sdata->idle;
+	queue_size = atomic_load_explicit(&sdata->queue_entry_count, memory_order_acquire);
 	if(!queue_size)
 	{
 		spinlock_release(&sdata->lock);
@@ -128,6 +125,16 @@ void schedule()
 		atomic_fetch_add_explicit(&sdata->queue_entry_count, -1, memory_order_release);
 		spinlock_release(&sdata->lock);
 	}
+	
+	if(cur_running && cur_task != sdata->idle)
+	{
+		list_add_tail(&sdata->runqueue, &cur_task->queue_node);
+		atomic_fetch_add_explicit(&sdata->queue_entry_count, 1, memory_order_release);
+	}
+
+
+	if(!next->rsp0)
+		panic("ctx switch to no stack %p %d %s\n", next, next->pid, next->name);
 
 	if(last != next)
 		native_context_switch(last, next);

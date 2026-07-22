@@ -1,4 +1,5 @@
 #include <sys/timer.h>
+#include <sched/scheduler.h>
 #include <libk/list.h>
 #include <klog.h>
 #include <panic.h>
@@ -11,6 +12,7 @@ static uint8_t max_prio = 0;
 void timer_interrupt()
 {
 	current->eoi();
+	schedule();
 }
 
 void timer_start()

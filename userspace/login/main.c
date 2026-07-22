@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
 
 	printf("logged in as %s on /dev/tty1\n", argv[1]);
 
-	const char* s_argv[2] = {"/bin/sh", NULL};
+	const char* s_argv[2] = {"/usr/bin/sh", NULL};
 	spawn(s_argv, NULL, 0);
 	wait(NULL);
 	return 0;

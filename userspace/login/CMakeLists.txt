@@ -6,4 +6,4 @@ target_link_libraries(login PRIVATE ${USERSPACE_LINK_LIBRARIES})
 target_sources(login
         PRIVATE
         main.c)
-set_target_properties(login PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/bin")
+set_target_properties(login PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/sysroot/usr/bin")

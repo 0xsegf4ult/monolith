@@ -4,6 +4,8 @@ set(KERNEL_SOURCES
 	dev/console.c
 	dev/efifb_font.c
 	dev/efifb.c
+	dev/ps2.c
+	dev/tty.c
 	fs/procfs/procfs.c
 	fs/ramfs/ramfs.c
 	fs/filesystem.c
@@ -13,15 +15,23 @@ set(KERNEL_SOURCES
 	fs/super.c
 	fs/ventry.c
 	fs/vfs.c
+	fs/vfs_sys.c
 	fs/vnode.c
 	mm/memory_map.c
 	mm/pmm.c
 	mm/slab.c
+	mm/vm_syscall.c
 	mm/vmm.c
 	libk/string.c
 	libk/vsprintf.c
 	sched/scheduler.c
+	sched/signal.c
 	sched/task.c
+	sched/task_sleep.c
+	sched/task_sys.c
+	sched/waitqueue.c
+	sys/binfmt/binfmt.c
+	sys/binfmt/elf.c
 	sys/clock.c
 	sys/device.c
 	sys/irq.c

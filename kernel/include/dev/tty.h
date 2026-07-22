@@ -1,14 +1,14 @@
 #pragma once
 
-#include <sys/mutex.hpp>
-#include <sys/spinlock.hpp>
-#include <sys/waitqueue.hpp>
-#include <types.hpp>
+#include <sched/waitqueue.h>
+#include <sys/mutex.h>
+#include <sys/spinlock.h>
+#include <types.h>
 
 constexpr size_t NCCS = 32;
-using tcflag_t = uint32_t;
-using cc_t = unsigned char;
-using speed_t = uint32_t;
+typedef uint32_t tcflag_t;
+typedef unsigned char cc_t;
+typedef uint32_t speed_t;
 
 enum tty_iflags : tcflag_t
 {
@@ -88,7 +88,7 @@ enum tty_cc : cc_t
 
 constexpr cc_t B38400 = 0000017;
 
-struct termios_t
+struct termios
 {
 	tcflag_t c_iflag;
 	tcflag_t c_oflag;
@@ -100,7 +100,7 @@ struct termios_t
 	speed_t obaud;
 };
 
-struct winsize_t
+struct winsize
 {
 	uint16_t ws_row;
 	uint16_t ws_col;
@@ -118,10 +118,10 @@ enum tty_io
 
 typedef void (*tty_output_t)(const char*, size_t);
 
+constexpr size_t tty_buffer_size = 0x1000;
+
 struct tty_device
 {
-        constexpr static size_t buffer_size = 0x1000;
-        
 	byte* read_buffer;
         uint32_t read_buffer_head;
         uint32_t read_buffer_tail;
@@ -140,11 +140,11 @@ struct tty_device
         wait_queue waitqueue;
         mutex_t lock;
 
-        termios_t termios;
-        winsize_t winsize;
+        struct termios termios;
+        struct winsize winsize;
 };
 
-tty_device* tty_create(uint16_t index, tty_output_t output_fn);
-void tty_consume(tty_device* tty, char c);
-ssize_t tty_read(tty_device* tty, byte* buffer, size_t length);
-ssize_t tty_write(tty_device* tty, const byte* buffer, size_t length);
+struct tty_device* tty_create(uint16_t index, tty_output_t output_fn);
+void tty_consume(struct tty_device* tty, char c);
+ssize_t tty_read(struct tty_device* tty, byte* buffer, size_t length);
+ssize_t tty_write(struct tty_device* tty, const byte* buffer, size_t length);

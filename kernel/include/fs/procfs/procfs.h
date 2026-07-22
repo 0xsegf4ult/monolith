@@ -1,6 +1,6 @@
 #pragma once
 
-struct file_ops
+struct file_ops;
 struct task;
 
 void procfs_init();

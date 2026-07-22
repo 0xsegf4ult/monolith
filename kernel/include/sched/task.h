@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sched/waitqueue.h>
 #include <sys/spinlock.h>
 #include <sys/cred.h>
 #include <libk/list.h>
@@ -61,7 +62,7 @@ struct task
 	pid_t pgid;
 	pid_t sid;
 
-	_Atomic struct task* parent;
+	struct task* _Atomic parent;
 
 	list_head_t children;
 	list_head_t sibling;
@@ -78,6 +79,8 @@ struct task
 	sigset_t sig_pending;
 	sigset_t sig_blocked;
 	spinlock_t sig_lock;
+
+	wait_queue_node wait;
 
 	int argc;
 	int envc;
@@ -96,3 +99,15 @@ extern spinlock_t g_task_list_lock;
 
 struct task* task_new(const char* name, pid_t forcepid);
 struct task* thread_kernel_new(const char* name, virtaddr_t entry);
+struct task* process_userspace_new(const char* name, virtaddr_t entry);
+void task_zombify(struct task* task);
+void task_destroy(struct task* task);
+
+int task_copy_args(struct task* proc, const char** argv, const char** envp);
+struct task* lookup_by_pid(pid_t pid);
+struct task* get_pgrp_leader(pid_t pgrp);
+
+static inline bool is_session_leader(struct task* task)
+{
+	return task->sid == task->tgid;
+}

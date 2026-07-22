@@ -38,10 +38,11 @@ struct vm_space* vm_userspace_new();
 void vm_space_destroy(struct vm_space* space);
 
 bool vm_page_fault(virtaddr_t address, uint32_t status);
+bool vm_validate_ptr(const void* ptr, size_t size);
 
-static inline virtaddr_t vmalloc(size_t length)
+static inline void* vmalloc(size_t length)
 {
-	return vm_space_map(vm_get_kernel_space(),
+	return (void*)vm_space_map(vm_get_kernel_space(),
 	(vm_mapping_info)
 	{
 		.length = length,
@@ -50,7 +51,7 @@ static inline virtaddr_t vmalloc(size_t length)
 	});
 }
 
-static inline void vfree(virtaddr_t addr)
+static inline void vfree(void* addr)
 {
-	vm_space_unmap(vm_get_kernel_space(), addr, 0);
+	vm_space_unmap(vm_get_kernel_space(), (virtaddr_t)addr, 0);
 }

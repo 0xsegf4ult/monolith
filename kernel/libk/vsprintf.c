@@ -107,6 +107,7 @@ ssize_t vsprintf(char* buf, const char* fmt, va_list args)
 
 		fmt++;
 	}
+	*(buf++) = '\0';
 
 	return (ssize_t)(buf - orig);
 }

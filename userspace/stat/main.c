@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -15,8 +16,8 @@ int main(int argc, char* argv[])
 	int st_r = stat(argv[1], &f_stat);
 	if(st_r < 0)
 	{
-		printf("stat: cannot stat %s: %s", argv[1], strerrordesc_np(-st_r));
-		return -1;
+		printf("stat: cannot stat %s: %s", argv[1], strerror(errno));
+		return 1;
 	}
 
 	mode_t mode = f_stat.st_mode;

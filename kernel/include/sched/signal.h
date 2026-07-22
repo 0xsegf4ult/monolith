@@ -1,6 +1,6 @@
 #pragma once
 
-#include <types.hpp>
+#include <types.h>
 
 enum SIGNAL_ID : uint32_t
 {
@@ -38,9 +38,10 @@ enum SIGNAL_ID : uint32_t
 	NSIG		= 32
 };
 
-struct task_t;
+struct task;
 
-bool signal_pending(task_t* task);
-int send_signal(task_t* task, uint32_t signal);
+bool signal_pending(struct task* task);
+int send_signal(struct task* task, uint32_t signal);
 int pid_send_signal(pid_t pid, uint32_t signal);
 int pgrp_send_signal(pid_t pgrp, uint32_t signal);
+void signal_try_handle();

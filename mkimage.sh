@@ -3,7 +3,7 @@
 cmake --build build -j$(nproc)
 
 current_dir=$(pwd)
-tar -cvf sysroot/boot/initramfs.tar -C $current_dir/sysroot usr -C $current_dir/base etc home root
+tar -cvf sysroot/boot/initramfs.tar -C $current_dir/sysroot --exclude='usr/include' usr -C $current_dir/base etc home root
 
 dd if=/dev/zero of=boot.img bs=512 count=93750
 parted boot.img -s -a minimal mklabel gpt

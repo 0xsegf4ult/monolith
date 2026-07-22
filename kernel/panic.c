@@ -47,7 +47,8 @@ void panic(const char* fmt, ...)
 	ssize_t written = vsprintf(panic_buf, fmt, args);
 	va_end(args);
 
-	panic_buf[written] = '\n';
+	panic_buf[written - 1] = '\n';
+	panic_buf[written] = '\0';
 	klog_write_nolock(panic_buf);
 
 	struct task* task = smp_current_task();

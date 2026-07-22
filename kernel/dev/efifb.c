@@ -101,7 +101,6 @@ void efifb_init(struct efifb_framebuffer* framebuffer)
 	fb->gfx_mode = false;
 
 	mmu_map_range(vm_get_kernel_space()->mmu_root, fb->address, fb->address + VM_DMAP_BASE, fb->height * fb->pitch, PROT_READ | PROT_WRITE | PROT_WRITECOMBINE, 0);
-	klog("efifb: mapped\n");
 	fb->address += VM_DMAP_BASE;
 		
 	fb->cursor_x = 0;

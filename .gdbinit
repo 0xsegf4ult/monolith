@@ -1,5 +1,5 @@
 layout split
-symbol-file buildroot/boot/vmmonolith.sym
+symbol-file sysroot/boot/kernel
 
 target remote localhost:26000
 
