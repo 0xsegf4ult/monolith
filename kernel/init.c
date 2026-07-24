@@ -3,6 +3,7 @@
 #include <dev/console.h>
 #include <dev/efifb.h>
 #include <dev/ps2.h>
+#include <dev/pseudo.h>
 #include <dev/tty.h>
 
 #include <fs/procfs/procfs.h>
@@ -49,6 +50,7 @@ void kernel_main()
 	efifb_init(&boot_info.fb);
 	ps2_init();
 	console_init();
+	pseudo_init();
 
 	vfs_mkdir("/proc", 0755);
 	procfs_init();

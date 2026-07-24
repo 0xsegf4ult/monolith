@@ -5,6 +5,7 @@ set(KERNEL_SOURCES
 	dev/efifb_font.c
 	dev/efifb.c
 	dev/ps2.c
+	dev/pseudo.c
 	dev/tty.c
 	fs/procfs/procfs.c
 	fs/ramfs/ramfs.c
