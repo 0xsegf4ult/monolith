@@ -37,7 +37,7 @@ int efifb_ioctl(struct file_descriptor* file, uint64_t op, uint64_t arg)
 
 	switch(op)
 	{
-	case FB_IOC_GETINFO:
+	case FBIOCGETINFO:
 	{
 		fbinfo_t info;
 		info.width = fb->width;
@@ -49,12 +49,12 @@ int efifb_ioctl(struct file_descriptor* file, uint64_t op, uint64_t arg)
 
 		return 0;
 	}
-	case FB_IOC_SET_TEXTMODE:
+	case FBIOCSETTXT:
 	{
 		fb->gfx_mode = false;
 		return 0;
 	}
-	case FB_IOC_SET_GFXMODE:
+	case FBIOCSETGFX:
 	{
 		fb->gfx_mode = true;
 		return 0;
@@ -69,7 +69,7 @@ static int efifb_mmap(struct file_descriptor* file, struct vm_object* vm)
 	struct efifb_framebuffer* fb = (struct efifb_framebuffer*)(chardev_lookup(file->inode->dev)->data);
 	if(!fb)
 		return -ENODEV;
-	
+
 	vm->flags |= VM_FLAG_DEVICE;
 	mmu_map_range(vm->space->mmu_root, fb->address - VM_DMAP_BASE, vm->base, vm->length, vm->prot | PROT_WRITECOMBINE, 0);
 	return 0;
@@ -90,7 +90,7 @@ void efifb_init(struct efifb_framebuffer* framebuffer)
 	dev_t id = make_dev(6, 0);
 	
 	struct char_device* dev = chardev_new(id);
-	dev->data = (void*)&fb;
+	dev->data = (void*)fb;
 	dev->fops = &efifb_fops;
 
 	vfs_mknod("/dev/fb0", S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, id);	

@@ -1,4 +1,5 @@
 #include <sys/clock.h>
+#include <mm/vmm.h>
 #include <libk/list.h>
 #include <cpu.h>
 #include <errno.h>
@@ -48,5 +49,16 @@ void clock_wait(uint64_t nanos)
 
 int sys_clock_gettime(clockid_t clock, struct timespec* tv)
 {
-	return -ENOSYS;
+	if(clock != CLOCK_REALTIME)
+		return -EINVAL;
+
+	if(!vm_validate_ptr(tv, sizeof(struct timespec)))
+		return -EFAULT;
+
+	uint64_t uptime = clock_uptime();
+
+	tv->tv_sec = (time_t)(uptime / 1000000000);
+	tv->tv_nsec = (int64_t)(uptime % 1000000000); 
+
+	return 0;
 }

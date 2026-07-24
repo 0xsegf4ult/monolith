@@ -2,3 +2,6 @@ sysroot
 build
 *.img
 *.sym
+*.tar*
+toolchain/build-gcc
+toolchain/build-binutils

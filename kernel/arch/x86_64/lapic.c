@@ -98,7 +98,7 @@ static void lapic_timer_calibrate()
 	lapic_write(LAPIC_REG_TIMER_INITCNT, 0xFFFFFFFF);
 	local_irq_enable();
 	
-	clock_wait(10 * 1000000);
+	clock_wait(1000000);
 
 	local_irq_disable();
 	lapic_write(LAPIC_REG_LVT_TIMER, 1 << 16);

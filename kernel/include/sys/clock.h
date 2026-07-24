@@ -3,6 +3,13 @@
 #include <libk/list.h>
 #include <types.h>
 
+enum clock_ids : clockid_t
+{
+	CLOCK_REALTIME = 0,
+	CLOCK_MONOTONIC = 1,
+	CLOCK_BOOTTIME = 7
+};
+
 typedef struct clock_source_type clocksource_t;
 
 struct clock_source_type

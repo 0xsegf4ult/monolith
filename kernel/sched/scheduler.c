@@ -1,5 +1,6 @@
 #include <sched/scheduler.h>
 #include <sched/task.h>
+#include <sched/task_sleep.h>
 
 #include <mm/slab.h>
 
@@ -159,6 +160,8 @@ void sched_init(uint32_t cpu_count)
 	}
 
 	num_cpus = cpu_count;
+
+	sleep_queue_init(cpu_count);
 }
 
 void sched_start_cpu()

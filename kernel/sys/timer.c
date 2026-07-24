@@ -1,5 +1,6 @@
 #include <sys/timer.h>
 #include <sched/scheduler.h>
+#include <sched/task_sleep.h>
 #include <libk/list.h>
 #include <klog.h>
 #include <panic.h>
@@ -12,6 +13,7 @@ static uint8_t max_prio = 0;
 void timer_interrupt()
 {
 	current->eoi();
+	sleep_queue_tick(1000000);
 	schedule();
 }
 
