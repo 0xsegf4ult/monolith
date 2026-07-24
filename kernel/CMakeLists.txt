@@ -6,6 +6,7 @@ set(KERNEL_SOURCES
 	dev/efifb.c
 	dev/ps2.c
 	dev/pseudo.c
+	dev/rtc.c
 	dev/tty.c
 	fs/procfs/procfs.c
 	fs/ramfs/ramfs.c

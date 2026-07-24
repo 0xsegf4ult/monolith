@@ -1,6 +1,6 @@
 #pragma once
 
-#include <types.hpp>
+#include <types.h>
 
 int rtc_init();
 time_t rtc_read();

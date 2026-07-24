@@ -4,6 +4,7 @@
 #include <dev/efifb.h>
 #include <dev/ps2.h>
 #include <dev/pseudo.h>
+#include <dev/rtc.h>
 #include <dev/tty.h>
 
 #include <fs/procfs/procfs.h>
@@ -15,6 +16,7 @@
 #include <sched/scheduler.h>
 #include <sched/task.h>
 #include <sys/binfmt/binfmt.h>
+#include <sys/clock.h>
 
 #include <libk/string.h>
 
@@ -50,12 +52,16 @@ void kernel_main()
 	efifb_init(&boot_info.fb);
 	ps2_init();
 	console_init();
-	pseudo_init();
 
 	vfs_mkdir("/proc", 0755);
 	procfs_init();
 	vmm_late_init();
 
+	pseudo_init();
+	rtc_init();
+	time_t cur_time = rtc_read();
+	klog("rtc: updated system time to %d\n", cur_time);
+	clock_set_boottime(cur_time);
 	binfmt_init();
 
 	mmu_map_range(vm_get_kernel_space()->mmu_root, boot_info.initramfs_address - VM_DMAP_BASE, boot_info.initramfs_address, boot_info.initramfs_size, PROT_READ, 0);

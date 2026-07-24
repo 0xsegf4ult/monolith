@@ -1,7 +1,9 @@
-#include <dev/rtc.hpp>
-#include <arch/x86_64/acpi.hpp>
-#include <arch/x86_64/io.hpp>
-#include <sys/spinlock.hpp>
+#include <dev/rtc.h>
+#include <sys/spinlock.h>
+#include <acpi.h>
+#include <cpu.h>
+#include <io.h>
+#include <types.h>
 
 static uint16_t cmos_address_port = 0x70;
 static uint16_t cmos_data_port = 0x71;
@@ -11,8 +13,8 @@ static spinlock_t lock;
 //disables NMI
 static uint8_t cmos_read(uint8_t reg)
 {
-	io::outb(reg | 0x80, cmos_address_port);
-	return io::inb(cmos_data_port);
+	outb(reg | 0x80, cmos_address_port);
+	return inb(cmos_data_port);
 }
 
 static bool rtc_update_in_progress()
@@ -37,12 +39,12 @@ static const int days_per_month[] =
 
 time_t rtc_read()
 {
-	uint64_t rflags;
-	spinlock_acquire_irqsave(lock, rflags);
+	uint64_t flags;
+	spinlock_acquire_irqsave(&lock, &flags);
 
 	while(rtc_update_in_progress())
 	{
-		asm volatile("pause");
+		native_cpu_relax();
 	}
 
 	uint8_t seconds = bcd_to_bin(cmos_read(0x00));
@@ -63,7 +65,7 @@ time_t rtc_read()
 		r_year = (year >= 70) ? (1900 + year) : (2000 + year);
 	}
 	
-	spinlock_release_irqsave(lock, rflags);
+	spinlock_release_irqsave(&lock, flags);
 
 	int64_t y_day = 0;
 	for(int m = 1; m < month; m++)
@@ -82,13 +84,11 @@ time_t rtc_read()
 
 int rtc_init()
 {
-	spinlock_init(lock);
+	spinlock_init(&lock);
 
-	auto* fadt = acpi_get_tables().fadt;
+	const fadt* fadt = acpi_get_tables()->fadt;
 	if(fadt)
-	{
 		century_register = fadt->century;
-	}
 
 	return 0;
 }
