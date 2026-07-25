@@ -51,7 +51,7 @@ void parse_memory_map(memory_map_t* out, virtaddr_t source, size_t src_entry_cou
 			break;
 		}
 
-		klog("memmap: [mem %p - %p] %s\n", region->begin, region->end, region_type_strings[region->type]);
+		klog("memmap: [mem %016p - %016p] %s\n", region->begin, region->end, region_type_strings[region->type]);
 		out->num_regions++;
 
 		if(out->num_regions >= max_memmap_regions)

@@ -1,5 +1,7 @@
 #include <fs/vnode.h>
+#include <fs/stat.h>
 #include <mm/slab.h>
+#include <net/socket.h>
 #include <sys/mutex.h>
 #include <types.h>
 
@@ -26,6 +28,9 @@ struct vnode* vnode_new(mode_t mode)
 
 void vnode_free(struct vnode* node)
 {
+	if(S_ISSOCK(node->mode))
+		socket_put((struct socket*)node->data);
+
 	kfree(node);
 }
 

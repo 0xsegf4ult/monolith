@@ -10,7 +10,7 @@ struct file_descriptor;
 struct file_ops
 {
 	int (*open)(struct vnode*, int);
-	int (*close)(int);
+	int (*close)(struct file_descriptor*);
 	ssize_t (*read)(struct file_descriptor*, byte*, size_t);
 	ssize_t (*write)(struct file_descriptor*, const byte*, size_t);
 	int (*ioctl)(struct file_descriptor*, uint64_t, uint64_t);

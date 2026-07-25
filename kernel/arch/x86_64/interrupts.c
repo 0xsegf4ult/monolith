@@ -33,18 +33,18 @@ void page_fault_handler(struct interrupt_frame* frame)
 	if(vm_page_fault(align_down(fault_addr, CONFIG_PAGE_SIZE), pflags))
 		return;
 
-	if(task && task->rsp && frame->rip <=  0x7fffffffffff)
+	if(task && task->rsp && frame->rip <= 0x7fffffffffff)
         {
 		dump_registers(frame);
 		stacktrace(frame->rbp);
-		klog("%s[%d]: segfault on cpu%u at %p ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), fault_addr, frame->rip, frame->rsp, frame->error_code);
+		klog("%s[%d]: segfault on cpu%u at %016p ip %016p sp %016p error %u\n", task->name, task->pid, smp_current_cpu(), fault_addr, frame->rip, frame->rsp, frame->error_code);
 		send_signal(task, SIGSEGV);
 		return;
 	}
 
 	panic_prepare();
 
-	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at %p %u\n", fault_addr, frame->error_code);
+	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled page fault at %016p %u\n", fault_addr, frame->error_code);
 	klog_nolock("CPU: %d PID: %d [%s] %s\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
 	dump_registers(frame);
@@ -61,14 +61,14 @@ void gpf_handler(struct interrupt_frame* frame)
         {
 		dump_registers(frame);
 		stacktrace(frame->rbp);
-		klog("%s[%d]: segfault on cpu%u ip %p sp %p error %u\n", task->name, task->pid, smp_current_cpu(), frame->rip, frame->rsp, frame->error_code);
+		klog("%s[%d]: segfault on cpu%u ip %016p sp %016p error %u\n", task->name, task->pid, smp_current_cpu(), frame->rip, frame->rsp, frame->error_code);
 		send_signal(task, SIGSEGV);
 		return;
 	}
 
 	panic_prepare();
 
-	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP %p [%d]\n", frame->rip, frame->error_code);
+	klog_nolock("\n\033[31mkernel panic:\033[0m unhandled general protection fault RIP %016p [%d]\n", frame->rip, frame->error_code);
 	klog_nolock("CPU: %d PID: %d [%s] %s\n", smp_current_cpu(), task ? task->pid : 0, task ? task->name : "kernel", task ? get_status_name(task->status) : "R");
 
 	dump_registers(frame);
@@ -125,7 +125,7 @@ void exception_handler(struct interrupt_frame* frame)
 
 			dump_registers(frame);
 			stacktrace(frame->rbp);
-			klog("%s[%d]: deadlysignal %x (vector %x) on cpu%d ip %p sp %p\n", task->name, task->pid, sig, frame->vector, smp_current_cpu(), frame->rip, frame->rsp);
+			klog("%s[%d]: deadlysignal %x (vector %x) on cpu%d ip %016p sp %016p\n", task->name, task->pid, sig, frame->vector, smp_current_cpu(), frame->rip, frame->rsp);
 			send_signal(task, sig);
 			return;
 		}

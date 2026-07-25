@@ -171,7 +171,7 @@ ssize_t read_proc_status(struct file_descriptor* file, byte* buffer, size_t leng
 	struct vm_space* targetvm = target->current_vm_space;
 
 	//FIXME: respect length
-	sprintf(buffer, "Name: %s\nState: %s\nPid: %d\nPgid:%d\nSid: %d\nUid: %u\nGid: %u\nVirtAnon: %u kB\nRssAnon: %u kB\nVirtFile: %u kB\nRssFile: %u kB\n",
+	sprintf(buffer, "Name: %s\nState: %s\nPid: %d\nPgid: %d\nSid: %d\nUid: %u\nGid: %u\nVirtAnon: %u kB\nRssAnon: %u kB\nVirtFile: %u kB\nRssFile: %u kB\n",
 		target->name,
 		get_status_name(target->status),
 		target->pid,
@@ -207,13 +207,13 @@ ssize_t read_proc_maps(struct file_descriptor* file, byte* buffer, size_t length
 		if(out_buffer >= (char*)buffer + length)
 			break;
 
-		ssize_t written = sprintf(out_buffer, "%p - %p %c%c%c %x %s\n",
+		ssize_t written = sprintf(out_buffer, "%016p - %016p %c%c%c %08x %s\n",
 			range->base,
 			range->base + range->length,
 			(range->prot & PROT_READ) ? 'r' : '-',
 			(range->prot & PROT_WRITE) ? 'w' : '-',
 			(range->prot & PROT_EXEC) ? 'x' : '-',
-			0,
+			range->offset,
 			range->file ? range->file->path->name : "[anon]"
 		);
 		out_buffer += (written - 1);

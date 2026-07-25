@@ -5,3 +5,5 @@ build
 *.tar*
 toolchain/build-gcc
 toolchain/build-binutils
+toolchain/gcc-*
+toolchain/binutils-*

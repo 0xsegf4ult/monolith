@@ -10,7 +10,7 @@
 static uint64_t ticks = 0;
 constexpr hwirq_t ISA_IRQ_PIT = 0;
 
-void irq_handler()
+void irq_handler(void* payload)
 {
 	ticks++;
 }
@@ -22,7 +22,7 @@ static uint64_t pit_read(clocksource_t* source)
 
 static void pit_enable(clocksource_t* source)
 {
-	irq_register(ISA_IRQ_PIT, irq_handler);
+	irq_register(ISA_IRQ_PIT, irq_handler, nullptr);
 	
 	outb(0b00110100, 0x43);
 	outb(1193 & 0xFF, 0x40);

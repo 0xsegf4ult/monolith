@@ -27,9 +27,7 @@ typedef struct
 
 enum efifb_ioctl_op
 {
-	FBIOCGETINFO 	= 1,
-	FBIOCSETTXT 	= 2,
-	FBIOCSETGFX  	= 3
+	FBIOCGETINFO 	= 1
 };
 
 void efifb_init(struct efifb_framebuffer* fb);

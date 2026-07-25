@@ -45,13 +45,20 @@ int main(int argc, char* argv[])
 	}
 
 	printf("File: %s\n"
-	       "Size: %d %s\n"
-	       "Links: %d\n"
+	       "Size: %d Blocks: %d IO Block: %d %s\n"
+	       "Device: %u,%u Inode: %u Links: %d Device type: %u,%u\n"
 	       "Access: (0%o/%c%c%c%c%c%c%c%c%c%c) Uid: (%d) Gid: (%d)\n",
 		argv[1],
 		f_stat.st_size,
+		f_stat.st_blocks,
+		f_stat.st_blksize,
 		typestr,
+		f_stat.st_dev >> 32,
+		f_stat.st_dev & 0xFFFFFFFF,
+		f_stat.st_ino,
 		f_stat.st_nlink,
+		f_stat.st_rdev >> 32,
+		f_stat.st_rdev & 0xFFFFFFFF,
 		mode & 0777,
 	       	type,
 		mode & S_IRUSR ? 'r' : '-',

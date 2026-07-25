@@ -108,7 +108,7 @@ void* kmalloc(size_t size)
 			return slab_alloc(&km_caches[i]);
 	}
 
-	panic("kmalloc: allocation %x too big", size);
+	panic("kmalloc: allocation %d too big", size);
 	return nullptr;
 }
 

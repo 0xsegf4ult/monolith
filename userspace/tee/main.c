@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,8 +16,8 @@ int main(int argc, const char** argv)
 		fd = open(argv[1], O_CREAT);
 		if(fd < 0)
 		{
-			printf("tee: %s: %s", argv[1], strerrordesc_np(-fd));
-			return -1;
+			printf("tee: %s: %s", argv[1], strerror(errno));
+			return 1;
 		}
 	}
 
@@ -25,7 +26,7 @@ int main(int argc, const char** argv)
 		ssize_t bytes_read = read(0, buffer, 0x1000);
 		if(bytes_read < 0)
 		{
-			printf("tee: stdin: %s", strerrordesc_np(-bytes_read));
+			printf("tee: stdin: %s", strerror(errno));
 			goto cleanup;
 		}
 		
@@ -38,7 +39,7 @@ int main(int argc, const char** argv)
 			ssize_t bw = write(fd, buffer, bytes_read);
 			if(bw < 0)
 			{
-				printf("tee: %s: %s", argv[1], strerrordesc_np(-bw));
+				printf("tee: %s: %s", argv[1], strerror(errno));
 				goto cleanup;
 			}
 		}

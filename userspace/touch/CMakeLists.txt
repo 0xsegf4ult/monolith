@@ -6,4 +6,4 @@ target_link_libraries(touch PRIVATE ${USERSPACE_LINK_LIBRARIES})
 target_sources(touch
         PRIVATE
         main.c)
-set_target_properties(touch PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/buildroot/bin")
+set_target_properties(touch PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/sysroot/usr/bin")

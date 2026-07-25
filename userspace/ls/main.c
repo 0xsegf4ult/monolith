@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
 
 				char pbuf[64];
 				sprintf(pbuf, "%s/%s", optind < argc ? argv[optind] : ".", name);
-				struct stat f_stat;
+				struct stat f_stat = {};
 				int st_r = stat(pbuf, &f_stat);
 
 				mode_t mode = f_stat.st_mode;

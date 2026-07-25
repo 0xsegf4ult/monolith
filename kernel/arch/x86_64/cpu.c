@@ -263,12 +263,12 @@ void cpu_context_restore(struct cpu_context* ctx)
 
 void dump_registers(struct interrupt_frame* frame)
 {
-        klog_nolock("RAX: %x RBX: %x RCX: %x\n", frame->rax, frame->rbx, frame->rcx);
-        klog_nolock("RDX: %x RSI: %x RDI: %x\n",  frame->rdx, frame->rsi, frame->rdi);
-        klog_nolock("RBP: %x R08: %x R09: %x\n", frame->rbp, frame->r8, frame->r9);
-        klog_nolock("R10: %x R11: %x R12: %x\n", frame->r10, frame->r11, frame->r12);
-        klog_nolock("R13: %x R14: %x R15: %x\n", frame->r13, frame->r14, frame->r15);
-        klog_nolock("RIP: %p:%p\nRSP: %p:%p\nRFLAGS: %x\n", frame->cs, frame->rip, frame->ss, frame->rsp, frame->rflags);
+        klog_nolock("RAX: %016x RBX: %016x RCX: %016x\n", frame->rax, frame->rbx, frame->rcx);
+        klog_nolock("RDX: %016x RSI: %016x RDI: %016x\n",  frame->rdx, frame->rsi, frame->rdi);
+        klog_nolock("RBP: %016x R08: %016x R09: %016x\n", frame->rbp, frame->r8, frame->r9);
+        klog_nolock("R10: %016x R11: %016x R12: %016x\n", frame->r10, frame->r11, frame->r12);
+        klog_nolock("R13: %016x R14: %016x R15: %016x\n", frame->r13, frame->r14, frame->r15);
+        klog_nolock("RIP: %02p:%016p\nRSP: %02p:%016p\nRFLAGS: %08x\n", frame->cs, frame->rip, frame->ss, frame->rsp, frame->rflags);
 }
 
 static bool valid_frame(virtaddr_t addr)
@@ -299,7 +299,7 @@ void stacktrace(virtaddr_t frame)
 	{
 		if((virtaddr_t)stk & 0x7)
 		{
-			klog_nolock("<unaligned stackframe> %p ???\n", stk);
+			klog_nolock("<unaligned stackframe> %016p ???\n", stk);
 			break;
 		}
 
@@ -312,7 +312,7 @@ void stacktrace(virtaddr_t frame)
 		if(stk->rip == 0x0)
 			break;
 
-		klog_nolock("%p %s\n", stk->rip, "???");
+		klog_nolock("%016p %s\n", stk->rip, "???");
 		stk = stk->rbp;
 	}
 }

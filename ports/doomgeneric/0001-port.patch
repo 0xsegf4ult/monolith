@@ -1,7 +1,7 @@
 From e99c756e4ca6193a1dff0589343737ef7acca6f3 Mon Sep 17 00:00:00 2001
 From: 0xsegf4ult <0xsegf4ult@protonmail.com>
 Date: Fri, 24 Jul 2026 15:05:46 +0200
-Subject: [PATCH] port
+Subject: [PATCH 1/2] port
 
 ---
  doomgeneric/Makefile.monolith      |  55 ++++++++
@@ -286,6 +286,46 @@ index 0000000..49ea295
 +
 +	return 0;
 +}
+-- 
+2.54.0
+
+
+From 9112463a07b1e2d32dcdc42e3877a8374cf64d40 Mon Sep 17 00:00:00 2001
+From: 0xsegf4ult <0xsegf4ult@protonmail.com>
+Date: Sat, 25 Jul 2026 20:37:11 +0200
+Subject: [PATCH 2/2] update fb/keyboard
+
+---
+ doomgeneric/doomgeneric_monolith.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/doomgeneric/doomgeneric_monolith.c b/doomgeneric/doomgeneric_monolith.c
+index 49ea295..bd5d8f5 100644
+--- a/doomgeneric/doomgeneric_monolith.c
++++ b/doomgeneric/doomgeneric_monolith.c
+@@ -50,6 +50,11 @@ static unsigned char convertToDoomKey(char key) {
+ 		return KEY_ESCAPE;
+ 	case 0x1d:
+ 		return KEY_FIRE;
++	case 0x2a:
++	case 0x36:
++		return KEY_RSHIFT;
++	case 0x38:
++		return KEY_LALT;
+ 	case 'w':
+ 	case 'W':
+ 		return KEY_UPARROW;
+@@ -111,10 +116,6 @@ void DG_Init() {
+ 	if (ret != 0)
+ 		I_Error("Failed to get framebuffer info: %s", strerror(errno));
+ 
+-	ret = ioctl(fbFd, FBIOCSETGFX, 0);
+-	if(ret < 0)
+-		I_Error("Failed to set framebuffer to GFX mode: %s", strerror(errno));
+-
+ 	fbWidth = finfo.width;
+ 	fbHeight = finfo.height;
+ 	fbBytesPerPixel = finfo.bpp;
 -- 
 2.54.0
 

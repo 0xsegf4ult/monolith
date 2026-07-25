@@ -4,20 +4,21 @@
 
 enum PRINT_FLAGS
 {
-	FLAG_SIGNED = 1
+	FLAG_SIGNED = 1,
+	FLAG_ZERO = 2,
 };
 
 static const char* digits = "0123456789abcdef";
 
-char* num_to_str(char* buf, int32_t num, int32_t base, int flags)
+char* num_to_str(char* buf, int64_t num, int32_t base, int flags, int padding)
 {
 	if(base < 2 || base > 16)
 		return buf;
 
 	ssize_t len = 0;
-	char tmp_str[32];
+	char tmp_str[64];
 
-	int32_t negative_num = num < 0 ? num : -num;
+	int64_t negative_num = num < 0 ? num : -num;
 
 	do
 	{
@@ -28,13 +29,18 @@ char* num_to_str(char* buf, int32_t num, int32_t base, int flags)
 	if(num < 0 && (flags & FLAG_SIGNED))
 		tmp_str[len++] = '-';
 
+	padding -= len;
+
+	while(padding-- > 0)
+		*(buf++) = (flags & FLAG_ZERO) ? '0' : ' ';
+
 	for(ssize_t i = len - 1; i >= 0; i--)
 		*(buf++) = tmp_str[i];
 
 	return buf;
 }
 
-char* ptr_to_str(char* buf, uintptr_t ptr)
+char* ptr_to_str(char* buf, uintptr_t ptr, int flags, int padding)
 {
 	(*buf++) = '0';
 	(*buf++) = 'x';
@@ -47,6 +53,11 @@ char* ptr_to_str(char* buf, uintptr_t ptr)
                 tmp_str[len++] = digits[ptr % 16];
                 ptr /= 16;
         } while(ptr);
+	
+	padding -= len;
+	
+	while(padding-- > 0)
+		*(buf++) = (flags & FLAG_ZERO) ? '0' : ' ';
 
         for(ssize_t i = len - 1; i >= 0; i--)
                 *(buf++) = tmp_str[i];
@@ -71,8 +82,51 @@ ssize_t vsprintf(char* buf, const char* fmt, va_list args)
 		int flags = 0;
 		char* str;
 		ssize_t len = 0;
+		char length = '\0';
+		int32_t base = 10;
+		int width = 0;
 
-		switch(*fmt)
+		if(*fmt == '0')
+		{
+			flags |= FLAG_ZERO;
+			fmt++;
+		}
+
+		while(*fmt >= '0' && *fmt <= '9')
+		{
+			width *= 10;
+			width += *fmt - 48;
+			fmt++;
+		}
+
+		if(*fmt == 'l' || *fmt == 'z')
+		{
+			length = *fmt;
+			fmt++;
+		}
+
+		char specifier = *fmt;
+
+		switch(specifier)
+		{
+		case 'd':
+		case 'i':
+			flags |= FLAG_SIGNED;
+			specifier = 'u';
+			break;
+		case 'x':
+			base = 16;
+			specifier = 'u';
+			break;
+		case 'o':
+			base = 8;
+			specifier = 'u';
+			break;
+		default:
+			break;
+		}
+
+		switch(specifier)
 		{
 		case '%':
 			*(buf++) = '%';
@@ -88,20 +142,24 @@ ssize_t vsprintf(char* buf, const char* fmt, va_list args)
 				*(buf++) = *(str++);
 
 			break;
-		case 'd':
-		case 'i':
-			flags |= FLAG_SIGNED;
 		case 'u':
-			buf = num_to_str(buf, va_arg(args, int32_t), 10, flags);
+			switch(length)
+			{
+			case 0:
+				buf = num_to_str(buf, va_arg(args, int32_t), base, flags, width);
+				break;
+			case 'l':
+				buf = num_to_str(buf, va_arg(args, int64_t), base, flags, width);
+				break;
+			case 'z':
+				buf = num_to_str(buf, va_arg(args, size_t), base, flags, width);
+				break;
+			default:
+				break;
+			}
 			break;
 		case 'p':
-			buf = ptr_to_str(buf, va_arg(args, uintptr_t));
-			break;
-		case 'x':
-			buf = num_to_str(buf, va_arg(args, uint32_t), 16, flags);
-			break;
-		case 'o':
-			buf = num_to_str(buf, va_arg(args, uint32_t), 8, flags);
+			buf = ptr_to_str(buf, va_arg(args, uintptr_t), flags, width);
 			break;
 		}
 

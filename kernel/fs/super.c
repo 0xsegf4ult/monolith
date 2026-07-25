@@ -17,7 +17,7 @@ int vfs_mount(const char* src, const char* target, const char* fstype)
 		return -EINVAL;
 
 	if(!(fs->flags & FS_FLAG_NODEV) && !src)
-		return -EINVAL;
+		return -ENOTBLK;
 
 	struct ventry* query = nullptr;
 	int q_status = vfs_lookup(target, &query, 0);

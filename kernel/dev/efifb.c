@@ -49,16 +49,6 @@ int efifb_ioctl(struct file_descriptor* file, uint64_t op, uint64_t arg)
 
 		return 0;
 	}
-	case FBIOCSETTXT:
-	{
-		fb->gfx_mode = false;
-		return 0;
-	}
-	case FBIOCSETGFX:
-	{
-		fb->gfx_mode = true;
-		return 0;
-	}
 	}
 
 	return -EINVAL;
@@ -75,8 +65,30 @@ static int efifb_mmap(struct file_descriptor* file, struct vm_object* vm)
 	return 0;
 }
 
+static int efifb_open(struct vnode* node, int flags)
+{
+	struct efifb_framebuffer* fb = (struct efifb_framebuffer*)(chardev_lookup(node->dev)->data);
+	if(!fb)
+		return -ENODEV;
+
+	fb->gfx_mode = true;
+	return 0;
+}
+
+static int efifb_close(struct file_descriptor* file)
+{
+	struct efifb_framebuffer* fb = (struct efifb_framebuffer*)(chardev_lookup(file->inode->dev)->data);
+	if(!fb)
+		return -ENODEV;
+
+	fb->gfx_mode = false;
+	return 0;
+}
+
 static struct file_ops efifb_fops = 
 {
+	.open = efifb_open,
+	.close = efifb_close,
 	.write = efifb_file_write,
 	.ioctl = efifb_ioctl,
 	.mmap = efifb_mmap

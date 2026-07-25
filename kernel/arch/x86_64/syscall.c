@@ -3,6 +3,7 @@
 #include <arch/x86_64/irq.h>
 #include <fs/vfs_sys.h>
 #include <mm/vm_syscall.h>
+#include <net/socket_sys.h>
 #include <sched/task.h>
 #include <sched/task_sys.h>
 #include <sched/task_sleep.h>
@@ -131,6 +132,18 @@ void syscall_handler(struct interrupt_frame* frame)
 		break;
 	case SYS_ARCH_PRCTL:
 		frame->rax = (uint64_t)sys_arch_prctl((int)frame->rdi, frame->rsi);
+		break;
+	case SYS_SOCKET:
+		frame->rax = (uint64_t)sys_socket((int)frame->rdi, (int)frame->rsi, (int)frame->rdx);
+		break;
+	case SYS_BIND:
+		frame->rax = (uint64_t)sys_bind((int)frame->rdi, (const struct sockaddr*)frame->rsi, (socklen_t)frame->rdx);
+		break;
+	case SYS_RECVFROM:
+		frame->rax = (uint64_t)sys_recvfrom((int)frame->rdi, (byte*)frame->rsi, (size_t)frame->rdx, (int)frame->rcx, (struct sockaddr*)frame->r8, (socklen_t*)frame->r9);
+		break;
+	case SYS_SENDTO:
+		frame->rax = (uint64_t)sys_sendto((int)frame->rdi, (const byte*)frame->rsi, (size_t)frame->rdx, (int)frame->rcx, (const struct sockaddr*)frame->r8, (socklen_t)frame->r9);
 		break;
 	default:
 		klog("unknown syscall: %u\n", frame->rax);

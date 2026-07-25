@@ -17,7 +17,6 @@
 #include <types.h>
 #include <panic.h>
 
-
 static struct vfs_context context = {};
 
 void vfs_init()
@@ -169,7 +168,39 @@ int vfs_unlink(const char* path)
 	return 0;
 }
 
-static int open_internal(struct vnode* node, int flags, struct ventry* path)
+void vfs_ref_file(struct file_descriptor* file)
+{
+	atomic_fetch_add(&file->refcount, 1u);
+}
+
+int vfs_put_file(struct file_descriptor* file)
+{
+	uint32_t last = atomic_fetch_add(&file->refcount, -1);
+	if(last > 1)
+		return 0;
+
+	int cres = 0;
+	if(file->inode->fops->close)
+		cres = file->inode->fops->close(file);
+	
+	if(cres < 0)
+		return cres;
+
+	file->pos = 0;
+
+	vnode_put(file->inode);
+	file->inode = nullptr;
+
+	if(file->path)
+	{
+		ventry_put(file->path);
+		file->path = nullptr;
+	}
+
+	file->fs_id = -1;
+}
+
+int vfs_open_internal(struct vnode* node, int flags, struct ventry* path)
 {
 	int fs_id = 0;
 	if(node->fops->open)
@@ -190,7 +221,7 @@ static int open_internal(struct vnode* node, int flags, struct ventry* path)
 			context.open_files[i].inode = node;
 			context.open_files[i].path = path;
 			context.open_files[i].fs_id = fs_id;
-			context.open_files[i].refcount = 1;
+			atomic_store(&context.open_files[i].refcount, 1);
 			break;
 		}
 	}
@@ -227,7 +258,7 @@ int vfs_open(const char* path, int flags)
 		return -EBADF;
 	}
 
-	int fd = open_internal(node, flags, query);
+	int fd = vfs_open_internal(node, flags, query);
 	if(fd < 0)
 		ventry_put(query);
 
@@ -255,7 +286,7 @@ int vfs_openat(int fd, const char* path, int flags)
 		return -EBADF;
 	}
 
-	int s_fd = open_internal(node, flags, query);
+	int s_fd = vfs_open_internal(node, flags, query);
 	if(s_fd < 0)
 		ventry_put(query);
 
@@ -298,26 +329,11 @@ int vfs_close(int fd)
 	if(!node)
 		return -EBADF;
 	
-	context.open_files[fd].refcount--;
-	if(context.open_files[fd].refcount > 0)
-		return 0;
 
-	int cres = 0;
-	if(node->fops->close)
-		cres = node->fops->close(context.open_files[fd].fs_id);
-	
+	int cres = vfs_put_file(&context.open_files[fd]);	
 	if(cres < 0)
 		return cres;
 
-	vnode_put(node);
-	context.open_files[fd].pos = 0;
-	context.open_files[fd].inode = nullptr;
-
-	if(context.open_files[fd].path)
-		ventry_put(context.open_files[fd].path);
-
-	context.open_files[fd].path = nullptr;
-	context.open_files[fd].fs_id = -1;
 	return 0;
 }
 
@@ -411,8 +427,7 @@ int vfs_dup(int fd)
 	if(!inode)
 		return -EBADF;
 
-	context.open_files[fd].refcount++;
-
+	vfs_ref_file(&context.open_files[fd]);
 	return fd;
 }
 

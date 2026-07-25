@@ -22,22 +22,24 @@ struct posix_dent
 
 enum OPEN_FLAGS
 {
-        O_NONBLOCK = 0x0001,
-        O_NDELAY = O_NONBLOCK,
-        O_CLOEXEC = 0x0002,
-        O_RDONLY = 0x0004,
-        O_WRONLY = 0x0008,
-        O_RDWR = O_RDONLY | O_WRONLY,
-        O_APPEND = 0x0010,
-        O_CREAT = 0x0020,
-        O_DSYNC = 0x0040,
-        O_EXCL = 0x0080,
-        O_NOCTTY = 0x0100,
-        O_RSYNC = 0x0200,
-        O_SYNC = 0x0400,
-        O_TRUNC = 0x0800,
-        O_CLOFORK = 0x1000,
-        O_ACCMODE = O_RDONLY | O_WRONLY | O_RDWR
+	O_RDONLY	= 0x000000,
+	O_WRONLY	= 0x000001,
+	O_RDWR		= 0x000002,
+	O_CREAT		= 0x000040,
+	O_EXCL		= 0x000080,
+	O_NOCTTY 	= 0x000100,
+	O_TRUNC		= 0x000200,
+	O_APPEND	= 0x000400,
+	O_NONBLOCK	= 0x000800,
+	O_DSYNC		= 0x001000,
+	O_ASYNC		= 0x002000,
+	O_DIRECT	= 0x004000,
+	O_NOFOLLOW	= 0x020000,
+	O_CLOEXEC	= 0x080000,
+	O_SYNC		= 0x101000,
+	O_RSYNC		= 0x101000,
+	O_PATH		= 0x200000,
+	O_ACCMODE	= O_RDWR | O_WRONLY | O_PATH
 };
 
 enum SEEK_FLAGS
@@ -74,6 +76,10 @@ int vfs_mkdir(const char* path, mode_t mode);
 int vfs_mknod(const char* path, mode_t mode, dev_t device);
 int vfs_unlink(const char* path);
 
+void vfs_ref_file(struct file_descriptor* file);
+int vfs_put_file(struct file_descriptor* file);
+
+int vfs_open_internal(struct vnode* node, int flags, struct ventry* ventry);
 int vfs_open(const char* path, int flags);
 int vfs_openat(int fd, const char* path, int flags);
 int vfs_close(int fd);

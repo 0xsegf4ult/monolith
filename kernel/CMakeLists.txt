@@ -1,13 +1,19 @@
-set(KERNEL_CFLAGS -ffreestanding -nostdlib -nodefaultlibs)
+set(KERNEL_CFLAGS -ffreestanding -nostdlib -nodefaultlibs -Wno-packed-bitfield-compat -fstack-protector-strong)
 set(KERNEL_LDFLAGS -nostdlib -nodefaultlibs)
 set(KERNEL_SOURCES
 	dev/console.c
+	dev/disk.c
 	dev/efifb_font.c
 	dev/efifb.c
+	dev/net/e1000/e1000.c
+	dev/nvme/nvme.c
+	dev/pcie/pcie.c
+	dev/pcie/pci_class.c
 	dev/ps2.c
 	dev/pseudo.c
 	dev/rtc.c
 	dev/tty.c
+	fs/fat/fatfs.c
 	fs/procfs/procfs.c
 	fs/ramfs/ramfs.c
 	fs/filesystem.c
@@ -24,6 +30,15 @@ set(KERNEL_SOURCES
 	mm/slab.c
 	mm/vm_syscall.c
 	mm/vmm.c
+	net/ipv4/ipv4.c
+	net/ipv4/raw.c
+	net/ipv4/route.c
+	net/ipv4/udp.c
+	net/arp.c
+	net/ether.c
+	net/netdev.c
+	net/socket.c
+	net/socket_sys.c
 	libk/string.c
 	libk/vsprintf.c
 	sched/scheduler.c

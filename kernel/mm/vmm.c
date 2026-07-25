@@ -213,6 +213,10 @@ static void vm_free_range(struct vm_space* space, struct vm_object* range)
 		addr += CONFIG_PAGE_SIZE;
 		len -= (len < CONFIG_PAGE_SIZE) ? len : CONFIG_PAGE_SIZE;
 	}
+
+	if(range->flags & VM_FLAG_FILE)
+		vfs_put_file(range->file);
+
 	mmu_invalidate(space->mmu_root, range->base, range->length);
 	kfree(range);
 }
@@ -253,7 +257,7 @@ virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 	if(is_file)
 	{
 		range->file = vfs_get_fd(info.fd);
-		atomic_fetch_add(&range->file->refcount, 1u);
+		vfs_ref_file(range->file);
 		range->offset = info.offset;
 	}
 	else
@@ -489,6 +493,6 @@ bool vm_validate_ptr(const void* ptr, size_t size)
 	//FIXME: actually check
 	if((virtaddr_t)ptr < VM_USERSPACE_BASE || (virtaddr_t)ptr > VM_USERSPACE_END)
 		return false;
-
+	
 	return true;
 }

@@ -171,7 +171,7 @@ constexpr char shifted_scancodes[] =
 
 static uint32_t keyboard0_mod = 0; 
 
-static void interrupt_handler()
+static void interrupt_handler(void* payload)
 {
 	auto scancode = inb(0x60);
 
@@ -244,7 +244,7 @@ int kbd_open(struct vnode* node, int flags)
 	return 0;
 }
 
-int kbd_close(int fd)
+int kbd_close(struct file_descriptor* file)
 {
 	owner = nullptr;
 	return 0;
@@ -302,7 +302,7 @@ void ps2_init()
 	dev->fops = &kbd_fops;
 
 	vfs_mknod("/dev/keyboard", S_IFCHR | S_IRUSR | S_IWUSR, id);
-	irq_register(ISA_IRQ_PS2, interrupt_handler);
+	irq_register(ISA_IRQ_PS2, interrupt_handler, nullptr);
 }
 
 void ps2_set_tty(struct tty_device* tty)

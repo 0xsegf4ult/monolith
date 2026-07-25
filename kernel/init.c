@@ -2,16 +2,22 @@
 
 #include <dev/console.h>
 #include <dev/efifb.h>
+#include <dev/pcie/pcie.h>
 #include <dev/ps2.h>
 #include <dev/pseudo.h>
 #include <dev/rtc.h>
 #include <dev/tty.h>
 
+#include <fs/fat/fatfs.h>
 #include <fs/procfs/procfs.h>
 #include <fs/initramfs.h>
 #include <fs/vfs.h>
 #include <mm/mmu.h>
 #include <mm/vmm.h>
+
+#include <net/arp.h>
+#include <net/netdev.h>
+#include <net/ipv4/ipv4.h>
 
 #include <sched/scheduler.h>
 #include <sched/task.h>
@@ -29,6 +35,7 @@ static const char* initargs[] = {"/usr/bin/init", nullptr};
 
 static void spawn_init()
 {
+	klog("init: running %s as PID1\n", initargs[0]);
 	struct task* init_proc = process_userspace_new(initargs[0], (virtaddr_t)binfmt_exec_task);
 	init_proc->argc = 1;
 	init_proc->envc = 0;
@@ -62,6 +69,15 @@ void kernel_main()
 	time_t cur_time = rtc_read();
 	klog("rtc: updated system time to %d\n", cur_time);
 	clock_set_boottime(cur_time);
+
+	netdev_init();
+	arp_init();
+	ipv4_init();
+	
+	pcie_init();
+
+	fatfs_init();
+
 	binfmt_init();
 
 	mmu_map_range(vm_get_kernel_space()->mmu_root, boot_info.initramfs_address - VM_DMAP_BASE, boot_info.initramfs_address, boot_info.initramfs_size, PROT_READ, 0);

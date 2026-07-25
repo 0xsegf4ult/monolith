@@ -32,7 +32,7 @@ void* memmap_reserve(memory_map_t* memmap, size_t size)
 			new_region->end = align_up(begin + size, CONFIG_PAGE_SIZE);
 			new_region->type = MEM_REGION_ALLOCATED;
 
-			klog("memmap: region [%p - %p] -> allocated\n", new_region->begin, new_region->end);
+			klog("memmap: region [%016p - %016p] -> allocated\n", new_region->begin, new_region->end);
 
 			memmap->num_regions++;
 			return (void*)(begin + VM_DMAP_BASE);

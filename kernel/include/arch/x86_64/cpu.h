@@ -81,3 +81,23 @@ void cpu_context_restore(struct cpu_context* ctx);
 struct interrupt_frame;
 void dump_registers(struct interrupt_frame* frame);
 void stacktrace(virtaddr_t frame);
+
+static inline uint16_t be16_to_native(uint16_t data)
+{
+	return __builtin_bswap16(data);
+}
+
+static inline uint16_t native_to_be16(uint16_t data)
+{
+	return __builtin_bswap16(data);
+}
+
+static inline uint32_t be32_to_native(uint32_t data)
+{
+	return __builtin_bswap32(data);
+}
+
+static inline uint32_t native_to_be32(uint32_t data)
+{
+	return __builtin_bswap32(data);
+}

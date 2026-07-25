@@ -61,7 +61,7 @@ int tty_open(struct vnode* node, int flags)
 	return 0;
 }
 
-int tty_close(int fd)
+int tty_close(struct file_descriptor* file)
 {
 	return 0;
 }
