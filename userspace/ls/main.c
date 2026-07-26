@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 	close(fd);
 	if(read_count < 0)
 	{
-		printf("ls: %s: %s", optind <  argc ? argv[optind] : ".", strerror(errno));
+		printf("ls: %s: %s", optind < argc ? argv[optind] : ".", strerror(errno));
 		return 1;
 	}
 

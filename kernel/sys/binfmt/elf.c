@@ -23,43 +23,79 @@ static bool elf_validate(Elf64_Ehdr* header)
 	return true;
 }
 
-int elf_exec(int binfd, struct task* task, virtaddr_t* out_entry)
+struct elf_image
 {
+	virtaddr_t entry;
+	char* interpreter;
+	virtaddr_t base;
+	virtaddr_t load_bias;
+	Elf64_Half phnum;
+	Elf64_Half phentsize;
+	Elf64_Off phdr_off;
+};
+
+static int elf_load(int binfd, struct task* task, struct elf_image* out_img)
+{
+	out_img->base = VM_USERSPACE_END;
+
 	Elf64_Ehdr header;
 	ssize_t r = vfs_read(binfd, (byte*)&header, sizeof(Elf64_Ehdr));
-
 	if(!elf_validate(&header))
 		return -ENOEXEC;
-
-	if(header.e_type != ET_EXEC)
+	
+	if(header.e_type != ET_EXEC && header.e_type != ET_DYN)
 	{
-		klog("binfmt_elf: only ET_EXEC is supported!");
+		klog("binfmt_elf: only ET_EXEC or ET_DYN is supported!");
 		return -ENOTSUP;
 	}
-
+	
 	Elf64_Phdr* phdrs = kmalloc(header.e_phentsize * header.e_phnum);
 	vfs_seek(binfd, header.e_phoff, SEEK_SET);
 	vfs_read(binfd, (byte*)phdrs, header.e_phentsize * header.e_phnum);
 
-	virtaddr_t base = 0;
+	out_img->phnum = header.e_phnum;
+	out_img->phentsize = header.e_phentsize;
+	out_img->phdr_off = header.e_phoff;
 
-	Elf64_Phdr* phdr = phdrs;
+	for(Elf64_Phdr* phdr = phdrs; phdr < phdrs + header.e_phnum; phdr++)
+	{
+		if(phdr->p_type == PT_INTERP)
+		{
+			char* interpreter = kmalloc(phdr->p_filesz);
+			vfs_seek(binfd, phdr->p_offset, SEEK_SET);
+			vfs_read(binfd, (byte*)interpreter, phdr->p_filesz);
+			out_img->interpreter = interpreter;
+			continue;
+		}
+
+		if(phdr->p_vaddr < out_img->base)
+			out_img->base = phdr->p_vaddr;
+	}
+
+	if(header.e_type == ET_DYN)
+		out_img->base = 0x7f0000000000;
+
+	bool found_bias = false;
 	for(Elf64_Phdr* phdr = phdrs; phdr < phdrs + header.e_phnum; phdr++)
 	{
 		if(phdr->p_type != PT_LOAD)
 			continue;
-
+		
+		if(!found_bias)
+		{
+			out_img->load_bias = out_img->base - phdr->p_vaddr;
+			found_bias = true;
+		}
+		
 		uint32_t protflags = PROT_USER | PROT_READ;
 		if(phdr->p_flags & PF_W)
 			protflags |= PROT_WRITE;
 		if(phdr->p_flags & PF_X)
 			protflags |= PROT_EXEC;
 
-		virtaddr_t map_vaddr = align_down(phdr->p_vaddr, CONFIG_PAGE_SIZE);
+		virtaddr_t map_vaddr = out_img->load_bias + align_down(phdr->p_vaddr, CONFIG_PAGE_SIZE);
 		off_t map_offset = align_down(phdr->p_offset, CONFIG_PAGE_SIZE);
-		virtaddr_t align_rem = phdr->p_vaddr - map_vaddr;
-		if(!base)
-			base = map_vaddr;
+		virtaddr_t align_rem = (out_img->load_bias + phdr->p_vaddr) - map_vaddr;
 
 		if(phdr->p_filesz)
 		{
@@ -81,18 +117,46 @@ int elf_exec(int binfd, struct task* task, virtaddr_t* out_entry)
 			virtaddr_t mem_end_addr = map_vaddr + align_rem + phdr->p_memsz;
 
 			virtaddr_t anon_map_start = align_up(file_end_addr, CONFIG_PAGE_SIZE);
-			memset((void*)file_end_addr, 0, anon_map_start - file_end_addr);
+			memset((void*)(file_end_addr), 0, anon_map_start - file_end_addr);
 
 			virtaddr_t anon_map_end = align_up(mem_end_addr, CONFIG_PAGE_SIZE);
 
-			vm_space_map(task->current_vm_space,
-			(vm_mapping_info)
+			if(anon_map_end - anon_map_start)
 			{
-				.length = anon_map_end - anon_map_start,
-				.prot = protflags,
-				.virt_base = anon_map_start
-			});
+				vm_space_map(task->current_vm_space,
+				(vm_mapping_info)
+				{
+					.length = anon_map_end - anon_map_start,
+					.prot = protflags,
+					.virt_base = out_img->load_bias + anon_map_start
+				});
+			}
 		}
+	}
+	
+	out_img->entry = out_img->load_bias + header.e_entry;
+	kfree(phdrs);
+	return 0;
+}
+
+int elf_exec(int binfd, struct task* task, virtaddr_t* out_entry)
+{
+	virtaddr_t entry = 0;
+	struct elf_image main_img = {};
+	int load_status = elf_load(binfd, task, &main_img);
+	if(load_status < 0)
+		return load_status;
+
+	entry = main_img.entry;
+
+	struct elf_image interp_img = {};
+	if(main_img.interpreter)
+	{
+		int interpfd = vfs_open(main_img.interpreter, 0);
+		int interp_status = elf_load(interpfd, task, &interp_img);
+		entry = interp_img.entry;
+		kfree(main_img.interpreter);
+		vfs_close(interpfd);
 	}
 
 	virtaddr_t align_check = task->rsp - (11 * 2 * sizeof(uintptr_t)) - ((task->envc + 1) * sizeof(uintptr_t)) - ((task->argc + 1) * sizeof(uintptr_t)) - sizeof(uintptr_t);
@@ -133,27 +197,27 @@ int elf_exec(int binfd, struct task* task, virtaddr_t* out_entry)
         *(uintptr_t*)task->rsp = AT_PAGESZ;
 
         task->rsp -= sizeof(uintptr_t);
-        *(uintptr_t*)task->rsp = 0;
+        *(uintptr_t*)task->rsp = main_img.load_bias;
         task->rsp -= sizeof(uintptr_t);
         *(uintptr_t*)task->rsp = AT_BASE;
 
 	task->rsp -= sizeof(uintptr_t);
-        *(uintptr_t*)task->rsp = header.e_entry;
+        *(uintptr_t*)task->rsp = main_img.entry;
         task->rsp -= sizeof(uintptr_t);
         *(uintptr_t*)task->rsp = AT_ENTRY;
 
         task->rsp -= sizeof(uintptr_t);
-        *(uintptr_t*)task->rsp = header.e_phnum;
+        *(uintptr_t*)task->rsp = main_img.phnum;
         task->rsp -= sizeof(uintptr_t);
         *(uintptr_t*)task->rsp = AT_PHNUM;
 
         task->rsp -= sizeof(uintptr_t);
-        *(uintptr_t*)task->rsp = header.e_phentsize;
+        *(uintptr_t*)task->rsp = main_img.phentsize;
         task->rsp -= sizeof(uintptr_t);
         *(uintptr_t*)task->rsp = AT_PHENT;
 
         task->rsp -= sizeof(uintptr_t);
-        *(uintptr_t*)task->rsp = base + header.e_phoff;
+        *(uintptr_t*)task->rsp = main_img.base + main_img.phdr_off;
         task->rsp -= sizeof(uintptr_t);
         *(uintptr_t*)task->rsp = AT_PHDR;
 
@@ -174,9 +238,8 @@ int elf_exec(int binfd, struct task* task, virtaddr_t* out_entry)
 	}
 
 	task->rsp -= sizeof(uintptr_t);
-	*(int*)task->rsp = task->argc;
+	*(int64_t*)task->rsp = task->argc;
 
-	kfree(phdrs);
-	*out_entry = header.e_entry;
+	*out_entry = entry;
 	return 0;
 }

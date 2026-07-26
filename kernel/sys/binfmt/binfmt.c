@@ -12,8 +12,6 @@
 #include <types.h>
 #include <cpu.h>
 
-#include <klog.h>
-
 static list_head_t binfmt_list = {&binfmt_list, &binfmt_list};
 
 static binfmt_descriptor_t binfmt_elf =
@@ -74,6 +72,6 @@ void binfmt_exec_task()
 	vfs_close(binfd);
 	if(res < 0)
 		sys_exit(res);
-
+		
 	native_switch_to_usermode(task->rsp, entry);
 }

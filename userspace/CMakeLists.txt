@@ -1,5 +1,5 @@
-set(USERSPACE_COMPILE_OPTIONS -static -Wl,-gc-sections)
-set(USERSPACE_LINK_OPTIONS -static)
+set(USERSPACE_COMPILE_OPTIONS -Wl,-gc-sections)
+set(USERSPACE_LINK_OPTIONS)
 
 add_subdirectory("cat")
 add_subdirectory("dhcpcl")

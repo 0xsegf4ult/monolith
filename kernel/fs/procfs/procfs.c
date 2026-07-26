@@ -207,7 +207,7 @@ ssize_t read_proc_maps(struct file_descriptor* file, byte* buffer, size_t length
 		if(out_buffer >= (char*)buffer + length)
 			break;
 
-		ssize_t written = sprintf(out_buffer, "%016p - %016p %c%c%c %08x %s\n",
+		ssize_t written = sprintf(out_buffer, "%012zx - %012zx %c%c%c %08x %s\n",
 			range->base,
 			range->base + range->length,
 			(range->prot & PROT_READ) ? 'r' : '-',

@@ -6,6 +6,7 @@ enum MAP_FLAGS
 {
 	MAP_SHARED 	= 0x1,
 	MAP_PRIVATE	= 0x2,
+	MAP_FIXED	= 0x10,
 	MAP_ANONYMOUS	= 0x20
 };
 

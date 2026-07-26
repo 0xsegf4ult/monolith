@@ -5,10 +5,13 @@
 #include <sys/smp.h>
 #include <errno.h>
 #include <types.h>
+#include <klog.h>
 
 void* sys_mmap(void* addr, size_t size, int prot, int flags, int fd, off_t offset)
 {
-	if(addr || !size || offset & 0xFFF)
+//	klog("sys_mmap(%p, %p, %d, %d, %d, %zx)\n", addr, size, prot, flags, fd, offset);
+
+	if(!size || offset & 0xFFF)
 		return (void*)EINVAL;
 
 	if(!(flags & MAP_PRIVATE) && !(flags & MAP_SHARED))
@@ -19,6 +22,10 @@ void* sys_mmap(void* addr, size_t size, int prot, int flags, int fd, off_t offse
 
 	struct task* task = smp_current_task();
 	bool is_anon = (flags & MAP_ANONYMOUS);
+	int map_flags = 0;
+	if(flags & MAP_FIXED)
+		map_flags |= VM_FLAG_REPLACE;
+
 	if(is_anon)
 	{
 		if(fd >= 0)
@@ -31,7 +38,9 @@ void* sys_mmap(void* addr, size_t size, int prot, int flags, int fd, off_t offse
 		(vm_mapping_info)
 		{
 			.length = size,
-			.prot = (prot & 7) | PROT_USER
+			.prot = (prot & 7) | PROT_USER,
+			.flags = map_flags,
+			.virt_base = (flags & MAP_FIXED) ? (virtaddr_t)addr : 0
 		});
 	}
 	else
@@ -52,9 +61,10 @@ void* sys_mmap(void* addr, size_t size, int prot, int flags, int fd, off_t offse
 		{
 			.length = size,
 			.prot = (prot & 7) | PROT_USER,
-			.flags = VM_FLAG_FILE,
+			.flags = map_flags | VM_FLAG_FILE,
 			.offset = offset,
-			.fd = v_fd
+			.fd = v_fd,
+			.virt_base = (flags & MAP_FIXED) ? (virtaddr_t)addr : 0
 		});
 	}
 }

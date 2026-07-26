@@ -22,8 +22,6 @@
 #include <types.h>
 #include <stdatomic.h>
 
-#include <klog.h>
-
 pid_t sys_spawn(const char** argv, const char** envp, uint64_t flags)
 {
 	if(!vm_validate_ptr(argv, sizeof(void*)))
@@ -54,7 +52,7 @@ pid_t sys_spawn(const char** argv, const char** envp, uint64_t flags)
 	while(argv[proc->argc])
 	{
 		if(!vm_validate_ptr(argv[proc->argc], PATH_MAX))
-			return -EFAULT; 
+			break;
 
 		proc->argc++;
 	}
@@ -64,7 +62,7 @@ pid_t sys_spawn(const char** argv, const char** envp, uint64_t flags)
 		while(envp[proc->envc])
 		{
 			if(!vm_validate_ptr(envp[proc->envc], PATH_MAX))
-				return -EFAULT; 
+				break;
 
 			proc->envc++;
 		}

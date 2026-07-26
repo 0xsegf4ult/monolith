@@ -91,7 +91,35 @@ void vmm_late_init()
 	procfs_create("vmstat", &vmstat_fops, nullptr);
 }
 
-static bool space_check_range(struct vm_space* space, struct vm_object* range)
+/* called under mutex, release on return */
+static bool space_replace_before(struct vm_space* space, struct vm_object* before, struct vm_object* range)
+{
+	virtaddr_t last_base = before->base;
+	before->base = range->base + range->length;
+
+	bool free = false;
+	if(before->length <= (before->base - last_base))
+		free = true;
+	else
+		before->length -= (before->base - last_base);
+
+	list_node_t* prev = before->list_node.prev;
+	list_add_tail(&before->list_node, &range->list_node);
+	if(free)
+		list_del(&before->list_node);
+
+	mutex_unlock(&space->lock);
+	return true;
+}
+
+static bool space_replace_after(struct vm_space* space, struct vm_object* after, struct vm_object* range)
+{
+	klog("try to replace after\n");
+	mutex_unlock(&space->lock);
+	return false;
+}
+
+static bool space_check_range(struct vm_space* space, struct vm_object* range, bool replace)
 {
 	struct vm_object* cur;
 
@@ -108,6 +136,9 @@ static bool space_check_range(struct vm_space* space, struct vm_object* range)
 		{
 			if(cur->base + cur->length > range->base)
 			{
+				if(replace)
+					return space_replace_before(space, cur, range);
+
 				mutex_unlock(&space->lock);
 				return false;
 			}
@@ -116,6 +147,9 @@ static bool space_check_range(struct vm_space* space, struct vm_object* range)
 		{
 			if(cur->base < range->base + range->length)
 			{
+				if(replace)
+					return space_replace_after(space, cur, range);
+				
 				mutex_unlock(&space->lock);
 				return false;
 			}
@@ -270,9 +304,9 @@ virtaddr_t vm_space_map(struct vm_space* space, vm_mapping_info info)
 
 	bool valid = false;
 
-	if(info.virt_base)
+	if(info.virt_base || vmflags & VM_FLAG_REPLACE)
 	{
-		valid = space_check_range(space, range);
+		valid = space_check_range(space, range, vmflags & VM_FLAG_REPLACE);
 	}
 	else
 	{

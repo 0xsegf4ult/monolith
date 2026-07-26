@@ -14,7 +14,8 @@ enum vm_flags_t : uint32_t
 	VM_FLAG_COW		= 2,
 	VM_FLAG_FILE		= 4,
 	VM_FLAG_DEVICE		= 8,
-	VM_FLAG_OWNER 		= 16
+	VM_FLAG_OWNER 		= 16,
+	VM_FLAG_REPLACE 	= 32,
 };
 
 enum vm_prot_t : uint32_t

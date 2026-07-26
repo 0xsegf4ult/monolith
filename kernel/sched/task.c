@@ -24,15 +24,13 @@
 #include <types.h>
 #include <stdatomic.h>
 
-#include <klog.h>
-
 list_head_t g_task_list = {&g_task_list, &g_task_list};
 spinlock_t g_task_list_lock = {0};
 
 static _Atomic pid_t next_pid = 1;
 static struct task* init_task = nullptr;
 constexpr size_t kernel_stack_size = 0x2000;
-constexpr size_t user_stack_size = 0x4000;
+constexpr size_t user_stack_size = 0x8000;
 
 static void kernel_stack_init(struct task* task, virtaddr_t entry)
 {
@@ -58,6 +56,7 @@ static void user_stack_init(struct task* task)
 		.length = user_stack_size,
 		.prot = PROT_READ | PROT_WRITE | PROT_USER,
 		.flags = VM_FLAG_ALLOCATE,
+		.virt_base = VM_USERSPACE_END - user_stack_size - 0x1000
 	}) + user_stack_size;
 }
 
@@ -174,7 +173,9 @@ int task_copy_args(struct task* proc, const char** argv, const char** envp)
 	for(int i = 0; i < proc->envc; i++)
 	{
 		size_t len = strlen(envp[i]);
-		for(ssize_t j = len; j >= 0; j--)
+		stack--;
+		*(char*)stack = '\0';
+		for(ssize_t j = len - 1; j >= 0; j--)
 		{
 			stack--;
 			*(char*)stack = envp[i][j];
@@ -186,7 +187,9 @@ int task_copy_args(struct task* proc, const char** argv, const char** envp)
 	for(int i = 0; i < proc->argc; i++)
 	{
 		size_t len = strlen(argv[i]);
-		for(ssize_t j = len; j >= 0; j--)
+		stack--;
+		*(char*)stack = '\0';
+		for(ssize_t j = len - 1; j >= 0; j--)
 		{
 			stack--;
 			*(char*)stack = argv[i][j];
